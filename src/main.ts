@@ -375,7 +375,12 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
   if (!targetPreviewStage) {
     return undefined;
   }
-  imageTargetPreview ??= new ImageTargetPreview(targetPreviewStage);
+  imageTargetPreview ??= new ImageTargetPreview(targetPreviewStage, {
+    onPlacementChange: (placement) => {
+      targetPlacement = placement;
+      syncTargetPlacementInputs(placement);
+    },
+  });
   return imageTargetPreview;
 }
 
@@ -391,6 +396,21 @@ function readTargetPlacement(): ImageTargetPlacement {
 function getSelectedTargetModel(): CloudflareModelOption | undefined {
   const selectedId = targetModelSelect?.value;
   return cloudflareModels.find((model) => model.id === selectedId);
+}
+
+function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
+  setRangeInputValue(targetScaleInput, placement.scale);
+  setRangeInputValue(targetOffsetXInput, placement.offsetX);
+  setRangeInputValue(targetOffsetYInput, placement.offsetY);
+  setRangeInputValue(targetHeightInput, placement.height);
+}
+
+function setRangeInputValue(input: HTMLInputElement | null, value: number): void {
+  if (!input) {
+    return;
+  }
+
+  input.value = String(Number(value.toFixed(3)));
 }
 
 async function updateTargetPreview(): Promise<void> {

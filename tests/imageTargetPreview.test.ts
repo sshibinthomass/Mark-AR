@@ -123,6 +123,107 @@ describe('ImageTargetPreview', () => {
     expect(secondModel.geometryDispose).toHaveBeenCalledTimes(1);
     expect(secondModel.materialDispose).toHaveBeenCalledTimes(1);
   });
+
+  it('moves a loaded model by dragging on the preview canvas', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    rendererElement.setPointerCapture = vi.fn(() => {
+      throw new Error('No active pointer');
+    });
+    rendererElement.releasePointerCapture = vi.fn(() => {
+      throw new Error('No active pointer');
+    });
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 150 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150 });
+
+    expect(placementChanges.at(-1)).toMatchObject({
+      scale: 1,
+      offsetX: 0.2,
+      offsetY: -0.2,
+      height: 0.12,
+    });
+    expect(model.group.position.x).toBeCloseTo(0.2);
+    expect(model.group.position.z).toBeCloseTo(-0.2);
+
+    preview.dispose();
+  });
+
+  it('scales a loaded model with a two-finger pinch on the preview canvas', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 2, clientX: 300, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 2, clientX: 400, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 2, clientX: 400, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 200, clientY: 200 });
+
+    expect(placementChanges.at(-1)).toMatchObject({
+      scale: 2,
+      offsetX: 0,
+      offsetY: 0,
+      height: 0.12,
+    });
+    expect(model.group.scale.x).toBeCloseTo(2);
+
+    preview.dispose();
+  });
 });
 
 function createDisposableModel() {
@@ -134,4 +235,14 @@ function createDisposableModel() {
   const group = new Group();
   group.add(mesh);
   return { group, geometryDispose, materialDispose };
+}
+
+function dispatchPointer(
+  target: HTMLElement,
+  type: string,
+  values: { pointerId: number; clientX: number; clientY: number },
+): void {
+  const event = new Event(type, { bubbles: true, cancelable: true }) as Event & typeof values;
+  Object.assign(event, values);
+  target.dispatchEvent(event);
 }
