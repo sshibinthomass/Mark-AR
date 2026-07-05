@@ -528,6 +528,7 @@ h1 {
 .target-editor,
 .object-action-row,
 .target-object-list,
+.control-section,
 .placement-grid,
 .saved-target-list,
 .saved-target-row,
@@ -605,6 +606,12 @@ h1 {
 
 .target-object-row small {
   justify-self: end;
+}
+
+.control-section {
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
 
 .placement-grid {

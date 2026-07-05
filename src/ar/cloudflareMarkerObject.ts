@@ -14,6 +14,8 @@ import type {
   ProcessedBaseImage,
 } from '../app/cloudflareModels';
 import { processedImageDataUrl } from '../app/cloudflareModels';
+import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
+import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import type { MarkerObject } from './arObjects';
 
@@ -23,6 +25,7 @@ export type CloudflarePlacedObject = {
   id?: string;
   model: CloudflareModelOption;
   placement?: ImageTargetPlacement;
+  animation?: ImageTargetAnimation;
 };
 
 export type CloudflarePlacedAsset = {
@@ -43,7 +46,7 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
 
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
   const placedObjects = createPlacedObjects(asset);
-  const modelRoots = placedObjects.map((object, index) => {
+  const animatedRoots = placedObjects.map((object, index) => {
     const modelRoot = new Group();
     modelRoot.name = modelRootName(object, index, placedObjects.length);
     modelRoot.position.z = asset.baseImage ? 0.12 : 0.04;
@@ -62,17 +65,42 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
         modelRoot.add(createModelLoadFallback());
       });
 
-    return modelRoot;
+    return {
+      root: modelRoot,
+      baseZ: modelRoot.position.z,
+      animation: normalizeAnimation(object.animation),
+      elapsedSeconds: 0,
+    };
   });
 
   return {
     group,
     update: (deltaSeconds: number) => {
-      for (const modelRoot of modelRoots) {
-        modelRoot.rotation.z += deltaSeconds * 0.22;
+      for (const animatedRoot of animatedRoots) {
+        animatedRoot.elapsedSeconds += deltaSeconds;
+        applyAnimation(
+          animatedRoot.root,
+          animatedRoot.animation,
+          animatedRoot.baseZ,
+          deltaSeconds,
+          animatedRoot.elapsedSeconds,
+        );
       }
     },
   };
+}
+
+function applyAnimation(
+  modelRoot: Group,
+  animation: ImageTargetAnimation,
+  baseZ: number,
+  deltaSeconds: number,
+  elapsedSeconds: number,
+): void {
+  if (animation.spinAxis !== 'none' && animation.spinSpeed !== 0) {
+    modelRoot.rotation[animation.spinAxis] += animation.spinSpeed * deltaSeconds;
+  }
+  modelRoot.position.z = baseZ + Math.sin(elapsedSeconds * animation.bobSpeed) * animation.bobHeight;
 }
 
 function modelRootName(object: CloudflarePlacedObject, index: number, objectCount: number): string {

@@ -1,4 +1,6 @@
 import type { CloudflareModelOption, ModelVisibility } from './cloudflareModels';
+import type { ImageTargetAnimation, ImageTargetSpinAxis } from './imageTargetAnimation';
+import { normalizeAnimation } from './imageTargetAnimation';
 import type { ImageTargetImagePayload, ImageTargetPlacement } from './imageTargetPayload';
 import { normalizePlacement } from './imageTargetPayload';
 
@@ -6,6 +8,7 @@ export type CloudImageTargetObject = {
   id: string;
   model: CloudflareModelOption;
   placement: ImageTargetPlacement;
+  animation?: ImageTargetAnimation;
 };
 
 export type CloudImageTarget = {
@@ -37,6 +40,12 @@ type WorkerImageTargetObject = {
     offset_x?: number;
     offset_y?: number;
     height?: number;
+  };
+  animation?: {
+    spin_axis?: string;
+    spin_speed?: number;
+    bob_height?: number;
+    bob_speed?: number;
   };
 };
 
@@ -261,6 +270,14 @@ function mapImageTargetObject(object: WorkerImageTargetObject, index: number): C
       offsetY: object.placement?.offset_y,
       height: object.placement?.height,
     }),
+    ...(object.animation ? {
+      animation: normalizeAnimation({
+        spinAxis: object.animation.spin_axis as ImageTargetSpinAxis | undefined,
+        spinSpeed: object.animation.spin_speed,
+        bobHeight: object.animation.bob_height,
+        bobSpeed: object.animation.bob_speed,
+      }),
+    } : {}),
   };
 }
 
@@ -297,7 +314,12 @@ function imageTargetObjectsRequestBody(
   objects: CloudImageTargetObject[] | undefined,
   legacyModel?: CloudflareModelOption,
   legacyPlacement?: ImageTargetPlacement,
-): Array<{ id: string; model: Record<string, string>; placement: Record<string, number> }> {
+): Array<{
+  id: string;
+  model: Record<string, string>;
+  placement: Record<string, number>;
+  animation?: Record<string, number | string>;
+}> {
   const requestObjects = objects?.length
     ? objects
     : legacyModel
@@ -312,7 +334,18 @@ function imageTargetObjectsRequestBody(
     id: object.id || `object-${index + 1}`,
     model: modelRequestBody(object.model),
     placement: placementRequestBody(object.placement),
+    ...(object.animation ? { animation: animationRequestBody(object.animation) } : {}),
   }));
+}
+
+function animationRequestBody(animation: ImageTargetAnimation): Record<string, number | string> {
+  const normalized = normalizeAnimation(animation);
+  return {
+    spin_axis: normalized.spinAxis,
+    spin_speed: normalized.spinSpeed,
+    bob_height: normalized.bobHeight,
+    bob_speed: normalized.bobSpeed,
+  };
 }
 
 function placementRequestBody(placement: ImageTargetPlacement): Record<string, number> {

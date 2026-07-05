@@ -298,6 +298,81 @@ describe('ImageTargetPreview', () => {
 
     preview.dispose();
   });
+
+  it('positions the preview camera from camera controls', async () => {
+    const container = document.createElement('div');
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    await preview.update({
+      camera: { distance: 3, height: 1.4, yawDegrees: 90, targetHeight: 0.2 },
+    });
+
+    const camera = (preview as unknown as { camera: { position: { x: number; y: number; z: number } } }).camera;
+    expect(camera.position.x).toBeCloseTo(3);
+    expect(camera.position.y).toBeCloseTo(1.4);
+    expect(camera.position.z).toBeCloseTo(0);
+
+    preview.dispose();
+  });
+
+  it('animates loaded objects with per-object spin and bob settings', async () => {
+    const container = document.createElement('div');
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    let frameCallback: FrameRequestCallback | undefined;
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: (callback) => {
+        frameCallback = callback;
+        return 1;
+      },
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    await preview.update({
+      objects: [
+        {
+          id: 'animated-object',
+          model: { id: 'lamp', label: 'Lamp', url: 'https://example.com/lamp.glb', visibility: 'public' },
+          placement: { scale: 1, offsetX: 0, offsetY: 0.1, height: 0.2 },
+          animation: { spinAxis: 'y', spinSpeed: 2, bobHeight: 0.1, bobSpeed: Math.PI },
+        },
+      ],
+      selectedObjectId: 'animated-object',
+    });
+
+    frameCallback?.(1000);
+    frameCallback?.(1500);
+
+    expect(model.group.rotation.y).toBeCloseTo(1);
+    expect(model.group.position.y).toBeCloseTo(0.3);
+    expect(model.group.position.z).toBeCloseTo(0.1);
+
+    preview.dispose();
+  });
 });
 
 function createDisposableModel() {

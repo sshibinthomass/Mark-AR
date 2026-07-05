@@ -18,6 +18,12 @@ import {
   type CloudImageTargetObject,
 } from './app/cloudImageTargets';
 import {
+  DEFAULT_IMAGE_TARGET_ANIMATION,
+  normalizeAnimation,
+  type ImageTargetAnimation,
+  type ImageTargetSpinAxis,
+} from './app/imageTargetAnimation';
+import {
   DEFAULT_IMAGE_TARGET_PLACEMENT,
   imageTargetDataUrl,
   normalizePlacement,
@@ -39,7 +45,11 @@ import {
   stopCameraPreview,
   type CapturedImage,
 } from './capture/cameraCapture';
-import { ImageTargetPreview } from './scene/ImageTargetPreview';
+import {
+  DEFAULT_PREVIEW_CAMERA_VIEW,
+  ImageTargetPreview,
+  type PreviewCameraView,
+} from './scene/ImageTargetPreview';
 import { renderAppShell } from './ui/appShell';
 import { routeFromHash } from './ui/pageRoutes';
 import { activateRoute } from './ui/pageRouter';
@@ -81,6 +91,15 @@ const targetScaleInput = document.querySelector<HTMLInputElement>('#target-scale
 const targetOffsetXInput = document.querySelector<HTMLInputElement>('#target-offset-x');
 const targetOffsetYInput = document.querySelector<HTMLInputElement>('#target-offset-y');
 const targetHeightInput = document.querySelector<HTMLInputElement>('#target-height');
+const targetCameraDistanceInput = document.querySelector<HTMLInputElement>('#target-camera-distance');
+const targetCameraHeightInput = document.querySelector<HTMLInputElement>('#target-camera-height');
+const targetCameraYawInput = document.querySelector<HTMLInputElement>('#target-camera-yaw');
+const targetCameraTargetInput = document.querySelector<HTMLInputElement>('#target-camera-target');
+const targetSpinAxisSelect = document.querySelector<HTMLSelectElement>('#target-spin-axis');
+const targetSpinSpeedInput = document.querySelector<HTMLInputElement>('#target-spin-speed');
+const targetBobHeightInput = document.querySelector<HTMLInputElement>('#target-bob-height');
+const targetBobSpeedInput = document.querySelector<HTMLInputElement>('#target-bob-speed');
+const resetTargetAnimationButton = document.querySelector<HTMLButtonElement>('#reset-target-animation');
 const saveImageTargetButton = document.querySelector<HTMLButtonElement>('#save-image-target');
 const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#refresh-image-targets');
 const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-status');
@@ -93,6 +112,8 @@ let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
 let targetPlacement: ImageTargetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
+let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
+let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
 let targetObjects: CloudImageTargetObject[] = [];
 let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
@@ -251,6 +272,31 @@ targetImageFile?.addEventListener('change', async () => {
   });
 });
 
+[targetCameraDistanceInput, targetCameraHeightInput, targetCameraYawInput, targetCameraTargetInput].forEach((input) => {
+  input?.addEventListener('input', () => {
+    targetCameraView = readTargetCameraView();
+    void updateTargetPreview();
+  });
+});
+
+[targetSpinSpeedInput, targetBobHeightInput, targetBobSpeedInput].forEach((input) => {
+  input?.addEventListener('input', () => {
+    updateSelectedTargetObjectAnimation(readTargetAnimation());
+    void updateTargetPreview();
+  });
+});
+
+targetSpinAxisSelect?.addEventListener('change', () => {
+  updateSelectedTargetObjectAnimation(readTargetAnimation());
+  void updateTargetPreview();
+});
+
+resetTargetAnimationButton?.addEventListener('click', () => {
+  updateSelectedTargetObjectAnimation(DEFAULT_IMAGE_TARGET_ANIMATION);
+  syncTargetAnimationInputs(DEFAULT_IMAGE_TARGET_ANIMATION);
+  void updateTargetPreview();
+});
+
 targetModelSelect?.addEventListener('change', () => {
   if (targetObjects.length === 0 && getSelectedTargetModel()) {
     addTargetObjectFromSelection();
@@ -282,6 +328,8 @@ refreshImageTargetsButton?.addEventListener('click', async () => {
 });
 
 renderTargetObjectList();
+syncTargetCameraInputs(targetCameraView);
+syncTargetAnimationInputs(targetAnimation);
 
 async function initializeCloudflareControls(): Promise<void> {
   if (authToken) {
@@ -428,6 +476,24 @@ function readTargetPlacement(): ImageTargetPlacement {
   });
 }
 
+function readTargetCameraView(): PreviewCameraView {
+  return {
+    distance: Number(targetCameraDistanceInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.distance,
+    height: Number(targetCameraHeightInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.height,
+    yawDegrees: Number(targetCameraYawInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.yawDegrees,
+    targetHeight: Number(targetCameraTargetInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight,
+  };
+}
+
+function readTargetAnimation(): ImageTargetAnimation {
+  return normalizeAnimation({
+    spinAxis: targetSpinAxisSelect?.value as ImageTargetSpinAxis | undefined,
+    spinSpeed: Number(targetSpinSpeedInput?.value),
+    bobHeight: Number(targetBobHeightInput?.value),
+    bobSpeed: Number(targetBobSpeedInput?.value),
+  });
+}
+
 function getSelectedTargetModel(): CloudflareModelOption | undefined {
   const selectedId = targetModelSelect?.value;
   return cloudflareModels.find((model) => model.id === selectedId);
@@ -444,6 +510,7 @@ function addTargetObjectFromSelection(): void {
     id: createTargetObjectId(),
     model,
     placement: nextTargetObjectPlacement(),
+    animation: nextTargetObjectAnimation(),
   };
   targetObjects = [...targetObjects, object];
   selectTargetObject(object.id, { refreshPreview: false });
@@ -465,7 +532,9 @@ function removeSelectedTargetObject(): void {
 
   const selectedObject = getSelectedTargetObject();
   targetPlacement = selectedObject?.placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT;
+  targetAnimation = selectedObject?.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION;
   syncTargetPlacementInputs(targetPlacement);
+  syncTargetAnimationInputs(targetAnimation);
   renderTargetObjectList();
   updateImageTargetStatus(
     targetObjects.length > 0
@@ -484,10 +553,12 @@ function selectTargetObject(objectId: string, options?: { refreshPreview?: boole
 
   selectedTargetObjectId = object.id;
   targetPlacement = object.placement;
+  targetAnimation = object.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION;
   if (targetModelSelect) {
     targetModelSelect.value = object.model.id;
   }
   syncTargetPlacementInputs(object.placement);
+  syncTargetAnimationInputs(targetAnimation);
   renderTargetObjectList();
   updateImageTargetStatus(`${object.model.label} selected.`, false);
   if (options?.refreshPreview !== false) {
@@ -500,6 +571,15 @@ function updateSelectedTargetObjectPlacement(placement: ImageTargetPlacement): v
   const object = getSelectedTargetObject();
   if (object) {
     object.placement = targetPlacement;
+    renderTargetObjectList();
+  }
+}
+
+function updateSelectedTargetObjectAnimation(animation: ImageTargetAnimation): void {
+  targetAnimation = normalizeAnimation(animation);
+  const object = getSelectedTargetObject();
+  if (object) {
+    object.animation = targetAnimation;
     renderTargetObjectList();
   }
 }
@@ -556,6 +636,10 @@ function nextTargetObjectPlacement(): ImageTargetPlacement {
   });
 }
 
+function nextTargetObjectAnimation(): ImageTargetAnimation {
+  return normalizeAnimation(readTargetAnimation());
+}
+
 function createTargetObjectId(): string {
   const cryptoId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -568,6 +652,23 @@ function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
   setRangeInputValue(targetOffsetXInput, placement.offsetX);
   setRangeInputValue(targetOffsetYInput, placement.offsetY);
   setRangeInputValue(targetHeightInput, placement.height);
+}
+
+function syncTargetAnimationInputs(animation: ImageTargetAnimation): void {
+  const normalized = normalizeAnimation(animation);
+  if (targetSpinAxisSelect) {
+    targetSpinAxisSelect.value = normalized.spinAxis;
+  }
+  setRangeInputValue(targetSpinSpeedInput, normalized.spinSpeed);
+  setRangeInputValue(targetBobHeightInput, normalized.bobHeight);
+  setRangeInputValue(targetBobSpeedInput, normalized.bobSpeed);
+}
+
+function syncTargetCameraInputs(cameraView: PreviewCameraView): void {
+  setRangeInputValue(targetCameraDistanceInput, cameraView.distance);
+  setRangeInputValue(targetCameraHeightInput, cameraView.height);
+  setRangeInputValue(targetCameraYawInput, cameraView.yawDegrees);
+  setRangeInputValue(targetCameraTargetInput, cameraView.targetHeight);
 }
 
 function setRangeInputValue(input: HTMLInputElement | null, value: number): void {
@@ -587,6 +688,7 @@ async function updateTargetPreview(): Promise<void> {
     imageUrl: targetImagePayload ? imageTargetDataUrl(targetImagePayload) : undefined,
     objects: targetObjects,
     selectedObjectId: selectedTargetObjectId,
+    camera: targetCameraView,
   });
 }
 
@@ -622,6 +724,7 @@ async function saveCurrentImageTarget(): Promise<void> {
   const objects = targetObjects.map((object) => ({
     ...object,
     placement: normalizePlacement(object.placement),
+    animation: normalizeAnimation(object.animation),
   }));
   updateImageTargetStatus('Saving image target...', false);
 

@@ -84,4 +84,33 @@ describe('createCloudflareMarkerObject', () => {
     expect(plantRoot.position.z).toBeCloseTo(0.08);
     expect(plantRoot.scale.x).toBeCloseTo(0.8);
   });
+
+  it('applies per-object spin and bob animation in the AR runtime', async () => {
+    const loadedModel = new Group();
+
+    const markerObject = createCloudflareMarkerObject({
+      objects: [
+        {
+          id: 'animated-object',
+          model: {
+            id: 'generated-lamp',
+            label: 'Lamp',
+            url: 'https://worker.example/models/lamp.glb',
+          },
+          placement: { scale: 1, offsetX: 0, offsetY: 0.1, height: 0.2 },
+          animation: { spinAxis: 'y', spinSpeed: 2, bobHeight: 0.1, bobSpeed: Math.PI },
+        },
+      ],
+      loadModelGroup: async () => loadedModel,
+    });
+
+    await Promise.resolve();
+    markerObject.update(0.5);
+
+    const modelRoot = markerObject.group.getObjectByName('cloudflare-model-root-animated-object') as Group;
+    expect(modelRoot.rotation.y).toBeCloseTo(1);
+    expect(modelRoot.position.x).toBeCloseTo(0);
+    expect(modelRoot.position.y).toBeCloseTo(0.1);
+    expect(modelRoot.position.z).toBeCloseTo(0.3);
+  });
 });

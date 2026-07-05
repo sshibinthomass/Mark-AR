@@ -32,6 +32,14 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#add-target-object')).toBeTruthy();
     expect(container.querySelector('#remove-target-object')).toBeTruthy();
     expect(container.querySelector('#target-object-list')).toBeTruthy();
+    expect(container.querySelector('#target-camera-distance')).toBeTruthy();
+    expect(container.querySelector('#target-camera-height')).toBeTruthy();
+    expect(container.querySelector('#target-camera-yaw')).toBeTruthy();
+    expect(container.querySelector('#target-spin-axis')).toBeTruthy();
+    expect(container.querySelector('#target-spin-speed')).toBeTruthy();
+    expect(container.querySelector('#target-bob-height')).toBeTruthy();
+    expect(container.querySelector('#target-bob-speed')).toBeTruthy();
+    expect(container.querySelector('#reset-target-animation')).toBeTruthy();
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
     expect(container.querySelector('#save-image-target')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();

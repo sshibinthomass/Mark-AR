@@ -18,6 +18,8 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { CloudImageTargetObject } from '../app/cloudImageTargets';
+import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
+import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
 
@@ -35,6 +37,20 @@ export type PreviewPlacementChange = {
   placement: ImageTargetPlacement;
 };
 
+export type PreviewCameraView = {
+  distance: number;
+  height: number;
+  yawDegrees: number;
+  targetHeight: number;
+};
+
+export const DEFAULT_PREVIEW_CAMERA_VIEW: PreviewCameraView = {
+  distance: 2.1,
+  height: 1.1,
+  yawDegrees: 0,
+  targetHeight: 0,
+};
+
 type PreviewDeps = {
   createRenderer?: () => PreviewRenderer;
   requestFrame?: (callback: FrameRequestCallback) => number;
@@ -50,6 +66,7 @@ type PreviewState = {
   placement?: ImageTargetPlacement;
   objects?: CloudImageTargetObject[];
   selectedObjectId?: string;
+  camera?: Partial<PreviewCameraView>;
 };
 
 export class ImageTargetPreview {
@@ -67,9 +84,13 @@ export class ImageTargetPreview {
   private readonly activePointers = new Map<number, PointerPoint>();
   private readonly loadedModels = new Map<string, Group>();
   private readonly placements = new Map<string, ImageTargetPlacement>();
+  private readonly animations = new Map<string, ImageTargetAnimation>();
   private frameId = 0;
   private disposed = false;
   private updateToken = 0;
+  private elapsedSeconds = 0;
+  private lastFrameTimestamp: number | undefined;
+  private cameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
   private selectedObjectId?: string;
   private dragStart?: { pointer: PointerPoint; objectId: string; placement: ImageTargetPlacement };
   private pinchStart?: { distance: number; objectId: string; placement: ImageTargetPlacement };
@@ -83,8 +104,7 @@ export class ImageTargetPreview {
     this.loadModel = deps.loadModel ?? defaultLoadModel;
     this.onPlacementChange = deps.onPlacementChange;
 
-    this.camera.position.set(0, 1.1, 2.1);
-    this.camera.lookAt(0, 0, 0);
+    this.applyCameraView();
     this.scene.add(new AmbientLight(0xffffff, 1.6));
 
     const keyLight = new DirectionalLight(0xffffff, 1.2);
@@ -110,10 +130,13 @@ export class ImageTargetPreview {
 
     const updateToken = ++this.updateToken;
     const previewObjects = previewObjectsFromState(state);
+    this.cameraView = normalizeCameraView(state.camera);
+    this.applyCameraView();
     this.clearGroup(this.imageRoot);
     this.clearGroup(this.modelRoot);
     this.loadedModels.clear();
     this.placements.clear();
+    this.animations.clear();
     this.activePointers.clear();
     this.dragStart = undefined;
     this.pinchStart = undefined;
@@ -121,6 +144,7 @@ export class ImageTargetPreview {
 
     for (const object of previewObjects) {
       this.placements.set(object.id, normalizePlacement(object.placement));
+      this.animations.set(object.id, normalizeAnimation(object.animation));
     }
 
     if (state.imageUrl) {
@@ -161,6 +185,7 @@ export class ImageTargetPreview {
     this.clearGroup(this.modelRoot);
     this.loadedModels.clear();
     this.placements.clear();
+    this.animations.clear();
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove);
     this.renderer.domElement.removeEventListener('pointerup', this.handlePointerEnd);
@@ -178,11 +203,13 @@ export class ImageTargetPreview {
     this.renderer.setSize(width, height);
   }
 
-  private render(): void {
+  private render(timestamp = 0): void {
     if (this.disposed) {
       return;
     }
-    this.modelRoot.rotation.y += 0.01;
+    const deltaSeconds = this.frameDeltaSeconds(timestamp);
+    this.elapsedSeconds += deltaSeconds;
+    this.applyObjectAnimations(deltaSeconds);
     this.renderer.render(this.scene, this.camera);
     this.frameId = this.requestFrame(this.render);
   }
@@ -309,6 +336,43 @@ export class ImageTargetPreview {
     loadedModel.scale.setScalar(placement.scale);
   }
 
+  private applyObjectAnimations(deltaSeconds: number): void {
+    for (const [objectId, loadedModel] of this.loadedModels) {
+      const animation = this.animations.get(objectId);
+      const placement = this.placements.get(objectId);
+      if (!animation || !placement) {
+        continue;
+      }
+
+      if (animation.spinAxis !== 'none' && animation.spinSpeed !== 0) {
+        loadedModel.rotation[animation.spinAxis] += animation.spinSpeed * deltaSeconds;
+      }
+      loadedModel.position.y =
+        placement.height + Math.sin(this.elapsedSeconds * animation.bobSpeed) * animation.bobHeight;
+    }
+  }
+
+  private frameDeltaSeconds(timestamp: number): number {
+    if (this.lastFrameTimestamp === undefined) {
+      this.lastFrameTimestamp = timestamp;
+      return 0;
+    }
+
+    const deltaSeconds = Math.max(0, (timestamp - this.lastFrameTimestamp) / 1000);
+    this.lastFrameTimestamp = timestamp;
+    return Math.min(deltaSeconds, 1);
+  }
+
+  private applyCameraView(): void {
+    const yawRadians = (this.cameraView.yawDegrees * Math.PI) / 180;
+    this.camera.position.set(
+      Math.sin(yawRadians) * this.cameraView.distance,
+      this.cameraView.height,
+      Math.cos(yawRadians) * this.cameraView.distance,
+    );
+    this.camera.lookAt(0, this.cameraView.targetHeight, 0);
+  }
+
   private selectedLoadedModel(): Group | undefined {
     return this.selectedObjectId ? this.loadedModels.get(this.selectedObjectId) : undefined;
   }
@@ -352,6 +416,23 @@ function selectPreviewObjectId(objects: CloudImageTargetObject[], requestedId?: 
   }
 
   return objects[0]?.id;
+}
+
+function normalizeCameraView(value: Partial<PreviewCameraView> | undefined): PreviewCameraView {
+  return {
+    distance: clampNumber(value?.distance, 0.8, 5, DEFAULT_PREVIEW_CAMERA_VIEW.distance),
+    height: clampNumber(value?.height, 0.1, 3, DEFAULT_PREVIEW_CAMERA_VIEW.height),
+    yawDegrees: clampNumber(value?.yawDegrees, -180, 180, DEFAULT_PREVIEW_CAMERA_VIEW.yawDegrees),
+    targetHeight: clampNumber(value?.targetHeight, -0.5, 1.5, DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight),
+  };
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, numberValue));
 }
 
 function pointerFromEvent(event: PointerEvent): PointerPoint {

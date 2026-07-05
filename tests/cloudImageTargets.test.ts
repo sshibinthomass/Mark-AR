@@ -77,6 +77,7 @@ describe('cloud image target client', () => {
               id: 'object-plant',
               model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
               placement: { scale: 0.8, offset_x: -0.2, offset_y: 0.15, height: 0.08 },
+              animation: { spin_axis: 'y', spin_speed: 1.5, bob_height: 0.08, bob_speed: 2 },
             },
           ],
         },
@@ -101,6 +102,7 @@ describe('cloud image target client', () => {
           id: 'object-plant',
           model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
           placement: { scale: 0.8, offsetX: -0.2, offsetY: 0.15, height: 0.08 },
+          animation: { spinAxis: 'y', spinSpeed: 1.5, bobHeight: 0.08, bobSpeed: 2 },
         },
       ],
     });
@@ -172,6 +174,7 @@ describe('cloud image target client', () => {
           id: 'object-plant',
           model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
           placement: { scale: 0.7, offset_x: -0.2, offset_y: 0.2, height: 0.1 },
+          animation: { spin_axis: 'x', spin_speed: 2, bob_height: 0.05, bob_speed: 3 },
         },
       ],
     }), { status: 201 }));
@@ -192,6 +195,7 @@ describe('cloud image target client', () => {
           id: 'object-plant',
           model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
           placement: { scale: 0.7, offsetX: -0.2, offsetY: 0.2, height: 0.1 },
+          animation: { spinAxis: 'x', spinSpeed: 2, bobHeight: 0.05, bobSpeed: 3 },
         },
       ],
     });
@@ -213,6 +217,7 @@ describe('cloud image target client', () => {
             id: 'object-plant',
             model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
             placement: { scale: 0.7, offset_x: -0.2, offset_y: 0.2, height: 0.1 },
+            animation: { spin_axis: 'x', spin_speed: 2, bob_height: 0.05, bob_speed: 3 },
           },
         ],
       }),

@@ -196,6 +196,33 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                 <label><span>Y offset</span><input id="target-offset-y" type="range" min="-1" max="1" step="0.05" value="0" /></label>
                 <label><span>Height</span><input id="target-height" type="range" min="0" max="1" step="0.02" value="0.12" /></label>
               </div>
+              <div class="control-section">
+                <p class="eyebrow">Camera view</p>
+                <div class="placement-grid">
+                  <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
+                  <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
+                  <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
+                  <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
+                </div>
+              </div>
+              <div class="control-section">
+                <p class="eyebrow">Animation</p>
+                <label>
+                  <span>Spin axis</span>
+                  <select id="target-spin-axis">
+                    <option value="none">None</option>
+                    <option value="x">X</option>
+                    <option value="y">Y</option>
+                    <option value="z" selected>Z</option>
+                  </select>
+                </label>
+                <div class="placement-grid">
+                  <label><span>Spin speed</span><input id="target-spin-speed" type="range" min="-6" max="6" step="0.05" value="0.22" /></label>
+                  <label><span>Bob height</span><input id="target-bob-height" type="range" min="0" max="1" step="0.02" value="0" /></label>
+                  <label><span>Bob speed</span><input id="target-bob-speed" type="range" min="0" max="8" step="0.05" value="0" /></label>
+                  <button id="reset-target-animation" type="button">Reset animation</button>
+                </div>
+              </div>
               <div class="button-row">
                 <button id="save-image-target" class="primary" type="button">Save target</button>
                 <button id="refresh-image-targets" type="button">Refresh targets</button>
