@@ -2,6 +2,12 @@ import type { CloudflareModelOption, ModelVisibility } from './cloudflareModels'
 import type { ImageTargetImagePayload, ImageTargetPlacement } from './imageTargetPayload';
 import { normalizePlacement } from './imageTargetPayload';
 
+export type CloudImageTargetObject = {
+  id: string;
+  model: CloudflareModelOption;
+  placement: ImageTargetPlacement;
+};
+
 export type CloudImageTarget = {
   id: string;
   label: string;
@@ -9,6 +15,7 @@ export type CloudImageTarget = {
   imageObjectKey: string;
   model: CloudflareModelOption;
   placement: ImageTargetPlacement;
+  objects: CloudImageTargetObject[];
   ownerEmail?: string;
   visibility?: ModelVisibility;
   createdAt?: string;
@@ -20,6 +27,17 @@ type WorkerImageTargetModel = {
   label?: string;
   url?: string;
   preview_url?: string;
+};
+
+type WorkerImageTargetObject = {
+  id?: string;
+  model?: WorkerImageTargetModel;
+  placement?: {
+    scale?: number;
+    offset_x?: number;
+    offset_y?: number;
+    height?: number;
+  };
 };
 
 type WorkerImageTargetEntry = {
@@ -34,6 +52,7 @@ type WorkerImageTargetEntry = {
     offset_y?: number;
     height?: number;
   };
+  objects?: WorkerImageTargetObject[];
   owner_email?: string;
   visibility?: ModelVisibility;
   created_at?: string;
@@ -58,8 +77,9 @@ type ClientInput = {
 type CreateImageTargetInput = ClientInput &
   ImageTargetImagePayload & {
     label: string;
-    model: CloudflareModelOption;
-    placement: ImageTargetPlacement;
+    model?: CloudflareModelOption;
+    placement?: ImageTargetPlacement;
+    objects?: CloudImageTargetObject[];
   };
 
 type UpdateImageTargetInput = ClientInput & {
@@ -67,6 +87,7 @@ type UpdateImageTargetInput = ClientInput & {
   label?: string;
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;
+  objects?: CloudImageTargetObject[];
 } & Partial<ImageTargetImagePayload>;
 
 type DeleteImageTargetInput = ClientInput & {
@@ -103,7 +124,9 @@ export async function createImageTarget({
   imageMimeType,
   model,
   placement,
+  objects,
 }: CreateImageTargetInput): Promise<CloudImageTarget> {
+  const requestObjects = imageTargetObjectsRequestBody(objects, model, placement);
   const response = await fetchImpl(imageTargetsUrl(apiUrl), {
     method: 'POST',
     headers: jsonHeaders(authToken),
@@ -111,8 +134,9 @@ export async function createImageTarget({
       label,
       image_base64: imageBase64,
       image_mime_type: imageMimeType,
-      model: modelRequestBody(model),
-      placement: placementRequestBody(placement),
+      model: requestObjects[0].model,
+      placement: requestObjects[0].placement,
+      objects: requestObjects,
     }),
   });
   return parseImageTargetResponse(response, 'Image target create failed');
@@ -126,6 +150,7 @@ export async function updateImageTarget({
   label,
   model,
   placement,
+  objects,
   imageBase64,
   imageMimeType,
 }: UpdateImageTargetInput): Promise<CloudImageTarget> {
@@ -138,6 +163,12 @@ export async function updateImageTarget({
   }
   if (placement) {
     body.placement = placementRequestBody(placement);
+  }
+  if (objects) {
+    const requestObjects = imageTargetObjectsRequestBody(objects, model, placement);
+    body.objects = requestObjects;
+    body.model = requestObjects[0].model;
+    body.placement = requestObjects[0].placement;
   }
   if (imageBase64 !== undefined) {
     body.image_base64 = imageBase64;
@@ -171,7 +202,12 @@ export async function deleteImageTarget({
 }
 
 function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | null {
-  if (!entry.id || !entry.label || !entry.image_url || !entry.image_object_key || !entry.model?.id || !entry.model.label || !entry.model.url) {
+  if (!entry.id || !entry.label || !entry.image_url || !entry.image_object_key) {
+    return null;
+  }
+  const objects = mapImageTargetObjects(entry);
+  const firstObject = objects[0];
+  if (!firstObject) {
     return null;
   }
 
@@ -180,22 +216,51 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
     label: entry.label,
     imageUrl: entry.image_url,
     imageObjectKey: entry.image_object_key,
-    model: {
-      id: entry.model.id,
-      label: entry.model.label,
-      url: entry.model.url,
-      ...(entry.model.preview_url ? { previewUrl: entry.model.preview_url } : {}),
-    },
-    placement: normalizePlacement({
-      scale: entry.placement?.scale,
-      offsetX: entry.placement?.offset_x,
-      offsetY: entry.placement?.offset_y,
-      height: entry.placement?.height,
-    }),
+    model: firstObject.model,
+    placement: firstObject.placement,
+    objects,
     ...(entry.owner_email ? { ownerEmail: entry.owner_email } : {}),
     ...(entry.visibility ? { visibility: entry.visibility } : {}),
     ...(entry.created_at ? { createdAt: entry.created_at } : {}),
     ...(entry.updated_at ? { updatedAt: entry.updated_at } : {}),
+  };
+}
+
+function mapImageTargetObjects(entry: WorkerImageTargetEntry): CloudImageTargetObject[] {
+  const objects = (entry.objects ?? [])
+    .map((object, index) => mapImageTargetObject(object, index))
+    .filter((object): object is CloudImageTargetObject => Boolean(object));
+  if (objects.length > 0) {
+    return objects;
+  }
+
+  const legacyObject = mapImageTargetObject({
+    id: 'object-1',
+    model: entry.model,
+    placement: entry.placement,
+  }, 0);
+  return legacyObject ? [legacyObject] : [];
+}
+
+function mapImageTargetObject(object: WorkerImageTargetObject, index: number): CloudImageTargetObject | null {
+  if (!object.model?.id || !object.model.label || !object.model.url) {
+    return null;
+  }
+
+  return {
+    id: object.id || `object-${index + 1}`,
+    model: {
+      id: object.model.id,
+      label: object.model.label,
+      url: object.model.url,
+      ...(object.model.preview_url ? { previewUrl: object.model.preview_url } : {}),
+    },
+    placement: normalizePlacement({
+      scale: object.placement?.scale,
+      offsetX: object.placement?.offset_x,
+      offsetY: object.placement?.offset_y,
+      height: object.placement?.height,
+    }),
   };
 }
 
@@ -226,6 +291,28 @@ function modelRequestBody(model: CloudflareModelOption): Record<string, string> 
     url: model.url,
     ...(model.previewUrl ? { preview_url: model.previewUrl } : {}),
   };
+}
+
+function imageTargetObjectsRequestBody(
+  objects: CloudImageTargetObject[] | undefined,
+  legacyModel?: CloudflareModelOption,
+  legacyPlacement?: ImageTargetPlacement,
+): Array<{ id: string; model: Record<string, string>; placement: Record<string, number> }> {
+  const requestObjects = objects?.length
+    ? objects
+    : legacyModel
+      ? [{ id: 'object-1', model: legacyModel, placement: normalizePlacement(legacyPlacement) }]
+      : [];
+
+  if (requestObjects.length === 0) {
+    throw new Error('Choose at least one Cloudflare model.');
+  }
+
+  return requestObjects.map((object, index) => ({
+    id: object.id || `object-${index + 1}`,
+    model: modelRequestBody(object.model),
+    placement: placementRequestBody(object.placement),
+  }));
 }
 
 function placementRequestBody(placement: ImageTargetPlacement): Record<string, number> {

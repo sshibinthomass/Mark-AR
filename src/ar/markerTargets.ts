@@ -47,6 +47,7 @@ export function createRuntimeMarkerTargets({
     cloudflareAsset: {
       model: target.model,
       placement: target.placement,
+      objects: target.objects,
     },
   }));
 

@@ -17,6 +17,7 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
+import type { CloudImageTargetObject } from '../app/cloudImageTargets';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
 
@@ -29,19 +30,26 @@ type PointerPoint = {
   y: number;
 };
 
+export type PreviewPlacementChange = {
+  objectId: string;
+  placement: ImageTargetPlacement;
+};
+
 type PreviewDeps = {
   createRenderer?: () => PreviewRenderer;
   requestFrame?: (callback: FrameRequestCallback) => number;
   cancelFrame?: (frameId: number) => void;
   loadTexture?: (url: string) => Promise<Texture | undefined>;
   loadModel?: (url: string) => Promise<Group | undefined>;
-  onPlacementChange?: (placement: ImageTargetPlacement) => void;
+  onPlacementChange?: (change: PreviewPlacementChange) => void;
 };
 
 type PreviewState = {
   imageUrl?: string;
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;
+  objects?: CloudImageTargetObject[];
+  selectedObjectId?: string;
 };
 
 export class ImageTargetPreview {
@@ -52,18 +60,19 @@ export class ImageTargetPreview {
   private readonly cancelFrame: (frameId: number) => void;
   private readonly loadTexture: (url: string) => Promise<Texture | undefined>;
   private readonly loadModel: (url: string) => Promise<Group | undefined>;
-  private readonly onPlacementChange?: (placement: ImageTargetPlacement) => void;
+  private readonly onPlacementChange?: (change: PreviewPlacementChange) => void;
   private readonly container: HTMLElement;
   private readonly imageRoot = new Group();
   private readonly modelRoot = new Group();
   private readonly activePointers = new Map<number, PointerPoint>();
+  private readonly loadedModels = new Map<string, Group>();
+  private readonly placements = new Map<string, ImageTargetPlacement>();
   private frameId = 0;
   private disposed = false;
   private updateToken = 0;
-  private placement = normalizePlacement();
-  private loadedModel?: Group;
-  private dragStart?: { pointer: PointerPoint; placement: ImageTargetPlacement };
-  private pinchStart?: { distance: number; placement: ImageTargetPlacement };
+  private selectedObjectId?: string;
+  private dragStart?: { pointer: PointerPoint; objectId: string; placement: ImageTargetPlacement };
+  private pinchStart?: { distance: number; objectId: string; placement: ImageTargetPlacement };
 
   constructor(container: HTMLElement, deps: PreviewDeps = {}) {
     this.container = container;
@@ -100,10 +109,19 @@ export class ImageTargetPreview {
     }
 
     const updateToken = ++this.updateToken;
+    const previewObjects = previewObjectsFromState(state);
     this.clearGroup(this.imageRoot);
     this.clearGroup(this.modelRoot);
-    this.loadedModel = undefined;
-    this.placement = normalizePlacement(state.placement);
+    this.loadedModels.clear();
+    this.placements.clear();
+    this.activePointers.clear();
+    this.dragStart = undefined;
+    this.pinchStart = undefined;
+    this.selectedObjectId = selectPreviewObjectId(previewObjects, state.selectedObjectId);
+
+    for (const object of previewObjects) {
+      this.placements.set(object.id, normalizePlacement(object.placement));
+    }
 
     if (state.imageUrl) {
       const texture = await this.loadTexture(state.imageUrl);
@@ -117,16 +135,19 @@ export class ImageTargetPreview {
       this.imageRoot.add(plane);
     }
 
-    if (state.model) {
-      const model = await this.loadModel(state.model.url);
+    for (const object of previewObjects) {
+      const model = await this.loadModel(object.model.url);
       if (this.disposed || updateToken !== this.updateToken || !model) {
         if (model) {
           disposeObject3D(model);
         }
-        return;
+        if (this.disposed || updateToken !== this.updateToken) {
+          return;
+        }
+        continue;
       }
-      this.loadedModel = model;
-      this.applyPlacement();
+      this.loadedModels.set(object.id, model);
+      this.applyPlacementToObject(object.id);
       this.modelRoot.add(model);
     }
   }
@@ -138,6 +159,8 @@ export class ImageTargetPreview {
     }
     this.clearGroup(this.imageRoot);
     this.clearGroup(this.modelRoot);
+    this.loadedModels.clear();
+    this.placements.clear();
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove);
     this.renderer.domElement.removeEventListener('pointerup', this.handlePointerEnd);
@@ -172,7 +195,7 @@ export class ImageTargetPreview {
   }
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
-    if (!this.loadedModel) {
+    if (!this.selectedLoadedModel()) {
       return;
     }
 
@@ -189,7 +212,7 @@ export class ImageTargetPreview {
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
-    if (!this.loadedModel || !this.activePointers.has(event.pointerId)) {
+    if (!this.selectedLoadedModel() || !this.activePointers.has(event.pointerId)) {
       return;
     }
 
@@ -200,7 +223,7 @@ export class ImageTargetPreview {
     if (this.activePointers.size >= 2 && this.pinchStart) {
       const distance = pinchDistance([...this.activePointers.values()]);
       if (distance > 0 && this.pinchStart.distance > 0) {
-        this.updatePlacement({
+        this.updatePlacement(this.pinchStart.objectId, {
           ...this.pinchStart.placement,
           scale: this.pinchStart.placement.scale * (distance / this.pinchStart.distance),
         });
@@ -219,7 +242,7 @@ export class ImageTargetPreview {
       offsetX: this.dragStart.placement.offsetX + ((pointer.x - this.dragStart.pointer.x) / width) * 2,
       offsetY: this.dragStart.placement.offsetY + ((pointer.y - this.dragStart.pointer.y) / height) * 2,
     });
-    this.updatePlacement(nextPlacement);
+    this.updatePlacement(this.dragStart.objectId, nextPlacement);
   };
 
   private readonly handlePointerEnd = (event: PointerEvent): void => {
@@ -241,35 +264,94 @@ export class ImageTargetPreview {
   };
 
   private startDragGesture(pointer: PointerPoint): void {
+    const selected = this.selectedPlacement();
+    if (!selected) {
+      return;
+    }
+
     this.dragStart = {
       pointer,
-      placement: { ...this.placement },
+      objectId: selected.objectId,
+      placement: { ...selected.placement },
     };
     this.pinchStart = undefined;
   }
 
   private startPinchGesture(): void {
-    this.dragStart = undefined;
-    this.pinchStart = {
-      distance: pinchDistance([...this.activePointers.values()]),
-      placement: { ...this.placement },
-    };
-  }
-
-  private updatePlacement(placement: ImageTargetPlacement): void {
-    this.placement = normalizePlacement(placement);
-    this.applyPlacement();
-    this.onPlacementChange?.({ ...this.placement });
-  }
-
-  private applyPlacement(): void {
-    if (!this.loadedModel) {
+    const selected = this.selectedPlacement();
+    if (!selected) {
       return;
     }
 
-    this.loadedModel.position.set(this.placement.offsetX, this.placement.height, this.placement.offsetY);
-    this.loadedModel.scale.setScalar(this.placement.scale);
+    this.dragStart = undefined;
+    this.pinchStart = {
+      distance: pinchDistance([...this.activePointers.values()]),
+      objectId: selected.objectId,
+      placement: { ...selected.placement },
+    };
   }
+
+  private updatePlacement(objectId: string, placement: ImageTargetPlacement): void {
+    const nextPlacement = normalizePlacement(placement);
+    this.placements.set(objectId, nextPlacement);
+    this.applyPlacementToObject(objectId);
+    this.onPlacementChange?.({ objectId, placement: { ...nextPlacement } });
+  }
+
+  private applyPlacementToObject(objectId: string): void {
+    const loadedModel = this.loadedModels.get(objectId);
+    const placement = this.placements.get(objectId);
+    if (!loadedModel || !placement) {
+      return;
+    }
+
+    loadedModel.position.set(placement.offsetX, placement.height, placement.offsetY);
+    loadedModel.scale.setScalar(placement.scale);
+  }
+
+  private selectedLoadedModel(): Group | undefined {
+    return this.selectedObjectId ? this.loadedModels.get(this.selectedObjectId) : undefined;
+  }
+
+  private selectedPlacement(): { objectId: string; placement: ImageTargetPlacement } | undefined {
+    const objectId = this.selectedObjectId;
+    if (!objectId) {
+      return undefined;
+    }
+
+    const placement = this.placements.get(objectId);
+    return placement ? { objectId, placement } : undefined;
+  }
+}
+
+function previewObjectsFromState(state: PreviewState): CloudImageTargetObject[] {
+  if (state.objects?.length) {
+    return state.objects.map((object, index) => ({
+      ...object,
+      id: object.id || `object-${index + 1}`,
+      placement: normalizePlacement(object.placement),
+    }));
+  }
+
+  if (!state.model) {
+    return [];
+  }
+
+  return [
+    {
+      id: 'object-1',
+      model: state.model,
+      placement: normalizePlacement(state.placement),
+    },
+  ];
+}
+
+function selectPreviewObjectId(objects: CloudImageTargetObject[], requestedId?: string): string | undefined {
+  if (requestedId && objects.some((object) => object.id === requestedId)) {
+    return requestedId;
+  }
+
+  return objects[0]?.id;
 }
 
 function pointerFromEvent(event: PointerEvent): PointerPoint {

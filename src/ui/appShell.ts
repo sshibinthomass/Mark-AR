@@ -35,7 +35,7 @@ const modeCards: ModeCard[] = [
     route: 'targets',
     badge: 'IMG+3D',
     title: 'Image targets',
-    text: 'Upload a target image, bind it to a Cloudflare model, and save it to the cloud.',
+    text: 'Upload a target image, bind it to Cloudflare models, and save it to the cloud.',
     action: 'Create target',
   },
   {
@@ -163,7 +163,7 @@ export function renderAppShell(markers: MarkerSpec[]): string {
       </section>
 
       <section class="page" data-page="targets" hidden aria-label="Cloud image targets">
-        ${renderPageHeader('Image targets', 'Upload a scan image, place a model above it, and save the pairing to Cloudflare.')}
+        ${renderPageHeader('Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
         <section class="target-workspace">
           <div class="target-editor">
             <section class="tool-card">
@@ -185,6 +185,11 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                   <option value="">Loading models...</option>
                 </select>
               </label>
+              <div class="object-action-row">
+                <button id="add-target-object" type="button">Add object</button>
+                <button id="remove-target-object" type="button">Remove object</button>
+              </div>
+              <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
               <div class="placement-grid">
                 <label><span>Scale</span><input id="target-scale" type="range" min="0.1" max="5" step="0.1" value="1" /></label>
                 <label><span>X offset</span><input id="target-offset-x" type="range" min="-1" max="1" step="0.05" value="0" /></label>

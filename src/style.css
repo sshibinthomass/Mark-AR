@@ -526,6 +526,8 @@ h1 {
 
 .target-workspace,
 .target-editor,
+.object-action-row,
+.target-object-list,
 .placement-grid,
 .saved-target-list,
 .saved-target-row,
@@ -549,10 +551,60 @@ h1 {
 }
 
 .target-editor label > span,
+.target-object-row small,
 .saved-target-row span {
   color: var(--muted);
   font-size: 13px;
   font-weight: 750;
+}
+
+.target-editor input[type="text"],
+.target-editor select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.9);
+  font-weight: 700;
+}
+
+.object-action-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.target-object-list {
+  gap: 8px;
+}
+
+.target-object-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  text-align: left;
+}
+
+.target-object-row[aria-selected="true"] {
+  border-color: rgba(15, 118, 110, 0.42);
+  background:
+    linear-gradient(135deg, rgba(94, 234, 212, 0.3), rgba(255, 255, 255, 0.92)),
+    rgba(255, 255, 255, 0.92);
+}
+
+.target-object-row strong,
+.target-object-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-object-row small {
+  justify-self: end;
 }
 
 .placement-grid {
@@ -782,7 +834,8 @@ button:disabled {
 
   .landing-flow,
   .mode-picker,
-  .button-row {
+  .button-row,
+  .object-action-row {
     grid-template-columns: 1fr;
   }
 

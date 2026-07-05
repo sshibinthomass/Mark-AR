@@ -166,10 +166,13 @@ describe('ImageTargetPreview', () => {
     dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150 });
 
     expect(placementChanges.at(-1)).toMatchObject({
-      scale: 1,
-      offsetX: 0.2,
-      offsetY: -0.2,
-      height: 0.12,
+      objectId: 'object-1',
+      placement: {
+        scale: 1,
+        offsetX: 0.2,
+        offsetY: -0.2,
+        height: 0.12,
+      },
     });
     expect(model.group.position.x).toBeCloseTo(0.2);
     expect(model.group.position.z).toBeCloseTo(-0.2);
@@ -215,12 +218,83 @@ describe('ImageTargetPreview', () => {
     dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 200, clientY: 200 });
 
     expect(placementChanges.at(-1)).toMatchObject({
-      scale: 2,
-      offsetX: 0,
-      offsetY: 0,
-      height: 0.12,
+      objectId: 'object-1',
+      placement: {
+        scale: 2,
+        offsetX: 0,
+        offsetY: 0,
+        height: 0.12,
+      },
     });
     expect(model.group.scale.x).toBeCloseTo(2);
+
+    preview.dispose();
+  });
+
+  it('moves only the selected object when multiple preview objects are loaded', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const chair = createDisposableModel();
+    const lamp = createDisposableModel();
+    const loadModel = vi
+      .fn<() => Promise<Group | undefined>>()
+      .mockResolvedValueOnce(chair.group)
+      .mockResolvedValueOnce(lamp.group);
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel,
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+    });
+
+    await preview.update({
+      objects: [
+        {
+          id: 'chair-object',
+          model: { id: 'chair', label: 'Chair', url: 'https://example.com/chair.glb', visibility: 'public' },
+          placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+        },
+        {
+          id: 'lamp-object',
+          model: { id: 'lamp', label: 'Lamp', url: 'https://example.com/lamp.glb', visibility: 'public' },
+          placement: { scale: 0.8, offsetX: 0.25, offsetY: 0.15, height: 0.2 },
+        },
+      ],
+      selectedObjectId: 'lamp-object',
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 150 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150 });
+
+    const placementChange = placementChanges.at(-1) as {
+      objectId: string;
+      placement: { scale: number; offsetX: number; offsetY: number; height: number };
+    };
+    expect(placementChange.objectId).toBe('lamp-object');
+    expect(placementChange.placement.scale).toBeCloseTo(0.8);
+    expect(placementChange.placement.offsetX).toBeCloseTo(0.45);
+    expect(placementChange.placement.offsetY).toBeCloseTo(-0.05);
+    expect(placementChange.placement.height).toBeCloseTo(0.2);
+    expect(chair.group.position.x).toBeCloseTo(0);
+    expect(chair.group.position.z).toBeCloseTo(0);
+    expect(lamp.group.position.x).toBeCloseTo(0.45);
+    expect(lamp.group.position.z).toBeCloseTo(-0.05);
 
     preview.dispose();
   });

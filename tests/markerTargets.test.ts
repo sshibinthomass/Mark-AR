@@ -14,6 +14,18 @@ describe('marker target mapping', () => {
           imageObjectKey: 'image-targets/images/cloud-1.jpg',
           model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
           placement: { scale: 1.2, offsetX: 0.1, offsetY: -0.2, height: 0.16 },
+          objects: [
+            {
+              id: 'object-chair',
+              model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+              placement: { scale: 1.2, offsetX: 0.1, offsetY: -0.2, height: 0.16 },
+            },
+            {
+              id: 'object-plant',
+              model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
+              placement: { scale: 0.8, offsetX: -0.3, offsetY: 0.2, height: 0.08 },
+            },
+          ],
         },
       ],
     });
@@ -29,6 +41,18 @@ describe('marker target mapping', () => {
       cloudflareAsset: {
         model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
         placement: { scale: 1.2, offsetX: 0.1, offsetY: -0.2, height: 0.16 },
+        objects: [
+          {
+            id: 'object-chair',
+            model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+            placement: { scale: 1.2, offsetX: 0.1, offsetY: -0.2, height: 0.16 },
+          },
+          {
+            id: 'object-plant',
+            model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
+            placement: { scale: 0.8, offsetX: -0.3, offsetY: 0.2, height: 0.08 },
+          },
+        ],
       },
     });
   });

@@ -19,10 +19,17 @@ import type { MarkerObject } from './arObjects';
 
 export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
 
-export type CloudflarePlacedAsset = {
+export type CloudflarePlacedObject = {
+  id?: string;
   model: CloudflareModelOption;
+  placement?: ImageTargetPlacement;
+};
+
+export type CloudflarePlacedAsset = {
+  model?: CloudflareModelOption;
   baseImage?: ProcessedBaseImage;
   placement?: ImageTargetPlacement;
+  objects?: CloudflarePlacedObject[];
   loadModelGroup?: ModelGroupLoader;
 };
 
@@ -34,32 +41,50 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
     group.add(createProcessedBasePlane(asset.baseImage));
   }
 
-  const modelRoot = new Group();
-  modelRoot.name = 'cloudflare-model-root';
-  modelRoot.position.z = asset.baseImage ? 0.12 : 0.04;
-  const placement = asset.placement;
-  if (placement) {
-    modelRoot.position.set(placement.offsetX, placement.offsetY, placement.height);
-    modelRoot.scale.setScalar(placement.scale);
-  }
-  group.add(modelRoot);
-
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
-  void loadModelGroup(asset.model.url)
-    .then((loadedModel) => {
-      loadedModel.name = loadedModel.name || 'cloudflare-loaded-model';
-      modelRoot.add(loadedModel);
-    })
-    .catch(() => {
-      modelRoot.add(createModelLoadFallback());
-    });
+  const modelRoots = createPlacedObjects(asset).map((object, index) => {
+    const modelRoot = new Group();
+    modelRoot.name = object.id ? `cloudflare-model-root-${object.id}` : `cloudflare-model-root-${index + 1}`;
+    modelRoot.position.z = asset.baseImage ? 0.12 : 0.04;
+    if (object.placement) {
+      modelRoot.position.set(object.placement.offsetX, object.placement.offsetY, object.placement.height);
+      modelRoot.scale.setScalar(object.placement.scale);
+    }
+    group.add(modelRoot);
+
+    void loadModelGroup(object.model.url)
+      .then((loadedModel) => {
+        loadedModel.name = loadedModel.name || 'cloudflare-loaded-model';
+        modelRoot.add(loadedModel);
+      })
+      .catch(() => {
+        modelRoot.add(createModelLoadFallback());
+      });
+
+    return modelRoot;
+  });
 
   return {
     group,
     update: (deltaSeconds: number) => {
-      modelRoot.rotation.z += deltaSeconds * 0.22;
+      for (const modelRoot of modelRoots) {
+        modelRoot.rotation.z += deltaSeconds * 0.22;
+      }
     },
   };
+}
+
+function createPlacedObjects(asset: CloudflarePlacedAsset): CloudflarePlacedObject[] {
+  if (asset.objects?.length) {
+    return asset.objects;
+  }
+  if (!asset.model) {
+    return [];
+  }
+  return [{
+    model: asset.model,
+    ...(asset.placement ? { placement: asset.placement } : {}),
+  }];
 }
 
 async function loadGltfModelGroup(modelUrl: string): Promise<Group> {

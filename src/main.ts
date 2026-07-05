@@ -15,6 +15,7 @@ import {
   deleteImageTarget,
   listImageTargets,
   type CloudImageTarget,
+  type CloudImageTargetObject,
 } from './app/cloudImageTargets';
 import {
   DEFAULT_IMAGE_TARGET_PLACEMENT,
@@ -73,6 +74,9 @@ const targetImageFile = document.querySelector<HTMLInputElement>('#target-image-
 const targetLabelInput = document.querySelector<HTMLInputElement>('#target-label');
 const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-model-select');
 const targetPreviewStage = document.querySelector<HTMLElement>('#target-preview-stage');
+const addTargetObjectButton = document.querySelector<HTMLButtonElement>('#add-target-object');
+const removeTargetObjectButton = document.querySelector<HTMLButtonElement>('#remove-target-object');
+const targetObjectList = document.querySelector<HTMLElement>('#target-object-list');
 const targetScaleInput = document.querySelector<HTMLInputElement>('#target-scale');
 const targetOffsetXInput = document.querySelector<HTMLInputElement>('#target-offset-x');
 const targetOffsetYInput = document.querySelector<HTMLInputElement>('#target-offset-y');
@@ -89,6 +93,8 @@ let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
 let targetPlacement: ImageTargetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
+let targetObjects: CloudImageTargetObject[] = [];
+let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
 
 activateRoute(shell, routeFromHash(window.location.hash));
@@ -240,13 +246,31 @@ targetImageFile?.addEventListener('change', async () => {
 
 [targetScaleInput, targetOffsetXInput, targetOffsetYInput, targetHeightInput].forEach((input) => {
   input?.addEventListener('input', () => {
-    targetPlacement = readTargetPlacement();
+    updateSelectedTargetObjectPlacement(readTargetPlacement());
     void updateTargetPreview();
   });
 });
 
 targetModelSelect?.addEventListener('change', () => {
+  if (targetObjects.length === 0 && getSelectedTargetModel()) {
+    addTargetObjectFromSelection();
+    return;
+  }
+
+  const selectedModel = getSelectedTargetModel();
+  if (selectedModel) {
+    updateImageTargetStatus(`${selectedModel.label} ready to add.`, false);
+  }
+  renderTargetObjectList();
   void updateTargetPreview();
+});
+
+addTargetObjectButton?.addEventListener('click', () => {
+  addTargetObjectFromSelection();
+});
+
+removeTargetObjectButton?.addEventListener('click', () => {
+  removeSelectedTargetObject();
 });
 
 saveImageTargetButton?.addEventListener('click', async () => {
@@ -256,6 +280,8 @@ saveImageTargetButton?.addEventListener('click', async () => {
 refreshImageTargetsButton?.addEventListener('click', async () => {
   await refreshImageTargets();
 });
+
+renderTargetObjectList();
 
 async function initializeCloudflareControls(): Promise<void> {
   if (authToken) {
@@ -369,6 +395,7 @@ function renderTargetModelOptions(models: CloudflareModelOption[]): void {
   }
 
   targetModelSelect.value = models.some((model) => model.id === selectedValue) ? selectedValue : '';
+  renderTargetObjectList();
 }
 
 function ensureImageTargetPreview(): ImageTargetPreview | undefined {
@@ -376,9 +403,17 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
     return undefined;
   }
   imageTargetPreview ??= new ImageTargetPreview(targetPreviewStage, {
-    onPlacementChange: (placement) => {
+    onPlacementChange: ({ objectId, placement }) => {
+      const object = targetObjects.find((entry) => entry.id === objectId);
+      if (object) {
+        object.placement = placement;
+      }
       targetPlacement = placement;
-      syncTargetPlacementInputs(placement);
+      if (!selectedTargetObjectId || selectedTargetObjectId === objectId) {
+        selectedTargetObjectId = objectId;
+        syncTargetPlacementInputs(placement);
+      }
+      renderTargetObjectList();
     },
   });
   return imageTargetPreview;
@@ -396,6 +431,136 @@ function readTargetPlacement(): ImageTargetPlacement {
 function getSelectedTargetModel(): CloudflareModelOption | undefined {
   const selectedId = targetModelSelect?.value;
   return cloudflareModels.find((model) => model.id === selectedId);
+}
+
+function addTargetObjectFromSelection(): void {
+  const model = getSelectedTargetModel();
+  if (!model) {
+    updateImageTargetStatus('Choose a Cloudflare model before adding an object.', true);
+    return;
+  }
+
+  const object: CloudImageTargetObject = {
+    id: createTargetObjectId(),
+    model,
+    placement: nextTargetObjectPlacement(),
+  };
+  targetObjects = [...targetObjects, object];
+  selectTargetObject(object.id, { refreshPreview: false });
+  renderTargetObjectList();
+  updateImageTargetStatus(`${model.label} added to the target.`, false);
+  void updateTargetPreview();
+}
+
+function removeSelectedTargetObject(): void {
+  if (targetObjects.length === 0) {
+    updateImageTargetStatus('No placed objects to remove.', true);
+    return;
+  }
+
+  const selectedIndex = targetObjects.findIndex((object) => object.id === selectedTargetObjectId);
+  const removeIndex = selectedIndex >= 0 ? selectedIndex : targetObjects.length - 1;
+  targetObjects = targetObjects.filter((_, index) => index !== removeIndex);
+  selectedTargetObjectId = targetObjects[Math.min(removeIndex, targetObjects.length - 1)]?.id;
+
+  const selectedObject = getSelectedTargetObject();
+  targetPlacement = selectedObject?.placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT;
+  syncTargetPlacementInputs(targetPlacement);
+  renderTargetObjectList();
+  updateImageTargetStatus(
+    targetObjects.length > 0
+      ? `${targetObjects.length} object${targetObjects.length === 1 ? '' : 's'} placed.`
+      : 'No objects placed yet.',
+    false,
+  );
+  void updateTargetPreview();
+}
+
+function selectTargetObject(objectId: string, options?: { refreshPreview?: boolean }): void {
+  const object = targetObjects.find((entry) => entry.id === objectId);
+  if (!object) {
+    return;
+  }
+
+  selectedTargetObjectId = object.id;
+  targetPlacement = object.placement;
+  if (targetModelSelect) {
+    targetModelSelect.value = object.model.id;
+  }
+  syncTargetPlacementInputs(object.placement);
+  renderTargetObjectList();
+  updateImageTargetStatus(`${object.model.label} selected.`, false);
+  if (options?.refreshPreview !== false) {
+    void updateTargetPreview();
+  }
+}
+
+function updateSelectedTargetObjectPlacement(placement: ImageTargetPlacement): void {
+  targetPlacement = normalizePlacement(placement);
+  const object = getSelectedTargetObject();
+  if (object) {
+    object.placement = targetPlacement;
+    renderTargetObjectList();
+  }
+}
+
+function getSelectedTargetObject(): CloudImageTargetObject | undefined {
+  return targetObjects.find((object) => object.id === selectedTargetObjectId);
+}
+
+function renderTargetObjectList(): void {
+  if (!targetObjectList) {
+    return;
+  }
+
+  if (addTargetObjectButton) {
+    addTargetObjectButton.disabled = !getSelectedTargetModel();
+  }
+  if (removeTargetObjectButton) {
+    removeTargetObjectButton.disabled = targetObjects.length === 0;
+  }
+
+  targetObjectList.innerHTML = '';
+  if (targetObjects.length === 0) {
+    targetObjectList.textContent = 'No objects placed yet.';
+    return;
+  }
+
+  for (const [index, object] of targetObjects.entries()) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'target-object-row';
+    row.dataset.objectId = object.id;
+    row.setAttribute('aria-selected', String(object.id === selectedTargetObjectId));
+    row.addEventListener('click', () => selectTargetObject(object.id));
+
+    const label = document.createElement('strong');
+    label.textContent = object.model.label;
+    const meta = document.createElement('small');
+    meta.textContent = `${index + 1} · ${Number(object.placement.scale.toFixed(2))}x`;
+    row.append(label, meta);
+    targetObjectList.append(row);
+  }
+}
+
+function nextTargetObjectPlacement(): ImageTargetPlacement {
+  if (targetObjects.length === 0) {
+    return normalizePlacement(readTargetPlacement());
+  }
+
+  const index = targetObjects.length;
+  return normalizePlacement({
+    ...DEFAULT_IMAGE_TARGET_PLACEMENT,
+    offsetX: Math.max(-0.8, Math.min(0.8, -0.24 + index * 0.18)),
+    offsetY: Math.max(-0.8, Math.min(0.8, (index % 3) * 0.12)),
+  });
+}
+
+function createTargetObjectId(): string {
+  const cryptoId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `object-${cryptoId}`;
 }
 
 function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
@@ -420,8 +585,8 @@ async function updateTargetPreview(): Promise<void> {
   }
   await preview.update({
     imageUrl: targetImagePayload ? imageTargetDataUrl(targetImagePayload) : undefined,
-    model: getSelectedTargetModel(),
-    placement: targetPlacement,
+    objects: targetObjects,
+    selectedObjectId: selectedTargetObjectId,
   });
 }
 
@@ -441,13 +606,23 @@ async function saveCurrentImageTarget(): Promise<void> {
     return;
   }
 
-  const model = getSelectedTargetModel();
-  if (!model) {
-    updateImageTargetStatus('Choose a Cloudflare model.', true);
+  if (targetObjects.length === 0) {
+    const model = getSelectedTargetModel();
+    if (model) {
+      addTargetObjectFromSelection();
+    }
+  }
+
+  if (targetObjects.length === 0) {
+    updateImageTargetStatus('Add at least one Cloudflare model.', true);
     return;
   }
 
-  targetPlacement = readTargetPlacement();
+  updateSelectedTargetObjectPlacement(readTargetPlacement());
+  const objects = targetObjects.map((object) => ({
+    ...object,
+    placement: normalizePlacement(object.placement),
+  }));
   updateImageTargetStatus('Saving image target...', false);
 
   try {
@@ -457,8 +632,9 @@ async function saveCurrentImageTarget(): Promise<void> {
       label: targetLabelInput?.value.trim() || 'Image target',
       imageBase64: targetImagePayload.imageBase64,
       imageMimeType: targetImagePayload.imageMimeType,
-      model,
-      placement: targetPlacement,
+      model: objects[0].model,
+      placement: objects[0].placement,
+      objects,
     });
     await refreshImageTargets({ rethrowOnError: true });
     updateImageTargetStatus('Image target saved to Cloudflare.', false);
@@ -513,7 +689,9 @@ function renderSavedImageTargets(): void {
     const label = document.createElement('strong');
     label.textContent = target.label;
     const modelName = document.createElement('span');
-    modelName.textContent = target.model.label;
+    modelName.textContent = target.objects.length === 1
+      ? target.model.label
+      : `${target.objects.length} objects`;
     meta.append(label, modelName);
 
     const deleteButton = document.createElement('button');
