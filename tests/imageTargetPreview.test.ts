@@ -1,8 +1,16 @@
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, Texture } from 'three';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ImageTargetPreview } from '../src/scene/ImageTargetPreview';
 
 describe('ImageTargetPreview', () => {
+  const originalRequestAnimationFrame = window.requestAnimationFrame;
+  const originalCancelAnimationFrame = window.cancelAnimationFrame;
+
+  afterEach(() => {
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+    window.cancelAnimationFrame = originalCancelAnimationFrame;
+  });
+
   it('mounts a renderer and disposes it cleanly with injected dependencies', () => {
     const container = document.createElement('div');
     const rendererElement = document.createElement('canvas');
@@ -26,6 +34,36 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
     expect(renderer.dispose).toHaveBeenCalled();
     expect(container.contains(rendererElement)).toBe(false);
+  });
+
+  it('binds native frame APIs to window when dependencies are not injected', () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const cancelFrame = vi.fn();
+    let requestFrameThis: unknown;
+
+    window.requestAnimationFrame = function boundFrameCheck(this: unknown): number {
+      requestFrameThis = this;
+      return 1;
+    };
+    window.cancelAnimationFrame = cancelFrame;
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    expect(requestFrameThis).toBe(window);
+    preview.dispose();
+    expect(cancelFrame).toHaveBeenCalledWith(1);
   });
 
   it('disposes replaced GPU-backed preview resources on update and dispose', async () => {
