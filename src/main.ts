@@ -429,20 +429,25 @@ async function saveCurrentImageTarget(): Promise<void> {
 
   targetPlacement = readTargetPlacement();
   updateImageTargetStatus('Saving image target...', false);
-  await createImageTarget({
-    apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
-    authToken,
-    label: targetLabelInput?.value.trim() || 'Image target',
-    imageBase64: targetImagePayload.imageBase64,
-    imageMimeType: targetImagePayload.imageMimeType,
-    model,
-    placement: targetPlacement,
-  });
-  updateImageTargetStatus('Image target saved to Cloudflare.', false);
-  await refreshImageTargets();
+
+  try {
+    await createImageTarget({
+      apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
+      authToken,
+      label: targetLabelInput?.value.trim() || 'Image target',
+      imageBase64: targetImagePayload.imageBase64,
+      imageMimeType: targetImagePayload.imageMimeType,
+      model,
+      placement: targetPlacement,
+    });
+    await refreshImageTargets({ rethrowOnError: true });
+    updateImageTargetStatus('Image target saved to Cloudflare.', false);
+  } catch (error) {
+    updateImageTargetStatus(errorMessage(error, 'Unable to save image target'), true);
+  }
 }
 
-async function refreshImageTargets(): Promise<void> {
+async function refreshImageTargets(options?: { rethrowOnError?: boolean }): Promise<void> {
   try {
     cloudImageTargets = await listImageTargets({
       apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
@@ -459,6 +464,9 @@ async function refreshImageTargets(): Promise<void> {
     cloudImageTargets = [];
     renderSavedImageTargets();
     updateImageTargetStatus(errorMessage(error, 'Unable to load image targets'), true);
+    if (options?.rethrowOnError) {
+      throw error;
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AR_MARKERS } from '../src/ar/markerCatalog';
-import { compileMarkerTargets } from '../src/ar/targetCompiler';
+import { compileMarkerTargets, loadMarkerImage } from '../src/ar/targetCompiler';
 
 describe('compileMarkerTargets', () => {
   it('loads marker images in target order and returns a disposable object url', async () => {
@@ -47,5 +47,32 @@ describe('compileMarkerTargets', () => {
     result.dispose();
 
     expect(revokeObjectUrl).toHaveBeenCalledWith('blob:mark-ar-targets');
+  });
+
+  it('sets anonymous crossOrigin before assigning a marker image src', async () => {
+    const OriginalImage = globalThis.Image;
+    const assignments: Array<{ crossOrigin: string | null; src: string }> = [];
+
+    class FakeImage {
+      crossOrigin: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      set src(value: string) {
+        assignments.push({ crossOrigin: this.crossOrigin, src: value });
+        this.onload?.();
+      }
+    }
+
+    vi.stubGlobal('Image', FakeImage);
+
+    try {
+      await loadMarkerImage('/markers/cloud-target.jpg');
+      expect(assignments).toEqual([
+        { crossOrigin: 'anonymous', src: '/markers/cloud-target.jpg' },
+      ]);
+    } finally {
+      vi.stubGlobal('Image', OriginalImage);
+    }
   });
 });
