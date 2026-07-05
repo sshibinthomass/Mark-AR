@@ -19,7 +19,7 @@ export const AR_MARKERS: MarkerSpec[] = [
     id: 'aurora-gate',
     label: 'Aurora Gate',
     targetIndex: 0,
-    imagePath: '/markers/aurora-gate.svg',
+    imagePath: withBasePath(import.meta.env.BASE_URL, 'markers/aurora-gate.svg'),
     object: {
       kind: 'crystalTower',
       color: 0x16d9e3,
@@ -30,7 +30,7 @@ export const AR_MARKERS: MarkerSpec[] = [
     id: 'orbit-key',
     label: 'Orbit Key',
     targetIndex: 1,
-    imagePath: '/markers/orbit-key.svg',
+    imagePath: withBasePath(import.meta.env.BASE_URL, 'markers/orbit-key.svg'),
     object: {
       kind: 'orbitBeacon',
       color: 0xff4f8b,
@@ -45,4 +45,11 @@ export function getMarkerImagePaths(): string[] {
 
 export function getMarkerByTargetIndex(targetIndex: number): MarkerSpec | undefined {
   return AR_MARKERS.find((marker) => marker.targetIndex === targetIndex);
+}
+
+export function withBasePath(basePath: string, assetPath: string): string {
+  const cleanBase = basePath.endsWith('/') ? basePath : `${basePath}/`;
+  const cleanAsset = assetPath.replace(/^\/+/, '');
+
+  return `${cleanBase}${cleanAsset}`;
 }

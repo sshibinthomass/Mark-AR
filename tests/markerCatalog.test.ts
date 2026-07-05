@@ -3,6 +3,7 @@ import {
   AR_MARKERS,
   getMarkerByTargetIndex,
   getMarkerImagePaths,
+  withBasePath,
 } from '../src/ar/markerCatalog';
 
 describe('AR marker catalog', () => {
@@ -23,5 +24,12 @@ describe('AR marker catalog', () => {
     expect(getMarkerByTargetIndex(0)?.label).toBe('Aurora Gate');
     expect(getMarkerByTargetIndex(1)?.label).toBe('Orbit Key');
     expect(getMarkerByTargetIndex(9)).toBeUndefined();
+  });
+
+  it('prefixes marker assets with the Vite base path for GitHub Pages', () => {
+    expect(withBasePath('/Mark-AR/', 'markers/aurora-gate.svg')).toBe(
+      '/Mark-AR/markers/aurora-gate.svg',
+    );
+    expect(withBasePath('/', 'markers/orbit-key.svg')).toBe('/markers/orbit-key.svg');
   });
 });
