@@ -64,6 +64,7 @@ describe('setupMarkerAnchors', () => {
         cloudflareAsset: {
           model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
           placement: { scale: 1.5, offsetX: 0.1, offsetY: 0.2, height: 0.2 },
+          loadModelGroup: async () => new Group(),
         },
       },
     ]);
