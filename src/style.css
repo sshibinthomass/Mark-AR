@@ -665,6 +665,9 @@ h1 {
   background: rgba(4, 18, 22, 0.76);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
   backdrop-filter: blur(10px);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .target-camera-gizmo::before {
@@ -675,6 +678,10 @@ h1 {
   height: 1px;
   transform: translate(-50%, -50%) rotate(-22deg);
   background: rgba(255, 255, 255, 0.18);
+}
+
+.target-camera-gizmo.is-dragging {
+  cursor: grabbing;
 }
 
 .gizmo-button,
@@ -692,6 +699,7 @@ h1 {
   font-size: 12px;
   font-weight: 950;
   line-height: 1;
+  touch-action: none;
 }
 
 .gizmo-button-y {

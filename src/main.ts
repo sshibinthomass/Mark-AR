@@ -48,6 +48,7 @@ import {
 import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
   type PreviewCameraView,
+  cameraViewForDrag,
   cameraViewForPreset,
   isCameraPreset,
 } from './scene/previewCamera';
@@ -120,6 +121,16 @@ let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
 let targetObjects: CloudImageTargetObject[] = [];
 let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
+let targetCameraGizmoDrag:
+  | {
+      pointerId: number;
+      startX: number;
+      startY: number;
+      startView: PreviewCameraView;
+      didMove: boolean;
+    }
+  | undefined;
+let suppressedCameraGizmoClick: { x: number; y: number } | undefined;
 
 activateRoute(shell, routeFromHash(window.location.hash));
 void initializeCloudflareControls();
@@ -283,6 +294,19 @@ targetImageFile?.addEventListener('change', async () => {
 });
 
 targetCameraGizmo?.addEventListener('click', (event) => {
+  if (suppressedCameraGizmoClick) {
+    const distanceFromDragEnd = Math.hypot(
+      event.clientX - suppressedCameraGizmoClick.x,
+      event.clientY - suppressedCameraGizmoClick.y,
+    );
+    suppressedCameraGizmoClick = undefined;
+    if (distanceFromDragEnd < 6) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+  }
+
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-camera-preset]');
   if (!button || !isCameraPreset(button.dataset.cameraPreset)) {
     return;
@@ -292,6 +316,42 @@ targetCameraGizmo?.addEventListener('click', (event) => {
   syncTargetCameraInputs(targetCameraView);
   void updateTargetPreview();
 });
+
+targetCameraGizmo?.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0 && event.pointerType !== 'touch') {
+    return;
+  }
+
+  targetCameraGizmoDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startView: targetCameraView,
+    didMove: false,
+  };
+  targetCameraGizmo.classList.add('is-dragging');
+  window.addEventListener('pointermove', handleTargetCameraGizmoPointerMove);
+  window.addEventListener('pointerup', handleTargetCameraGizmoPointerEnd);
+  window.addEventListener('pointercancel', handleTargetCameraGizmoPointerEnd);
+});
+
+function handleTargetCameraGizmoPointerMove(event: PointerEvent): void {
+  if (!targetCameraGizmoDrag || targetCameraGizmoDrag.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const deltaX = event.clientX - targetCameraGizmoDrag.startX;
+  const deltaY = event.clientY - targetCameraGizmoDrag.startY;
+  if (!targetCameraGizmoDrag.didMove && Math.hypot(deltaX, deltaY) < 3) {
+    return;
+  }
+
+  targetCameraGizmoDrag.didMove = true;
+  targetCameraView = cameraViewForDrag(targetCameraGizmoDrag.startView, { deltaX, deltaY });
+  syncTargetCameraInputs(targetCameraView);
+  void updateTargetPreview();
+  event.preventDefault();
+}
 
 [targetSpinSpeedInput, targetBobHeightInput, targetBobSpeedInput].forEach((input) => {
   input?.addEventListener('input', () => {
@@ -683,6 +743,23 @@ function syncTargetCameraInputs(cameraView: PreviewCameraView): void {
   setRangeInputValue(targetCameraHeightInput, cameraView.height);
   setRangeInputValue(targetCameraYawInput, cameraView.yawDegrees);
   setRangeInputValue(targetCameraTargetInput, cameraView.targetHeight);
+}
+
+function handleTargetCameraGizmoPointerEnd(event: PointerEvent): void {
+  if (!targetCameraGizmoDrag || targetCameraGizmoDrag.pointerId !== event.pointerId) {
+    return;
+  }
+
+  if (targetCameraGizmoDrag.didMove) {
+    suppressedCameraGizmoClick = { x: event.clientX, y: event.clientY };
+    event.preventDefault();
+  }
+
+  targetCameraGizmoDrag = undefined;
+  targetCameraGizmo?.classList.remove('is-dragging');
+  window.removeEventListener('pointermove', handleTargetCameraGizmoPointerMove);
+  window.removeEventListener('pointerup', handleTargetCameraGizmoPointerEnd);
+  window.removeEventListener('pointercancel', handleTargetCameraGizmoPointerEnd);
 }
 
 function setRangeInputValue(input: HTMLInputElement | null, value: number): void {
