@@ -22,6 +22,9 @@ import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
+import { DEFAULT_PREVIEW_CAMERA_VIEW, type PreviewCameraView } from './previewCamera';
+
+export { DEFAULT_PREVIEW_CAMERA_VIEW, type PreviewCameraView } from './previewCamera';
 
 type PreviewRenderer = Pick<WebGLRenderer, 'setPixelRatio' | 'setSize' | 'render' | 'dispose'> & {
   domElement: HTMLCanvasElement;
@@ -35,20 +38,6 @@ type PointerPoint = {
 export type PreviewPlacementChange = {
   objectId: string;
   placement: ImageTargetPlacement;
-};
-
-export type PreviewCameraView = {
-  distance: number;
-  height: number;
-  yawDegrees: number;
-  targetHeight: number;
-};
-
-export const DEFAULT_PREVIEW_CAMERA_VIEW: PreviewCameraView = {
-  distance: 2.1,
-  height: 1.1,
-  yawDegrees: 0,
-  targetHeight: 0,
 };
 
 type PreviewDeps = {

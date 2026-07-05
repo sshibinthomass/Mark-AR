@@ -47,9 +47,11 @@ import {
 } from './capture/cameraCapture';
 import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
-  ImageTargetPreview,
   type PreviewCameraView,
-} from './scene/ImageTargetPreview';
+  cameraViewForPreset,
+  isCameraPreset,
+} from './scene/previewCamera';
+import { ImageTargetPreview } from './scene/ImageTargetPreview';
 import { renderAppShell } from './ui/appShell';
 import { routeFromHash } from './ui/pageRoutes';
 import { activateRoute } from './ui/pageRouter';
@@ -95,6 +97,7 @@ const targetCameraDistanceInput = document.querySelector<HTMLInputElement>('#tar
 const targetCameraHeightInput = document.querySelector<HTMLInputElement>('#target-camera-height');
 const targetCameraYawInput = document.querySelector<HTMLInputElement>('#target-camera-yaw');
 const targetCameraTargetInput = document.querySelector<HTMLInputElement>('#target-camera-target');
+const targetCameraGizmo = document.querySelector<HTMLElement>('#target-camera-gizmo');
 const targetSpinAxisSelect = document.querySelector<HTMLSelectElement>('#target-spin-axis');
 const targetSpinSpeedInput = document.querySelector<HTMLInputElement>('#target-spin-speed');
 const targetBobHeightInput = document.querySelector<HTMLInputElement>('#target-bob-height');
@@ -277,6 +280,17 @@ targetImageFile?.addEventListener('change', async () => {
     targetCameraView = readTargetCameraView();
     void updateTargetPreview();
   });
+});
+
+targetCameraGizmo?.addEventListener('click', (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-camera-preset]');
+  if (!button || !isCameraPreset(button.dataset.cameraPreset)) {
+    return;
+  }
+
+  targetCameraView = cameraViewForPreset(button.dataset.cameraPreset);
+  syncTargetCameraInputs(targetCameraView);
+  void updateTargetPreview();
 });
 
 [targetSpinSpeedInput, targetBobHeightInput, targetBobSpeedInput].forEach((input) => {

@@ -236,7 +236,15 @@ export function renderAppShell(markers: MarkerSpec[]): string {
               <div id="saved-image-target-list" class="saved-target-list"></div>
             </section>
           </div>
-          <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
+          <div class="target-preview-shell">
+            <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
+            <div id="target-camera-gizmo" class="target-camera-gizmo" aria-label="Camera view controls">
+              <button type="button" class="gizmo-button gizmo-button-y" data-camera-preset="top" aria-label="Top camera view" title="Top view">Y</button>
+              <button type="button" class="gizmo-button gizmo-button-z" data-camera-preset="front" aria-label="Front camera view" title="Front view">Z</button>
+              <button type="button" class="gizmo-button gizmo-button-x" data-camera-preset="right" aria-label="Right camera view" title="Right view">X</button>
+              <button type="button" class="gizmo-home" data-camera-preset="home" aria-label="Reset camera view" title="Reset view">0</button>
+            </div>
+          </div>
         </section>
       </section>
 
