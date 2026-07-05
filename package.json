@@ -11,13 +11,13 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
-    "@types/three": "^0.185.0",
+    "@types/three": "^0.150.2",
     "happy-dom": "^20.10.6",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^4.1.9"
   },
   "dependencies": {
-    "three": "^0.185.1"
+    "three": "^0.150.1"
   }
 }
