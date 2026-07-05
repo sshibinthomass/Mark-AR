@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Aurora Gate</title>
+  <desc id="desc">Printable Web AR marker for target zero.</desc>
+  <rect width="1024" height="1024" fill="#fbfbf5"/>
+  <rect x="32" y="32" width="960" height="960" fill="none" stroke="#101014" stroke-width="32"/>
+  <rect x="88" y="88" width="848" height="848" fill="#f8f5e9" stroke="#101014" stroke-width="10"/>
+  <path d="M182 828V238l330-132 330 132v590H182Z" fill="#101014"/>
+  <path d="M250 780V284l262-104 262 104v496H250Z" fill="#16d9e3"/>
+  <path d="M318 728V328l194-76 194 76v400H318Z" fill="#fbfbf5"/>
+  <path d="M386 728V372l126-50 126 50v356H386Z" fill="#101014"/>
+  <path d="M444 728V412l68-28 68 28v316H444Z" fill="#f6d365"/>
+  <circle cx="216" cy="216" r="52" fill="#f6d365" stroke="#101014" stroke-width="16"/>
+  <circle cx="808" cy="246" r="40" fill="#fbfbf5" stroke="#101014" stroke-width="16"/>
+  <rect x="148" y="576" width="76" height="76" fill="#fbfbf5"/>
+  <rect x="796" y="576" width="76" height="76" fill="#fbfbf5"/>
+  <rect x="148" y="696" width="76" height="76" fill="#16d9e3"/>
+  <rect x="796" y="696" width="76" height="76" fill="#f6d365"/>
+  <path d="M704 396h104v28H704zm-488 0h104v28H216zM704 466h104v28H704zm-488 0h104v28H216z" fill="#101014"/>
+  <path d="M512 120 548 88l34 34-36 34 36 34-34 34-36-32-36 32-34-34 36-34-36-34 34-34 36 32Z" fill="#101014"/>
+  <text x="512" y="900" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" letter-spacing="6" fill="#101014">AURORA GATE</text>
+  <text x="512" y="950" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="4" fill="#101014">MARK-AR TARGET 01</text>
+</svg>
