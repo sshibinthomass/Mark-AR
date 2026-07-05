@@ -72,7 +72,7 @@ Append these tests inside `describe('handleGenerateModelRequest', () => { ... })
     const { bucket, objects } = createMemoryBucket({
       'image-targets/index.json': JSON.stringify({ targets: [] }),
     });
-    const env = createEnv({ MODEL_BUCKET: bucket });
+    const env = createEnv({ MODEL_BUCKET: bucket, PUBLIC_MODEL_ORIGIN: '' });
     const deps = { fetch: vi.fn(), now: () => new Date('2026-07-05T18:00:00Z') };
     const adminToken = await createAdminToken(env, deps);
     const ownerToken = await createApprovedUserToken(env, deps, adminToken, 'maker@example.com');
@@ -1582,16 +1582,16 @@ export type StartMarkerARHooks = {
 };
 ```
 
-Change `setupMarkerAnchors` signature and implementation:
+Change `setupMarkerAnchors` signature and implementation. Keep existing marker-array callers working by accepting either `RuntimeMarkerTarget[]` or `MarkerSpec[]`:
 
 ```ts
 export function setupMarkerAnchors(
   mindarThree: Pick<MindARThreeInstance, 'addAnchor' | 'scene'>,
-  targets: RuntimeMarkerTarget[] = createRuntimeMarkerTargets(),
+  targets: RuntimeMarkerTarget[] | MarkerSpec[] = createRuntimeMarkerTargets(),
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
   fallbackCloudflareAsset?: CloudflarePlacedAsset,
 ): MarkerObject[] {
-  return targets.map((target) => {
+  return normalizeAnchorTargets(targets).map((target) => {
     const anchor = mindarThree.addAnchor(target.marker.targetIndex);
     const cloudflareAsset = target.cloudflareAsset ?? fallbackCloudflareAsset;
     const markerObject = cloudflareAsset
@@ -1606,6 +1606,15 @@ export function setupMarkerAnchors(
 
     return markerObject;
   });
+}
+
+function normalizeAnchorTargets(targets: RuntimeMarkerTarget[] | MarkerSpec[]): RuntimeMarkerTarget[] {
+  if (targets.length === 0) {
+    return [];
+  }
+  return 'marker' in targets[0]
+    ? (targets as RuntimeMarkerTarget[])
+    : (targets as MarkerSpec[]).map((marker) => ({ marker }));
 }
 ```
 
