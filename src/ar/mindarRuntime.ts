@@ -5,7 +5,11 @@ import {
   createCloudflareMarkerObject,
   type CloudflarePlacedAsset,
 } from './cloudflareMarkerObject';
-import { AR_MARKERS, type MarkerSpec } from './markerCatalog';
+import { type MarkerSpec } from './markerCatalog';
+import {
+  createRuntimeMarkerTargets,
+  type RuntimeMarkerTarget,
+} from './markerTargets';
 import {
   compileMarkerTargets,
   type MindARCompilerConstructor,
@@ -46,6 +50,7 @@ export type MarkerARSession = {
 };
 
 export type StartMarkerARHooks = {
+  targets?: RuntimeMarkerTarget[];
   cloudflareAsset?: CloudflarePlacedAsset;
   onCompileProgress?: (percent: number) => void;
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void;
@@ -59,24 +64,35 @@ type MindARModules = {
 
 export function setupMarkerAnchors(
   mindarThree: Pick<MindARThreeInstance, 'addAnchor' | 'scene'>,
-  markers: MarkerSpec[] = AR_MARKERS,
+  targets: RuntimeMarkerTarget[] | MarkerSpec[] = createRuntimeMarkerTargets(),
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
-  cloudflareAsset?: CloudflarePlacedAsset,
+  fallbackCloudflareAsset?: CloudflarePlacedAsset,
 ): MarkerObject[] {
-  return markers.map((marker) => {
-    const anchor = mindarThree.addAnchor(marker.targetIndex);
+  return normalizeAnchorTargets(targets).map((target) => {
+    const anchor = mindarThree.addAnchor(target.marker.targetIndex);
+    const cloudflareAsset = target.cloudflareAsset ?? fallbackCloudflareAsset;
     const markerObject = cloudflareAsset
       ? createCloudflareMarkerObject(cloudflareAsset)
-      : createMarkerObject(marker.object);
+      : createMarkerObject(target.marker.object);
 
     anchor.group.add(markerObject.group);
     mindarThree.scene.add(anchor.group);
 
-    anchor.onTargetFound = () => onMarkerVisibility?.({ marker, visible: true });
-    anchor.onTargetLost = () => onMarkerVisibility?.({ marker, visible: false });
+    anchor.onTargetFound = () => onMarkerVisibility?.({ marker: target.marker, visible: true });
+    anchor.onTargetLost = () => onMarkerVisibility?.({ marker: target.marker, visible: false });
 
     return markerObject;
   });
+}
+
+function normalizeAnchorTargets(targets: RuntimeMarkerTarget[] | MarkerSpec[]): RuntimeMarkerTarget[] {
+  if (targets.length === 0) {
+    return [];
+  }
+
+  return 'marker' in targets[0]
+    ? (targets as RuntimeMarkerTarget[])
+    : (targets as MarkerSpec[]).map((marker) => ({ marker }));
 }
 
 export async function startMarkerAR(
@@ -84,10 +100,17 @@ export async function startMarkerAR(
   hooks: StartMarkerARHooks = {},
 ): Promise<MarkerARSession> {
   const { Compiler, MindARThree } = await loadMindARModules();
-  const compiledTargets = await compileMarkerTargets(AR_MARKERS, {
+  const targets = hooks.targets ?? createRuntimeMarkerTargets({
+    selectedModel: hooks.cloudflareAsset?.model,
+    processedBaseImage: hooks.cloudflareAsset?.baseImage,
+  });
+  const compiledTargets = await compileMarkerTargets(
+    targets.map((target) => target.marker),
+    {
     Compiler,
     onProgress: hooks.onCompileProgress,
-  });
+    },
+  );
 
   const mindarThree = new MindARThree({
     container,
@@ -97,6 +120,7 @@ export async function startMarkerAR(
   });
   const markerObjects = setupScene(
     mindarThree,
+    targets,
     hooks.onMarkerVisibility,
     hooks.cloudflareAsset,
   );
@@ -135,6 +159,7 @@ export async function startMarkerAR(
 
 function setupScene(
   mindarThree: MindARThreeInstance,
+  targets: RuntimeMarkerTarget[],
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
   cloudflareAsset?: CloudflarePlacedAsset,
 ): MarkerObject[] {
@@ -144,7 +169,7 @@ function setupScene(
   mindarThree.scene.add(ambient);
   mindarThree.scene.add(directional);
 
-  return setupMarkerAnchors(mindarThree, AR_MARKERS, onMarkerVisibility, cloudflareAsset);
+  return setupMarkerAnchors(mindarThree, targets, onMarkerVisibility, cloudflareAsset);
 }
 
 async function loadMindARModules(): Promise<MindARModules> {

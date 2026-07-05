@@ -14,6 +14,7 @@ import type {
   ProcessedBaseImage,
 } from '../app/cloudflareModels';
 import { processedImageDataUrl } from '../app/cloudflareModels';
+import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import type { MarkerObject } from './arObjects';
 
 export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
@@ -21,6 +22,7 @@ export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
 export type CloudflarePlacedAsset = {
   model: CloudflareModelOption;
   baseImage?: ProcessedBaseImage;
+  placement?: ImageTargetPlacement;
   loadModelGroup?: ModelGroupLoader;
 };
 
@@ -35,6 +37,11 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
   const modelRoot = new Group();
   modelRoot.name = 'cloudflare-model-root';
   modelRoot.position.z = asset.baseImage ? 0.12 : 0.04;
+  const placement = asset.placement;
+  if (placement) {
+    modelRoot.position.set(placement.offsetX, placement.offsetY, placement.height);
+    modelRoot.scale.setScalar(placement.scale);
+  }
   group.add(modelRoot);
 
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
