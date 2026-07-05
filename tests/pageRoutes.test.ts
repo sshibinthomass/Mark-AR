@@ -9,7 +9,8 @@ import {
 
 describe('page route helpers', () => {
   it('normalizes known routes and falls back to home for unknown routes', () => {
-    expect(PAGE_ROUTES).toEqual(['home', 'scan', 'base', 'models', 'markers', 'account']);
+    expect(PAGE_ROUTES).toEqual(['home', 'scan', 'base', 'models', 'targets', 'markers', 'account']);
+    expect(PAGE_ROUTES).toContain('targets');
     expect(DEFAULT_APP_ROUTE).toBe('home');
     expect(normalizeRoute('scan')).toBe('scan');
     expect(normalizeRoute('/models')).toBe('models');
@@ -21,7 +22,9 @@ describe('page route helpers', () => {
     expect(routeFromHash('')).toBe('home');
     expect(routeFromHash('#/base')).toBe('base');
     expect(routeFromHash('#models')).toBe('models');
+    expect(routeFromHash('#/targets')).toBe('targets');
     expect(routeFromHash('#/bad-route')).toBe('home');
     expect(hrefForRoute('scan')).toBe('#/scan');
+    expect(hrefForRoute('targets')).toBe('#/targets');
   });
 });

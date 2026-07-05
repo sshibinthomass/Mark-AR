@@ -1,4 +1,4 @@
-export const PAGE_ROUTES = ['home', 'scan', 'base', 'models', 'markers', 'account'] as const;
+export const PAGE_ROUTES = ['home', 'scan', 'base', 'models', 'targets', 'markers', 'account'] as const;
 
 export type AppRoute = (typeof PAGE_ROUTES)[number];
 

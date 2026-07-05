@@ -524,6 +524,105 @@ h1 {
   font-weight: 700;
 }
 
+.target-workspace,
+.target-editor,
+.placement-grid,
+.saved-target-list,
+.saved-target-row,
+.saved-target-row div {
+  display: grid;
+}
+
+.target-workspace {
+  grid-template-columns: minmax(280px, 420px) minmax(320px, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.target-editor {
+  gap: 16px;
+}
+
+.target-editor label {
+  display: grid;
+  gap: 8px;
+}
+
+.target-editor label > span,
+.saved-target-row span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.placement-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.placement-grid input[type="range"] {
+  width: 100%;
+}
+
+.target-preview-stage {
+  min-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(94, 234, 212, 0.14), transparent 42%),
+    linear-gradient(315deg, rgba(251, 191, 36, 0.1), transparent 42%),
+    #02070b;
+  box-shadow: var(--shadow);
+}
+
+.target-preview-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.saved-target-list {
+  gap: 10px;
+}
+
+.saved-target-row {
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.saved-target-row img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.saved-target-row div {
+  gap: 4px;
+  min-width: 0;
+}
+
+.saved-target-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-target-row span {
+  font-size: 0.9rem;
+}
+
+.is-error {
+  color: var(--danger);
+}
+
 .button-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -649,6 +748,14 @@ button:disabled {
 
   .mode-picker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .target-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .target-preview-stage {
+    min-height: 380px;
   }
 
   .ar-stage {

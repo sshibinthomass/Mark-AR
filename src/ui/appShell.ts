@@ -32,6 +32,13 @@ const modeCards: ModeCard[] = [
     action: 'Choose model',
   },
   {
+    route: 'targets',
+    badge: 'IMG+3D',
+    title: 'Image targets',
+    text: 'Upload a target image, bind it to a Cloudflare model, and save it to the cloud.',
+    action: 'Create target',
+  },
+  {
     route: 'markers',
     badge: 'MK',
     title: 'Markers',
@@ -56,6 +63,7 @@ export function renderAppShell(markers: MarkerSpec[]): string {
           ${renderRouteLink('scan', 'Scan')}
           ${renderRouteLink('base', 'Base')}
           ${renderRouteLink('models', 'Models')}
+          ${renderRouteLink('targets', 'Targets')}
           ${renderRouteLink('markers', 'Markers')}
           ${renderRouteLink('account', 'Account')}
         </div>
@@ -151,6 +159,52 @@ export function renderAppShell(markers: MarkerSpec[]): string {
             </select>
           </label>
           <button id="reload-cloudflare-models" type="button">Refresh models</button>
+        </section>
+      </section>
+
+      <section class="page" data-page="targets" hidden aria-label="Cloud image targets">
+        ${renderPageHeader('Image targets', 'Upload a scan image, place a model above it, and save the pairing to Cloudflare.')}
+        <section class="target-workspace">
+          <div class="target-editor">
+            <section class="tool-card">
+              <div class="tool-card-head">
+                <p class="eyebrow">Cloud target</p>
+                <p id="image-target-status">Sign in, choose an image, and select a model.</p>
+              </div>
+              <label>
+                <span>Target label</span>
+                <input id="target-label" type="text" value="" aria-label="Target label" />
+              </label>
+              <label class="file-control">
+                <span>Target image</span>
+                <input id="target-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
+              </label>
+              <label>
+                <span>Cloudflare model</span>
+                <select id="target-model-select">
+                  <option value="">Loading models...</option>
+                </select>
+              </label>
+              <div class="placement-grid">
+                <label><span>Scale</span><input id="target-scale" type="range" min="0.1" max="5" step="0.1" value="1" /></label>
+                <label><span>X offset</span><input id="target-offset-x" type="range" min="-1" max="1" step="0.05" value="0" /></label>
+                <label><span>Y offset</span><input id="target-offset-y" type="range" min="-1" max="1" step="0.05" value="0" /></label>
+                <label><span>Height</span><input id="target-height" type="range" min="0" max="1" step="0.02" value="0.12" /></label>
+              </div>
+              <div class="button-row">
+                <button id="save-image-target" class="primary" type="button">Save target</button>
+                <button id="refresh-image-targets" type="button">Refresh targets</button>
+              </div>
+            </section>
+            <section class="tool-card saved-target-card">
+              <div class="tool-card-head">
+                <p class="eyebrow">Saved</p>
+                <p>Cloud image targets</p>
+              </div>
+              <div id="saved-image-target-list" class="saved-target-list"></div>
+            </section>
+          </div>
+          <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
         </section>
       </section>
 
