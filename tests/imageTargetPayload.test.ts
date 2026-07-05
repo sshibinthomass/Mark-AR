@@ -25,4 +25,12 @@ describe('image target payload helpers', () => {
       'Target image must be PNG, JPEG, or WebP.',
     );
   });
+
+  it('rejects target images larger than 5 MB after base64 decoding', () => {
+    const oversizedBase64 = 'A'.repeat(6_990_508);
+
+    expect(validateTargetImagePayload({ imageBase64: oversizedBase64, imageMimeType: 'image/jpeg' })).toBe(
+      'Target image must be 5 MB or smaller.',
+    );
+  });
 });

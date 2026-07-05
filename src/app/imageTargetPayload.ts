@@ -17,6 +17,7 @@ export const DEFAULT_IMAGE_TARGET_PLACEMENT: ImageTargetPlacement = {
   height: 0.12,
 };
 
+const maxTargetImageBytes = 5 * 1024 * 1024;
 const supportedTargetImageMimeTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
 export function normalizePlacement(value?: Partial<ImageTargetPlacement>): ImageTargetPlacement {
@@ -35,6 +36,9 @@ export function validateTargetImagePayload(payload: ImageTargetImagePayload): st
   if (!supportedTargetImageMimeTypes.has(payload.imageMimeType)) {
     return 'Target image must be PNG, JPEG, or WebP.';
   }
+  if (decodedBase64Size(payload.imageBase64) > maxTargetImageBytes) {
+    return 'Target image must be 5 MB or smaller.';
+  }
   return null;
 }
 
@@ -47,4 +51,37 @@ function clampFinite(value: unknown, fallback: number, min: number, max: number)
     return fallback;
   }
   return Math.min(max, Math.max(min, value));
+}
+
+function decodedBase64Size(value: string): number {
+  let contentLength = 0;
+  let padding = 0;
+
+  for (let index = value.length - 1; index >= 0; index -= 1) {
+    const char = value[index];
+    if (char === '=') {
+      padding += 1;
+      continue;
+    }
+    if (isAsciiWhitespace(char)) {
+      continue;
+    }
+    break;
+  }
+
+  for (let index = 0; index < value.length; index += 1) {
+    if (!isAsciiWhitespace(value[index])) {
+      contentLength += 1;
+    }
+  }
+
+  if (contentLength === 0) {
+    return 0;
+  }
+
+  return Math.floor((contentLength * 3) / 4) - Math.min(padding, 2);
+}
+
+function isAsciiWhitespace(value: string): boolean {
+  return value === ' ' || value === '\n' || value === '\r' || value === '\t';
 }
