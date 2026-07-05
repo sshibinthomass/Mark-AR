@@ -24,6 +24,8 @@ import {
   type CapturedImage,
 } from './capture/cameraCapture';
 import { renderAppShell } from './ui/appShell';
+import { routeFromHash } from './ui/pageRoutes';
+import { activateRoute } from './ui/pageRouter';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -33,6 +35,7 @@ if (!app) {
 
 app.innerHTML = renderAppShell(AR_MARKERS);
 
+const shell = queryRequired<HTMLElement>('[data-app-shell]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');
 const status = queryRequired<HTMLParagraphElement>('#ar-status');
@@ -56,7 +59,12 @@ let authToken = loadWorkerAuthToken();
 let processedBaseImage: ProcessedBaseImage | undefined;
 let cloudflareModels: CloudflareModelOption[] = [];
 
+activateRoute(shell, routeFromHash(window.location.hash));
 void initializeCloudflareControls();
+
+window.addEventListener('hashchange', () => {
+  activateRoute(shell, routeFromHash(window.location.hash));
+});
 
 startButton.addEventListener('click', async () => {
   startButton.disabled = true;

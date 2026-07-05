@@ -1,17 +1,106 @@
 import type { MarkerSpec } from '../ar/markerCatalog';
+import { hrefForRoute, type AppRoute } from './pageRoutes';
+
+type ModeCard = {
+  route: AppRoute;
+  badge: string;
+  title: string;
+  text: string;
+  action: string;
+};
+
+const modeCards: ModeCard[] = [
+  {
+    route: 'scan',
+    badge: 'AR',
+    title: 'Scan marker',
+    text: 'Open the marker camera and place the selected model on a tracked image.',
+    action: 'Open scanner',
+  },
+  {
+    route: 'base',
+    badge: 'IMG',
+    title: 'Base image',
+    text: 'Capture or upload an image and let the Cloudflare Worker process it with OpenAI.',
+    action: 'Prepare base',
+  },
+  {
+    route: 'models',
+    badge: '3D',
+    title: 'Models',
+    text: 'Load all Cloudflare-hosted GLB models and choose the object for marker AR.',
+    action: 'Choose model',
+  },
+  {
+    route: 'markers',
+    badge: 'MK',
+    title: 'Markers',
+    text: 'Download the generated marker images used by the MindAR scanner.',
+    action: 'View markers',
+  },
+  {
+    route: 'account',
+    badge: 'ID',
+    title: 'Account',
+    text: 'Sign in to the Web-AR Worker for protected image processing routes.',
+    action: 'Sign in',
+  },
+];
 
 export function renderAppShell(markers: MarkerSpec[]): string {
   return `
-    <main class="app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Marker Web AR</p>
-          <h1>Scan and place</h1>
+    <main class="app-shell" data-app-shell>
+      <nav class="shell-nav" aria-label="Marker AR pages">
+        <a class="brand-link" href="${hrefForRoute('home')}" data-route-link="home">Marker AR studio</a>
+        <div class="route-tabs">
+          ${renderRouteLink('scan', 'Scan')}
+          ${renderRouteLink('base', 'Base')}
+          ${renderRouteLink('models', 'Models')}
+          ${renderRouteLink('markers', 'Markers')}
+          ${renderRouteLink('account', 'Account')}
         </div>
-        <a class="repo-link" href="#markers">Markers</a>
-      </header>
+      </nav>
 
-      <section class="scanner-layout" aria-label="Marker based augmented reality scanner">
+      <section class="page landing-page" data-page="home" aria-label="Marker AR studio home">
+        <div class="landing-inner">
+          <div class="landing-copy">
+            <p class="landing-kicker">Marker Web AR</p>
+            <h1>Marker AR studio</h1>
+            <p>Prepare a processed base image, choose a Cloudflare 3D model, and scan a generated marker to place it in AR.</p>
+            <div class="landing-flow" aria-label="Marker AR workflow">
+              <div class="landing-flow-step">
+                <span>01</span>
+                <strong>Base</strong>
+                <small>Capture image</small>
+              </div>
+              <div class="landing-flow-step">
+                <span>02</span>
+                <strong>Model</strong>
+                <small>Select GLB</small>
+              </div>
+              <div class="landing-flow-step">
+                <span>03</span>
+                <strong>Marker</strong>
+                <small>Scan and place</small>
+              </div>
+            </div>
+          </div>
+          <div class="landing-preview" aria-hidden="true">
+            <div class="preview-stage">
+              <span class="preview-floor"></span>
+              <span class="preview-marker"></span>
+              <span class="preview-object"></span>
+            </div>
+            <p><strong>Cloudflare ready</strong><span>Models load from the Web-AR Worker.</span></p>
+          </div>
+          <div class="mode-picker" aria-label="Workflow options">
+            ${modeCards.map(renderModeCard).join('')}
+          </div>
+        </div>
+      </section>
+
+      <section class="page" data-page="scan" hidden aria-label="Marker scanner">
+        ${renderPageHeader('Scan marker', 'Use the generated markers to anchor your selected Cloudflare model.')}
         <div class="scanner-panel">
           <div id="ar-stage" class="ar-stage" aria-label="AR camera stage">
             <div class="stage-idle">
@@ -26,66 +115,104 @@ export function renderAppShell(markers: MarkerSpec[]): string {
             <button id="start-ar" type="button">Start AR</button>
           </div>
         </div>
+      </section>
 
-        <aside class="workspace-panel" aria-label="AR setup controls">
-          <section class="tool-card worker-card" aria-label="Web AR Worker login">
-            <div class="tool-card-head">
-              <p class="eyebrow">Cloudflare Worker</p>
-              <p id="worker-status">Public models loading</p>
-            </div>
-            <form id="worker-login-form" class="login-form">
-              <label>
-                <span>Email</span>
-                <input id="worker-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
-              </label>
-              <label>
-                <span>Password</span>
-                <input id="worker-password" name="password" type="password" autocomplete="current-password" />
-              </label>
-              <div class="button-row">
-                <button id="worker-login" type="submit">Sign in</button>
-                <button id="worker-logout" type="button">Sign out</button>
-              </div>
-            </form>
-          </section>
+      <section class="page" data-page="base" hidden aria-label="Capture base image">
+        ${renderPageHeader('Base image', 'Capture or upload an image, then process it through the Web-AR Worker.')}
+        <section class="tool-card capture-card">
+          <div class="tool-card-head">
+            <p class="eyebrow">Base image</p>
+            <p id="base-image-status">Capture a surface to process</p>
+          </div>
+          <video id="base-capture-video" class="capture-video" playsinline muted></video>
+          <div class="button-row">
+            <button id="start-base-camera" type="button">Start camera</button>
+            <button id="process-base-image" class="primary" type="button">Process base</button>
+          </div>
+          <label class="file-control">
+            <span>Or choose image</span>
+            <input id="base-image-file" type="file" accept="image/*" />
+          </label>
+          <img id="processed-base-preview" class="base-preview" alt="Processed base preview" hidden />
+        </section>
+      </section>
 
-          <section class="tool-card capture-card" aria-label="Capture base image">
-            <div class="tool-card-head">
-              <p class="eyebrow">Base image</p>
-              <p id="base-image-status">Capture a surface to process</p>
-            </div>
-            <video id="base-capture-video" class="capture-video" playsinline muted></video>
-            <div class="button-row">
-              <button id="start-base-camera" type="button">Start camera</button>
-              <button id="process-base-image" type="button">Process base</button>
-            </div>
-            <label class="file-control">
-              <span>Or choose image</span>
-              <input id="base-image-file" type="file" accept="image/*" />
-            </label>
-            <img id="processed-base-preview" class="base-preview" alt="Processed base preview" hidden />
-          </section>
+      <section class="page" data-page="models" hidden aria-label="Cloudflare 3D models">
+        ${renderPageHeader('Models', 'Choose the 3D object that will appear above the processed base image.')}
+        <section class="tool-card model-card">
+          <div class="tool-card-head">
+            <p class="eyebrow">3D object</p>
+            <p id="cloudflare-model-status">No model selected</p>
+          </div>
+          <label>
+            <span>Cloudflare models</span>
+            <select id="cloudflare-model-select">
+              <option value="">Loading models...</option>
+            </select>
+          </label>
+          <button id="reload-cloudflare-models" type="button">Refresh models</button>
+        </section>
+      </section>
 
-          <section class="tool-card model-card" aria-label="Cloudflare 3D models">
-            <div class="tool-card-head">
-              <p class="eyebrow">3D object</p>
-              <p id="cloudflare-model-status">No model selected</p>
-            </div>
+      <section id="markers" class="page marker-page" data-page="markers" hidden aria-label="Generated marker images">
+        ${renderPageHeader('Markers', 'Print or display one of these markers before starting the scanner.')}
+        <div class="marker-panel">
+          ${markers.map(renderMarkerCard).join('')}
+        </div>
+      </section>
+
+      <section class="page" data-page="account" hidden aria-label="Web AR Worker login">
+        ${renderPageHeader('Account', 'Use your approved Web-AR Worker login for protected OpenAI processing.')}
+        <section class="tool-card worker-card">
+          <div class="tool-card-head">
+            <p class="eyebrow">Web-AR Worker</p>
+            <p id="worker-status">Public models loading</p>
+          </div>
+          <form id="worker-login-form" class="login-form">
             <label>
-              <span>Cloudflare models</span>
-              <select id="cloudflare-model-select">
-                <option value="">Loading models...</option>
-              </select>
+              <span>Email</span>
+              <input id="worker-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
             </label>
-            <button id="reload-cloudflare-models" type="button">Refresh models</button>
-          </section>
-
-          <section id="markers" class="marker-panel" aria-label="Generated marker images">
-            ${markers.map(renderMarkerCard).join('')}
-          </section>
-        </aside>
+            <label>
+              <span>Password</span>
+              <input id="worker-password" name="password" type="password" autocomplete="current-password" />
+            </label>
+            <div class="button-row">
+              <button id="worker-login" class="primary" type="submit">Sign in</button>
+              <button id="worker-logout" type="button">Sign out</button>
+            </div>
+          </form>
+        </section>
       </section>
     </main>
+  `;
+}
+
+function renderRouteLink(route: AppRoute, label: string): string {
+  return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${label}</a>`;
+}
+
+function renderPageHeader(title: string, text: string): string {
+  return `
+    <header class="page-header">
+      <a class="page-back" href="${hrefForRoute('home')}">Back</a>
+      <div>
+        <p class="eyebrow">Marker Web AR</p>
+        <h2>${title}</h2>
+        <p>${text}</p>
+      </div>
+    </header>
+  `;
+}
+
+function renderModeCard(card: ModeCard): string {
+  return `
+    <a class="mode-card" href="${hrefForRoute(card.route)}">
+      <span>${card.badge}</span>
+      <strong>${card.title}</strong>
+      <small>${card.text}</small>
+      <em>${card.action}</em>
+    </a>
   `;
 }
 
