@@ -42,13 +42,15 @@ export class ImageTargetPreview {
   private readonly cancelFrame: (frameId: number) => void;
   private readonly loadTexture: (url: string) => Promise<Texture | undefined>;
   private readonly loadModel: (url: string) => Promise<Group | undefined>;
+  private readonly container: HTMLElement;
   private readonly imageRoot = new Group();
   private readonly modelRoot = new Group();
   private frameId = 0;
   private disposed = false;
   private updateToken = 0;
 
-  constructor(private readonly container: HTMLElement, deps: PreviewDeps = {}) {
+  constructor(container: HTMLElement, deps: PreviewDeps = {}) {
+    this.container = container;
     this.renderer = deps.createRenderer?.() ?? new WebGLRenderer({ antialias: true, alpha: true });
     this.requestFrame = deps.requestFrame ?? requestAnimationFrame;
     this.cancelFrame = deps.cancelFrame ?? cancelAnimationFrame;
