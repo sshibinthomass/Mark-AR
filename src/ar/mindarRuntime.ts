@@ -1,5 +1,6 @@
 import { AmbientLight, Clock, DirectionalLight, Group, Scene } from 'three';
 import { createMarkerObject, type MarkerObject } from './arObjects';
+import { normalizeMindARCameraLayers } from './cameraLayers';
 import { AR_MARKERS, type MarkerSpec } from './markerCatalog';
 import {
   compileMarkerTargets,
@@ -106,6 +107,7 @@ export async function startMarkerAR(
   };
 
   await mindarThree.start();
+  normalizeMindARCameraLayers(container);
   hooks.onReady?.();
   frameId = requestAnimationFrame(render);
 
