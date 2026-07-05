@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 output
+.playwright-mcp
 *.local
 
 # Editor directories and files

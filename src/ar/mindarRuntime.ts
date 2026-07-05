@@ -1,6 +1,10 @@
 import { AmbientLight, Clock, DirectionalLight, Group, Scene } from 'three';
 import { createMarkerObject, type MarkerObject } from './arObjects';
 import { normalizeMindARCameraLayers } from './cameraLayers';
+import {
+  createCloudflareMarkerObject,
+  type CloudflarePlacedAsset,
+} from './cloudflareMarkerObject';
 import { AR_MARKERS, type MarkerSpec } from './markerCatalog';
 import {
   compileMarkerTargets,
@@ -42,6 +46,7 @@ export type MarkerARSession = {
 };
 
 export type StartMarkerARHooks = {
+  cloudflareAsset?: CloudflarePlacedAsset;
   onCompileProgress?: (percent: number) => void;
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void;
   onReady?: () => void;
@@ -56,10 +61,13 @@ export function setupMarkerAnchors(
   mindarThree: Pick<MindARThreeInstance, 'addAnchor' | 'scene'>,
   markers: MarkerSpec[] = AR_MARKERS,
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
+  cloudflareAsset?: CloudflarePlacedAsset,
 ): MarkerObject[] {
   return markers.map((marker) => {
     const anchor = mindarThree.addAnchor(marker.targetIndex);
-    const markerObject = createMarkerObject(marker.object);
+    const markerObject = cloudflareAsset
+      ? createCloudflareMarkerObject(cloudflareAsset)
+      : createMarkerObject(marker.object);
 
     anchor.group.add(markerObject.group);
     mindarThree.scene.add(anchor.group);
@@ -87,7 +95,11 @@ export async function startMarkerAR(
     filterMinCF: 0.001,
     filterBeta: 0.01,
   });
-  const markerObjects = setupScene(mindarThree, hooks.onMarkerVisibility);
+  const markerObjects = setupScene(
+    mindarThree,
+    hooks.onMarkerVisibility,
+    hooks.cloudflareAsset,
+  );
 
   let active = true;
   let frameId = 0;
@@ -124,6 +136,7 @@ export async function startMarkerAR(
 function setupScene(
   mindarThree: MindARThreeInstance,
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
+  cloudflareAsset?: CloudflarePlacedAsset,
 ): MarkerObject[] {
   const ambient = new AmbientLight(0xffffff, 1.7);
   const directional = new DirectionalLight(0xffffff, 1.2);
@@ -131,7 +144,7 @@ function setupScene(
   mindarThree.scene.add(ambient);
   mindarThree.scene.add(directional);
 
-  return setupMarkerAnchors(mindarThree, AR_MARKERS, onMarkerVisibility);
+  return setupMarkerAnchors(mindarThree, AR_MARKERS, onMarkerVisibility, cloudflareAsset);
 }
 
 async function loadMindARModules(): Promise<MindARModules> {
