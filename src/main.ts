@@ -215,7 +215,7 @@ baseImageFileInput.addEventListener('change', async () => {
 });
 
 reloadModelsButton.addEventListener('click', () => {
-  void refreshCloudflareModels();
+  void refreshCloudflareModelsAndTargets();
 });
 
 modelSelect.addEventListener('change', () => {
@@ -275,6 +275,10 @@ async function initializeCloudflareControls(): Promise<void> {
     }
   }
 
+  await refreshCloudflareModelsAndTargets();
+}
+
+async function refreshCloudflareModelsAndTargets(): Promise<void> {
   await refreshCloudflareModels();
   await refreshImageTargets();
 }

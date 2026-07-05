@@ -4,6 +4,8 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  type Material,
+  Object3D,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
@@ -80,6 +82,7 @@ export class ImageTargetPreview {
     if (state.imageUrl) {
       const texture = await this.loadTexture(state.imageUrl);
       if (this.disposed || updateToken !== this.updateToken) {
+        texture?.dispose();
         return;
       }
       const material = new MeshBasicMaterial({ map: texture });
@@ -91,6 +94,9 @@ export class ImageTargetPreview {
     if (state.model) {
       const model = await this.loadModel(state.model.url);
       if (this.disposed || updateToken !== this.updateToken || !model) {
+        if (model) {
+          disposeObject3D(model);
+        }
         return;
       }
       model.position.set(placement.offsetX, placement.height, placement.offsetY);
@@ -129,7 +135,10 @@ export class ImageTargetPreview {
   }
 
   private clearGroup(group: Group): void {
-    group.clear();
+    for (const child of [...group.children]) {
+      disposeObject3D(child);
+      group.remove(child);
+    }
   }
 }
 
@@ -140,4 +149,40 @@ function defaultLoadTexture(url: string): Promise<Texture> {
 async function defaultLoadModel(url: string): Promise<Group> {
   const gltf = await new GLTFLoader().loadAsync(url);
   return gltf.scene;
+}
+
+function disposeObject3D(object: Object3D): void {
+  object.traverse((node) => {
+    const mesh = node as Mesh;
+    if (mesh.geometry) {
+      mesh.geometry.dispose();
+    }
+    disposeMaterial(mesh.material);
+  });
+}
+
+function disposeMaterial(material: Material | Material[] | undefined): void {
+  if (!material) {
+    return;
+  }
+
+  for (const entry of Array.isArray(material) ? material : [material]) {
+    for (const value of Object.values(entry)) {
+      if (isDisposableTexture(value)) {
+        value.dispose();
+      }
+    }
+    entry.dispose();
+  }
+}
+
+function isDisposableTexture(value: unknown): value is Texture {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'isTexture' in value &&
+    (value as { isTexture?: boolean }).isTexture &&
+    'dispose' in value &&
+    typeof (value as { dispose?: unknown }).dispose === 'function',
+  );
 }
