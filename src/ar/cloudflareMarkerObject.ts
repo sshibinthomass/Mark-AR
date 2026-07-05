@@ -42,9 +42,10 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
   }
 
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
-  const modelRoots = createPlacedObjects(asset).map((object, index) => {
+  const placedObjects = createPlacedObjects(asset);
+  const modelRoots = placedObjects.map((object, index) => {
     const modelRoot = new Group();
-    modelRoot.name = object.id ? `cloudflare-model-root-${object.id}` : `cloudflare-model-root-${index + 1}`;
+    modelRoot.name = modelRootName(object, index, placedObjects.length);
     modelRoot.position.z = asset.baseImage ? 0.12 : 0.04;
     if (object.placement) {
       modelRoot.position.set(object.placement.offsetX, object.placement.offsetY, object.placement.height);
@@ -72,6 +73,13 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
       }
     },
   };
+}
+
+function modelRootName(object: CloudflarePlacedObject, index: number, objectCount: number): string {
+  if (object.id) {
+    return `cloudflare-model-root-${object.id}`;
+  }
+  return objectCount === 1 ? 'cloudflare-model-root' : `cloudflare-model-root-${index + 1}`;
 }
 
 function createPlacedObjects(asset: CloudflarePlacedAsset): CloudflarePlacedObject[] {
