@@ -27,9 +27,12 @@ import {
   DEFAULT_IMAGE_TARGET_PLACEMENT,
   imageTargetDataUrl,
   normalizePlacement,
+  resetPlacementTransform,
   validateTargetImagePayload,
   type ImageTargetImagePayload,
   type ImageTargetPlacement,
+  type PlacementTransformReset,
+  type PlacementTransformResetAxis,
 } from './app/imageTargetPayload';
 import {
   clearWorkerAuthToken,
@@ -53,6 +56,7 @@ import {
   isCameraPreset,
 } from './scene/previewCamera';
 import { ImageTargetPreview } from './scene/ImageTargetPreview';
+import type { PreviewTransformMode } from './scene/ImageTargetPreview';
 import { renderAppShell } from './ui/appShell';
 import { routeFromHash } from './ui/pageRoutes';
 import { activateRoute } from './ui/pageRouter';
@@ -94,6 +98,11 @@ const targetScaleInput = document.querySelector<HTMLInputElement>('#target-scale
 const targetOffsetXInput = document.querySelector<HTMLInputElement>('#target-offset-x');
 const targetOffsetYInput = document.querySelector<HTMLInputElement>('#target-offset-y');
 const targetHeightInput = document.querySelector<HTMLInputElement>('#target-height');
+const targetRotationXInput = document.querySelector<HTMLInputElement>('#target-rotation-x');
+const targetRotationYInput = document.querySelector<HTMLInputElement>('#target-rotation-y');
+const targetRotationZInput = document.querySelector<HTMLInputElement>('#target-rotation-z');
+const targetPlacementResetButtons = document.querySelectorAll<HTMLButtonElement>('[data-reset-transform]');
+const targetTransformModeButtons = document.querySelectorAll<HTMLButtonElement>('[data-transform-mode]');
 const targetCameraDistanceInput = document.querySelector<HTMLInputElement>('#target-camera-distance');
 const targetCameraHeightInput = document.querySelector<HTMLInputElement>('#target-camera-height');
 const targetCameraYawInput = document.querySelector<HTMLInputElement>('#target-camera-yaw');
@@ -118,6 +127,7 @@ let targetImagePayload: ImageTargetImagePayload | undefined;
 let targetPlacement: ImageTargetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
 let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
 let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
+let targetTransformMode: PreviewTransformMode = 'translate';
 let targetObjects: CloudImageTargetObject[] = [];
 let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
@@ -279,10 +289,34 @@ targetImageFile?.addEventListener('change', async () => {
   await updateTargetPreview();
 });
 
-[targetScaleInput, targetOffsetXInput, targetOffsetYInput, targetHeightInput].forEach((input) => {
+[targetScaleInput, targetOffsetXInput, targetOffsetYInput, targetHeightInput, targetRotationXInput, targetRotationYInput, targetRotationZInput].forEach((input) => {
   input?.addEventListener('input', () => {
     updateSelectedTargetObjectPlacement(readTargetPlacement());
     void updateTargetPreview();
+  });
+});
+
+targetPlacementResetButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    if (!isPlacementTransformReset(button.dataset.resetTransform) || !isPlacementTransformResetAxis(button.dataset.resetAxis)) {
+      return;
+    }
+
+    const nextPlacement = resetPlacementTransform(readTargetPlacement(), button.dataset.resetTransform, button.dataset.resetAxis);
+    updateSelectedTargetObjectPlacement(nextPlacement);
+    syncTargetPlacementInputs(nextPlacement);
+    void updateTargetPreview();
+  });
+});
+
+targetTransformModeButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    if (!isPreviewTransformMode(button.dataset.transformMode)) {
+      return;
+    }
+    targetTransformMode = button.dataset.transformMode;
+    syncTargetTransformModeButtons(targetTransformMode);
+    imageTargetPreview?.setTransformMode(targetTransformMode);
   });
 });
 
@@ -403,6 +437,7 @@ refreshImageTargetsButton?.addEventListener('click', async () => {
 
 renderTargetObjectList();
 syncTargetCameraInputs(targetCameraView);
+syncTargetTransformModeButtons(targetTransformMode);
 syncTargetAnimationInputs(targetAnimation);
 
 async function initializeCloudflareControls(): Promise<void> {
@@ -537,6 +572,17 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
       }
       renderTargetObjectList();
     },
+    onCameraChange: (cameraView) => {
+      targetCameraView = cameraView;
+      syncTargetCameraInputs(cameraView);
+    },
+    onSelectionChange: (objectId) => {
+      selectTargetObject(objectId, { refreshPreview: false });
+    },
+    onTransformModeChange: (mode) => {
+      targetTransformMode = mode;
+      syncTargetTransformModeButtons(mode);
+    },
   });
   return imageTargetPreview;
 }
@@ -547,6 +593,9 @@ function readTargetPlacement(): ImageTargetPlacement {
     offsetX: Number(targetOffsetXInput?.value),
     offsetY: Number(targetOffsetYInput?.value),
     height: Number(targetHeightInput?.value),
+    rotationX: Number(targetRotationXInput?.value),
+    rotationY: Number(targetRotationYInput?.value),
+    rotationZ: Number(targetRotationZInput?.value),
   });
 }
 
@@ -555,7 +604,9 @@ function readTargetCameraView(): PreviewCameraView {
     distance: Number(targetCameraDistanceInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.distance,
     height: Number(targetCameraHeightInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.height,
     yawDegrees: Number(targetCameraYawInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.yawDegrees,
+    targetX: targetCameraView.targetX,
     targetHeight: Number(targetCameraTargetInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight,
+    targetZ: targetCameraView.targetZ,
   };
 }
 
@@ -607,6 +658,9 @@ function removeSelectedTargetObject(): void {
   const selectedObject = getSelectedTargetObject();
   targetPlacement = selectedObject?.placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT;
   targetAnimation = selectedObject?.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION;
+  if (targetModelSelect) {
+    targetModelSelect.value = selectedObject?.model.id ?? '';
+  }
   syncTargetPlacementInputs(targetPlacement);
   syncTargetAnimationInputs(targetAnimation);
   renderTargetObjectList();
@@ -722,10 +776,14 @@ function createTargetObjectId(): string {
 }
 
 function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
-  setRangeInputValue(targetScaleInput, placement.scale);
-  setRangeInputValue(targetOffsetXInput, placement.offsetX);
-  setRangeInputValue(targetOffsetYInput, placement.offsetY);
-  setRangeInputValue(targetHeightInput, placement.height);
+  const normalized = normalizePlacement(placement);
+  setRangeInputValue(targetScaleInput, normalized.scale);
+  setRangeInputValue(targetOffsetXInput, normalized.offsetX);
+  setRangeInputValue(targetOffsetYInput, normalized.offsetY);
+  setRangeInputValue(targetHeightInput, normalized.height);
+  setRangeInputValue(targetRotationXInput, normalized.rotationX);
+  setRangeInputValue(targetRotationYInput, normalized.rotationY);
+  setRangeInputValue(targetRotationZInput, normalized.rotationZ);
 }
 
 function syncTargetAnimationInputs(animation: ImageTargetAnimation): void {
@@ -743,6 +801,12 @@ function syncTargetCameraInputs(cameraView: PreviewCameraView): void {
   setRangeInputValue(targetCameraHeightInput, cameraView.height);
   setRangeInputValue(targetCameraYawInput, cameraView.yawDegrees);
   setRangeInputValue(targetCameraTargetInput, cameraView.targetHeight);
+}
+
+function syncTargetTransformModeButtons(mode: PreviewTransformMode): void {
+  targetTransformModeButtons.forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.transformMode === mode));
+  });
 }
 
 function handleTargetCameraGizmoPointerEnd(event: PointerEvent): void {
@@ -770,6 +834,18 @@ function setRangeInputValue(input: HTMLInputElement | null, value: number): void
   input.value = String(Number(value.toFixed(3)));
 }
 
+function isPreviewTransformMode(value: string | undefined): value is PreviewTransformMode {
+  return value === 'translate' || value === 'rotate' || value === 'scale';
+}
+
+function isPlacementTransformReset(value: string | undefined): value is PlacementTransformReset {
+  return value === 'move' || value === 'rotate' || value === 'scale';
+}
+
+function isPlacementTransformResetAxis(value: string | undefined): value is PlacementTransformResetAxis {
+  return value === 'all' || value === 'x' || value === 'y' || value === 'z';
+}
+
 async function updateTargetPreview(): Promise<void> {
   const preview = ensureImageTargetPreview();
   if (!preview) {
@@ -780,6 +856,7 @@ async function updateTargetPreview(): Promise<void> {
     objects: targetObjects,
     selectedObjectId: selectedTargetObjectId,
     camera: targetCameraView,
+    transformMode: targetTransformMode,
   });
 }
 

@@ -162,15 +162,15 @@ export function renderAppShell(markers: MarkerSpec[]): string {
         </section>
       </section>
 
-      <section class="page" data-page="targets" hidden aria-label="Cloud image targets">
+      <section class="page target-page" data-page="targets" hidden aria-label="Cloud image targets">
         ${renderPageHeader('Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
         <section class="target-workspace">
-          <div class="target-editor">
-            <section class="tool-card">
-              <div class="tool-card-head">
-                <p class="eyebrow">Cloud target</p>
-                <p id="image-target-status">Sign in, choose an image, and select a model.</p>
-              </div>
+          <section class="tool-card target-setup-card">
+            <div class="tool-card-head">
+              <p class="eyebrow">Cloud target</p>
+              <p id="image-target-status">Sign in, choose an image, and select a model.</p>
+            </div>
+            <div class="target-setup-fields">
               <label>
                 <span>Target label</span>
                 <input id="target-label" type="text" value="" aria-label="Target label" />
@@ -185,58 +185,20 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                   <option value="">Loading models...</option>
                 </select>
               </label>
-              <div class="object-action-row">
-                <button id="add-target-object" type="button">Add object</button>
-                <button id="remove-target-object" type="button">Remove object</button>
-              </div>
-              <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
-              <div class="placement-grid">
-                <label><span>Scale</span><input id="target-scale" type="range" min="0.1" max="5" step="0.1" value="1" /></label>
-                <label><span>X offset</span><input id="target-offset-x" type="range" min="-1" max="1" step="0.05" value="0" /></label>
-                <label><span>Y offset</span><input id="target-offset-y" type="range" min="-1" max="1" step="0.05" value="0" /></label>
-                <label><span>Height</span><input id="target-height" type="range" min="0" max="1" step="0.02" value="0.12" /></label>
-              </div>
-              <div class="control-section">
-                <p class="eyebrow">Camera view</p>
-                <div class="placement-grid">
-                  <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
-                  <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
-                  <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
-                  <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
-                </div>
-              </div>
-              <div class="control-section">
-                <p class="eyebrow">Animation</p>
-                <label>
-                  <span>Spin axis</span>
-                  <select id="target-spin-axis">
-                    <option value="none">None</option>
-                    <option value="x">X</option>
-                    <option value="y">Y</option>
-                    <option value="z" selected>Z</option>
-                  </select>
-                </label>
-                <div class="placement-grid">
-                  <label><span>Spin speed</span><input id="target-spin-speed" type="range" min="-6" max="6" step="0.05" value="0.22" /></label>
-                  <label><span>Bob height</span><input id="target-bob-height" type="range" min="0" max="1" step="0.02" value="0" /></label>
-                  <label><span>Bob speed</span><input id="target-bob-speed" type="range" min="0" max="8" step="0.05" value="0" /></label>
-                  <button id="reset-target-animation" type="button">Reset animation</button>
-                </div>
-              </div>
-              <div class="button-row">
-                <button id="save-image-target" class="primary" type="button">Save target</button>
-                <button id="refresh-image-targets" type="button">Refresh targets</button>
-              </div>
-            </section>
-            <section class="tool-card saved-target-card">
-              <div class="tool-card-head">
-                <p class="eyebrow">Saved</p>
-                <p>Cloud image targets</p>
-              </div>
-              <div id="saved-image-target-list" class="saved-target-list"></div>
-            </section>
-          </div>
+            </div>
+            <div class="object-action-row">
+              <button id="add-target-object" type="button">Add object</button>
+              <button id="remove-target-object" type="button">Remove object</button>
+            </div>
+            <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
+          </section>
+
           <div class="target-preview-shell">
+            <div class="target-transform-toolbar" aria-label="Transform tools">
+              <button type="button" data-transform-mode="translate" aria-pressed="true">Move</button>
+              <button type="button" data-transform-mode="rotate" aria-pressed="false">Rotate</button>
+              <button type="button" data-transform-mode="scale" aria-pressed="false">Scale</button>
+            </div>
             <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
             <div id="target-camera-gizmo" class="target-camera-gizmo" aria-label="Camera view controls">
               <button type="button" class="gizmo-button gizmo-button-y" data-camera-preset="top" aria-label="Top camera view" title="Top view">Y</button>
@@ -245,6 +207,106 @@ export function renderAppShell(markers: MarkerSpec[]): string {
               <button type="button" class="gizmo-home" data-camera-preset="home" aria-label="Reset camera view" title="Reset view">0</button>
             </div>
           </div>
+
+          <section class="tool-card target-controls-card">
+            <div class="tool-card-head target-controls-head">
+              <p class="eyebrow">Adjust placement</p>
+              <p>Selected object controls</p>
+            </div>
+            <div class="transform-control-stack">
+              <div class="transform-control-group">
+                <div class="transform-control-head">
+                  <p class="eyebrow">Move</p>
+                  <button type="button" data-reset-transform="move" data-reset-axis="all">Reset move</button>
+                </div>
+                <div class="placement-grid">
+                  <div class="axis-control">
+                    <label><span>X offset</span><input id="target-offset-x" type="range" min="-1" max="1" step="0.05" value="0" /></label>
+                    <button type="button" data-reset-transform="move" data-reset-axis="x" title="Reset move X">X</button>
+                  </div>
+                  <div class="axis-control">
+                    <label><span>Y height</span><input id="target-height" type="range" min="0" max="1" step="0.02" value="0.12" /></label>
+                    <button type="button" data-reset-transform="move" data-reset-axis="y" title="Reset move Y">Y</button>
+                  </div>
+                  <div class="axis-control">
+                    <label><span>Z offset</span><input id="target-offset-y" type="range" min="-1" max="1" step="0.05" value="0" /></label>
+                    <button type="button" data-reset-transform="move" data-reset-axis="z" title="Reset move Z">Z</button>
+                  </div>
+                </div>
+              </div>
+              <div class="transform-control-group">
+                <div class="transform-control-head">
+                  <p class="eyebrow">Rotate</p>
+                  <button type="button" data-reset-transform="rotate" data-reset-axis="all">Reset rotate</button>
+                </div>
+                <div class="placement-grid">
+                  <div class="axis-control">
+                    <label><span>Rotate X</span><input id="target-rotation-x" type="range" min="-180" max="180" step="1" value="0" /></label>
+                    <button type="button" data-reset-transform="rotate" data-reset-axis="x" title="Reset rotate X">X</button>
+                  </div>
+                  <div class="axis-control">
+                    <label><span>Rotate Y</span><input id="target-rotation-y" type="range" min="-180" max="180" step="1" value="0" /></label>
+                    <button type="button" data-reset-transform="rotate" data-reset-axis="y" title="Reset rotate Y">Y</button>
+                  </div>
+                  <div class="axis-control">
+                    <label><span>Rotate Z</span><input id="target-rotation-z" type="range" min="-180" max="180" step="1" value="0" /></label>
+                    <button type="button" data-reset-transform="rotate" data-reset-axis="z" title="Reset rotate Z">Z</button>
+                  </div>
+                </div>
+              </div>
+              <div class="transform-control-group">
+                <div class="transform-control-head">
+                  <p class="eyebrow">Scale</p>
+                  <button type="button" data-reset-transform="scale" data-reset-axis="all">Reset scale</button>
+                </div>
+                <div class="placement-grid">
+                  <div class="axis-control">
+                    <label><span>Overall</span><input id="target-scale" type="range" min="0.1" max="5" step="0.1" value="1" /></label>
+                    <button type="button" data-reset-transform="scale" data-reset-axis="all" title="Reset overall scale">Overall</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="control-section">
+              <p class="eyebrow">Camera view</p>
+              <div class="placement-grid">
+                <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
+                <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
+                <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
+                <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
+              </div>
+            </div>
+            <div class="control-section">
+              <p class="eyebrow">Animation</p>
+              <label>
+                <span>Spin axis</span>
+                <select id="target-spin-axis" value="y">
+                  <option value="none">None</option>
+                  <option value="x">X</option>
+                  <option value="y" selected>Y</option>
+                  <option value="z">Z</option>
+                </select>
+              </label>
+              <div class="placement-grid">
+                <label><span>Spin speed</span><input id="target-spin-speed" type="range" min="-6" max="6" step="0.05" value="0" /></label>
+                <label><span>Bob height</span><input id="target-bob-height" type="range" min="0" max="1" step="0.02" value="0" /></label>
+                <label><span>Bob speed</span><input id="target-bob-speed" type="range" min="0" max="8" step="0.05" value="0" /></label>
+                <button id="reset-target-animation" type="button">Reset animation</button>
+              </div>
+            </div>
+            <div class="button-row">
+              <button id="save-image-target" class="primary" type="button">Save target</button>
+              <button id="refresh-image-targets" type="button">Refresh targets</button>
+            </div>
+          </section>
+
+          <section class="tool-card saved-target-card">
+            <div class="tool-card-head">
+              <p class="eyebrow">Saved</p>
+              <p>Cloud image targets</p>
+            </div>
+            <div id="saved-image-target-list" class="saved-target-list"></div>
+          </section>
         </section>
       </section>
 

@@ -525,10 +525,14 @@ h1 {
 }
 
 .target-workspace,
-.target-editor,
+.target-setup-fields,
 .object-action-row,
 .target-object-list,
 .control-section,
+.transform-control-stack,
+.transform-control-group,
+.transform-control-head,
+.axis-control,
 .placement-grid,
 .saved-target-list,
 .saved-target-row,
@@ -536,48 +540,106 @@ h1 {
   display: grid;
 }
 
+.target-page {
+  width: min(1180px, 100%);
+}
+
+.target-page .page-header {
+  margin-bottom: 12px;
+}
+
+.target-page .page-header h2 {
+  font-size: clamp(30px, 4vw, 46px);
+}
+
 .target-workspace {
-  grid-template-columns: minmax(280px, 420px) minmax(320px, 1fr);
-  gap: 20px;
-  align-items: stretch;
+  grid-template-areas:
+    "preview setup"
+    "preview controls"
+    "preview saved";
+  grid-template-columns: minmax(450px, 1fr) minmax(340px, 410px);
+  gap: 14px;
+  align-items: start;
 }
 
-.target-editor {
-  gap: 16px;
+.target-setup-card {
+  grid-area: setup;
 }
 
-.target-editor label {
+.target-controls-card {
+  grid-area: controls;
+}
+
+.saved-target-card {
+  grid-area: saved;
+}
+
+.target-setup-card,
+.target-controls-card,
+.saved-target-card {
+  gap: 12px;
+  padding: 14px;
+}
+
+.target-setup-fields {
+  gap: 10px;
+}
+
+.target-setup-card label,
+.target-controls-card label {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.target-editor label > span,
+.target-setup-card label > span,
+.target-controls-card label > span,
 .target-object-row small,
 .saved-target-row span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 750;
 }
 
-.target-editor input[type="text"],
-.target-editor select {
+.target-setup-card input[type="text"],
+.target-setup-card select,
+.target-controls-card select {
   width: 100%;
-  min-height: 44px;
+  min-height: 40px;
   border: 1px solid rgba(15, 118, 110, 0.18);
   border-radius: 8px;
-  padding: 9px 11px;
+  padding: 8px 10px;
   color: var(--ink);
   background: rgba(255, 255, 255, 0.9);
   font-weight: 700;
 }
 
+.target-page .file-control input {
+  min-height: 40px;
+  padding: 6px 8px;
+}
+
+.file-control input::file-selector-button {
+  min-height: 28px;
+  margin-right: 8px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 6px;
+  padding: 5px 9px;
+  color: var(--ink);
+  background: rgba(94, 234, 212, 0.16);
+  font-weight: 850;
+}
+
 .object-action-row {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .target-object-list {
-  gap: 8px;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .target-object-row {
@@ -586,7 +648,7 @@ h1 {
   gap: 8px;
   align-items: center;
   width: 100%;
-  min-height: 48px;
+  min-height: 42px;
   text-align: left;
 }
 
@@ -609,34 +671,91 @@ h1 {
 }
 
 .control-section {
-  gap: 10px;
+  gap: 9px;
   border-top: 1px solid var(--line);
-  padding-top: 12px;
+  padding-top: 11px;
+}
+
+.transform-control-stack {
+  gap: 10px;
+}
+
+.transform-control-group {
+  gap: 9px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+
+.transform-control-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.transform-control-head button,
+.axis-control button {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.axis-control {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: end;
+}
+
+.axis-control button {
+  min-width: 34px;
+  box-shadow: none;
 }
 
 .placement-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 10px;
 }
 
 .placement-grid input[type="range"] {
   width: 100%;
 }
 
+.target-page input[type="range"] {
+  accent-color: var(--teal-dark);
+}
+
+.target-page [data-reset-axis="x"] {
+  border-color: rgba(248, 113, 113, 0.42);
+  background: rgba(254, 226, 226, 0.86);
+}
+
+.target-page [data-reset-axis="y"] {
+  border-color: rgba(34, 197, 94, 0.36);
+  background: rgba(220, 252, 231, 0.86);
+}
+
+.target-page [data-reset-axis="z"] {
+  border-color: rgba(59, 130, 246, 0.36);
+  background: rgba(219, 234, 254, 0.86);
+}
+
 .target-preview-shell {
-  position: relative;
+  grid-area: preview;
+  position: sticky;
+  top: 84px;
   min-width: 0;
+  align-self: start;
 }
 
 .target-preview-stage {
-  min-height: 520px;
+  height: clamp(500px, calc(100svh - 164px), 760px);
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(94, 234, 212, 0.14), transparent 42%),
-    linear-gradient(315deg, rgba(251, 191, 36, 0.1), transparent 42%),
-    #02070b;
+    radial-gradient(circle at 50% 42%, rgba(94, 234, 212, 0.18), transparent 28%),
+    linear-gradient(145deg, rgba(17, 24, 39, 0.96), rgba(60, 64, 67, 0.92)),
+    #33383f;
   box-shadow: var(--shadow);
 }
 
@@ -644,6 +763,36 @@ h1 {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.target-transform-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 6px;
+  background: rgba(47, 47, 47, 0.82);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
+}
+
+.target-transform-toolbar button {
+  min-height: 32px;
+  border-color: rgba(255, 255, 255, 0.18);
+  padding: 6px 10px;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.target-transform-toolbar button[aria-pressed="true"] {
+  color: #111827;
+  background: #facc15;
 }
 
 .target-camera-gizmo {
@@ -725,22 +874,22 @@ h1 {
 }
 
 .saved-target-list {
-  gap: 10px;
+  gap: 8px;
 }
 
 .saved-target-row {
-  grid-template-columns: 64px minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
 }
 
 .saved-target-row img {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid var(--line);
@@ -771,6 +920,10 @@ h1 {
   gap: 10px;
 }
 
+.target-page .button-row {
+  gap: 8px;
+}
+
 button,
 .marker-card a {
   min-height: 44px;
@@ -782,6 +935,12 @@ button,
   box-shadow: 0 12px 32px rgba(15, 118, 110, 0.12);
   font-weight: 850;
   cursor: pointer;
+}
+
+.target-page button {
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 button.primary,
@@ -894,10 +1053,21 @@ button:disabled {
 
   .target-workspace {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "setup"
+      "preview"
+      "controls"
+      "saved";
+  }
+
+  .target-preview-shell {
+    position: relative;
+    top: auto;
   }
 
   .target-preview-stage {
-    min-height: 380px;
+    height: clamp(320px, 58svh, 480px);
+    min-height: 0;
   }
 
   .target-camera-gizmo {
@@ -930,8 +1100,75 @@ button:disabled {
   .landing-flow,
   .mode-picker,
   .button-row,
-  .object-action-row {
+  .object-action-row,
+  .placement-grid {
     grid-template-columns: 1fr;
+  }
+
+  .target-page .page-header h2 {
+    font-size: 32px;
+  }
+
+  .target-page .page-header {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .target-page .page-back {
+    min-height: 34px;
+    padding: 6px 10px;
+  }
+
+  .target-workspace {
+    gap: 10px;
+  }
+
+  .target-setup-card,
+  .target-controls-card,
+  .saved-target-card {
+    padding: 12px;
+  }
+
+  .target-page .button-row,
+  .target-page .object-action-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .target-page .placement-grid {
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 9px;
+  }
+
+  .target-transform-toolbar {
+    top: 8px;
+    left: 8px;
+    transform: scale(0.9);
+    transform-origin: top left;
+  }
+
+  .target-transform-toolbar button {
+    min-height: 30px;
+    padding: 5px 8px;
+  }
+
+  .target-camera-gizmo {
+    top: 8px;
+    right: 8px;
+    transform: scale(0.82);
+    transform-origin: top right;
+  }
+
+  .target-preview-stage {
+    height: clamp(300px, 52svh, 420px);
+  }
+
+  .saved-target-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+  }
+
+  .saved-target-row img {
+    width: 48px;
+    height: 48px;
   }
 
   .landing-flow-step::after {
