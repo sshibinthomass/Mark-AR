@@ -755,6 +755,53 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
+  it('creates selectable 3D text objects without loading a GLB model', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const textGroup = new Group();
+    textGroup.name = 'local-text-3d-object';
+    const loadModel = vi.fn(async () => createDisposableModel().group);
+    const createTextObject = vi.fn(() => textGroup);
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel,
+      loadTexture: vi.fn(async () => undefined),
+      createTextObject,
+    });
+
+    await preview.update({
+      objects: [
+        {
+          kind: 'text',
+          id: 'text-object',
+          text: { value: 'Hallo AR', language: 'german', font: 'studio-serif' },
+          placement: { scale: 1.2, offsetX: 0.15, offsetY: -0.2, height: 0.32, rotationX: 0, rotationY: 20, rotationZ: 0 },
+        },
+      ],
+      selectedObjectId: 'text-object',
+    });
+
+    expect(loadModel).not.toHaveBeenCalled();
+    expect(createTextObject).toHaveBeenCalledWith({ value: 'Hallo AR', language: 'german', font: 'studio-serif' });
+    expect(textGroup.position.x).toBeCloseTo(0.15);
+    expect(textGroup.position.y).toBeCloseTo(0.32);
+    expect(textGroup.position.z).toBeCloseTo(-0.2);
+    expect(textGroup.scale.x).toBeCloseTo(1.2);
+    expect(textGroup.rotation.y).toBeCloseTo(Math.PI / 9);
+
+    preview.dispose();
+  });
+
   it('positions the preview camera from camera controls', async () => {
     const container = document.createElement('div');
     const renderer = {

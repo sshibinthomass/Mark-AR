@@ -22,11 +22,15 @@ import {
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
-import type { CloudImageTargetObject } from '../app/cloudImageTargets';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
+import {
+  isTextTargetObject,
+  type TargetEditorObject,
+  type TargetTextContent,
+} from '../app/targetEditorObjects';
 import {
   cameraViewForOrbit,
   cameraViewForPan,
@@ -36,6 +40,7 @@ import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
   type PreviewCameraView,
 } from './previewCamera';
+import { createTextObject3D } from './textObject3d';
 
 export { DEFAULT_PREVIEW_CAMERA_VIEW, type PreviewCameraView } from './previewCamera';
 
@@ -62,6 +67,7 @@ type PreviewDeps = {
   cancelFrame?: (frameId: number) => void;
   loadTexture?: (url: string) => Promise<Texture | undefined>;
   loadModel?: (url: string) => Promise<Group | undefined>;
+  createTextObject?: (text: TargetTextContent) => Group;
   onPlacementChange?: (change: PreviewPlacementChange) => void;
   onCameraChange?: (camera: PreviewCameraView) => void;
   onSelectionChange?: (objectId: string) => void;
@@ -72,7 +78,7 @@ type PreviewState = {
   imageUrl?: string;
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;
-  objects?: CloudImageTargetObject[];
+  objects?: TargetEditorObject[];
   selectedObjectId?: string;
   camera?: Partial<PreviewCameraView>;
   transformMode?: PreviewTransformMode;
@@ -86,6 +92,7 @@ export class ImageTargetPreview {
   private readonly cancelFrame: (frameId: number) => void;
   private readonly loadTexture: (url: string) => Promise<Texture | undefined>;
   private readonly loadModel: (url: string) => Promise<Group | undefined>;
+  private readonly createTextObject: (text: TargetTextContent) => Group;
   private readonly onPlacementChange?: (change: PreviewPlacementChange) => void;
   private readonly onCameraChange?: (camera: PreviewCameraView) => void;
   private readonly onSelectionChange?: (objectId: string) => void;
@@ -126,6 +133,7 @@ export class ImageTargetPreview {
     this.cancelFrame = deps.cancelFrame ?? window.cancelAnimationFrame.bind(window);
     this.loadTexture = deps.loadTexture ?? defaultLoadTexture;
     this.loadModel = deps.loadModel ?? defaultLoadModel;
+    this.createTextObject = deps.createTextObject ?? createTextObject3D;
     this.onPlacementChange = deps.onPlacementChange;
     this.onCameraChange = deps.onCameraChange;
     this.onSelectionChange = deps.onSelectionChange;
@@ -205,6 +213,14 @@ export class ImageTargetPreview {
     }
 
     for (const object of previewObjects) {
+      if (isTextTargetObject(object)) {
+        const textObject = this.createTextObject(object.text);
+        this.loadedModels.set(object.id, textObject);
+        this.applyPlacementToObject(object.id);
+        this.modelRoot.add(textObject);
+        continue;
+      }
+
       const model = await this.loadModel(object.model.url);
       if (this.disposed || updateToken !== this.updateToken || !model) {
         if (model) {
@@ -804,7 +820,7 @@ export class ImageTargetPreview {
   }
 }
 
-function previewObjectsFromState(state: PreviewState): CloudImageTargetObject[] {
+function previewObjectsFromState(state: PreviewState): TargetEditorObject[] {
   if (state.objects?.length) {
     return state.objects.map((object, index) => ({
       ...object,
@@ -826,7 +842,7 @@ function previewObjectsFromState(state: PreviewState): CloudImageTargetObject[] 
   ];
 }
 
-function selectPreviewObjectId(objects: CloudImageTargetObject[], requestedId?: string): string | undefined {
+function selectPreviewObjectId(objects: TargetEditorObject[], requestedId?: string): string | undefined {
   if (requestedId && objects.some((object) => object.id === requestedId)) {
     return requestedId;
   }

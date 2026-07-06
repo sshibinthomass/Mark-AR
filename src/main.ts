@@ -42,6 +42,19 @@ import {
   saveWorkerAuthToken,
 } from './app/webArAuth';
 import {
+  createLocalTextObject,
+  fontOption,
+  isTargetTextFont,
+  isTargetTextLanguage,
+  isTextTargetObject,
+  languageOption,
+  saveableModelObjects,
+  type LocalImageTargetDraft,
+  type TargetEditorObject,
+  type TargetTextFont,
+  type TargetTextLanguage,
+} from './app/targetEditorObjects';
+import {
   captureVideoFrame,
   imageFileToCapturedImage,
   startCameraPreview,
@@ -96,6 +109,10 @@ const targetModelRail = document.querySelector<HTMLElement>('#target-model-rail'
 const addTargetObjectButton = document.querySelector<HTMLButtonElement>('#add-target-object');
 const removeTargetObjectButton = document.querySelector<HTMLButtonElement>('#remove-target-object');
 const targetObjectList = document.querySelector<HTMLElement>('#target-object-list');
+const targetTextValueInput = document.querySelector<HTMLTextAreaElement>('#target-text-value');
+const targetTextLanguageSelect = document.querySelector<HTMLSelectElement>('#target-text-language');
+const targetTextFontSelect = document.querySelector<HTMLSelectElement>('#target-text-font');
+const addTargetTextButton = document.querySelector<HTMLButtonElement>('#add-target-text');
 const targetScaleInput = document.querySelector<HTMLInputElement>('#target-scale');
 const targetOffsetXInput = document.querySelector<HTMLInputElement>('#target-offset-x');
 const targetOffsetYInput = document.querySelector<HTMLInputElement>('#target-offset-y');
@@ -130,7 +147,7 @@ let targetPlacement: ImageTargetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
 let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
 let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
 let targetTransformMode: PreviewTransformMode = 'translate';
-let targetObjects: CloudImageTargetObject[] = [];
+let targetObjects: TargetEditorObject[] = [];
 let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
 let targetCameraGizmoDrag:
@@ -163,6 +180,7 @@ startButton.addEventListener('click', async () => {
     const selectedModel = getSelectedModel();
     const runtimeTargets = createRuntimeMarkerTargets({
       cloudTargets: cloudImageTargets,
+      draftTarget: createCurrentDraftTarget(),
       selectedModel,
       processedBaseImage,
     });
@@ -419,6 +437,20 @@ removeTargetObjectButton?.addEventListener('click', () => {
   removeSelectedTargetObject();
 });
 
+targetTextLanguageSelect?.addEventListener('change', () => {
+  const language = readTargetTextLanguage();
+  if (targetTextValueInput) {
+    targetTextValueInput.value = languageOption(language).sample;
+  }
+  if (targetTextFontSelect && language === 'tamil') {
+    targetTextFontSelect.value = 'tamil-ui';
+  }
+});
+
+addTargetTextButton?.addEventListener('click', () => {
+  addTargetTextFromInput();
+});
+
 saveImageTargetButton?.addEventListener('click', async () => {
   await saveCurrentImageTarget();
 });
@@ -669,17 +701,39 @@ function addTargetObjectFromSelection(): void {
     return;
   }
 
-  const object: CloudImageTargetObject = {
-    id: createTargetObjectId(),
-    model,
-    placement: nextTargetObjectPlacement(),
-    animation: nextTargetObjectAnimation(),
-  };
+  const object = createTargetModelObject(model);
   targetObjects = [...targetObjects, object];
   selectTargetObject(object.id, { refreshPreview: false });
   renderTargetObjectList();
   updateImageTargetStatus(`${model.label} added to the target.`, false);
   void updateTargetPreview();
+}
+
+function addTargetTextFromInput(): void {
+  const object = createLocalTextObject({
+    id: createTargetObjectId(),
+    text: {
+      value: targetTextValueInput?.value,
+      language: readTargetTextLanguage(),
+      font: readTargetTextFont(),
+    },
+    placement: nextTargetObjectPlacement(),
+    animation: nextTargetObjectAnimation(),
+  });
+  targetObjects = [...targetObjects, object];
+  selectTargetObject(object.id, { refreshPreview: false });
+  renderTargetObjectList();
+  updateImageTargetStatus(`Text "${object.text.value}" added locally.`, false);
+  void updateTargetPreview();
+}
+
+function createTargetModelObject(model: CloudflareModelOption): CloudImageTargetObject {
+  return {
+    id: createTargetObjectId(),
+    model,
+    placement: nextTargetObjectPlacement(),
+    animation: nextTargetObjectAnimation(),
+  };
 }
 
 function removeSelectedTargetObject(): void {
@@ -697,7 +751,7 @@ function removeSelectedTargetObject(): void {
   targetPlacement = selectedObject?.placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT;
   targetAnimation = selectedObject?.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION;
   if (targetModelSelect) {
-    targetModelSelect.value = selectedObject?.model.id ?? '';
+    targetModelSelect.value = selectedObject && !isTextTargetObject(selectedObject) ? selectedObject.model.id : '';
   }
   syncTargetModelRailSelection();
   syncTargetPlacementInputs(targetPlacement);
@@ -722,13 +776,16 @@ function selectTargetObject(objectId: string, options?: { refreshPreview?: boole
   targetPlacement = object.placement;
   targetAnimation = object.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION;
   if (targetModelSelect) {
-    targetModelSelect.value = object.model.id;
+    targetModelSelect.value = isTextTargetObject(object) ? '' : object.model.id;
   }
   syncTargetModelRailSelection();
   syncTargetPlacementInputs(object.placement);
   syncTargetAnimationInputs(targetAnimation);
   renderTargetObjectList();
-  updateImageTargetStatus(`${object.model.label} selected.`, false);
+  updateImageTargetStatus(
+    isTextTargetObject(object) ? `${object.text.value} text selected.` : `${object.model.label} selected.`,
+    false,
+  );
   if (options?.refreshPreview !== false) {
     void updateTargetPreview();
   }
@@ -752,7 +809,7 @@ function updateSelectedTargetObjectAnimation(animation: ImageTargetAnimation): v
   }
 }
 
-function getSelectedTargetObject(): CloudImageTargetObject | undefined {
+function getSelectedTargetObject(): TargetEditorObject | undefined {
   return targetObjects.find((object) => object.id === selectedTargetObjectId);
 }
 
@@ -783,9 +840,11 @@ function renderTargetObjectList(): void {
     row.addEventListener('click', () => selectTargetObject(object.id));
 
     const label = document.createElement('strong');
-    label.textContent = object.model.label;
+    label.textContent = isTextTargetObject(object) ? object.text.value : object.model.label;
     const meta = document.createElement('small');
-    meta.textContent = `${index + 1} · ${Number(object.placement.scale.toFixed(2))}x`;
+    meta.textContent = isTextTargetObject(object)
+      ? `${languageOption(object.text.language).label} / ${fontOption(object.text.font).label}`
+      : `${index + 1} / ${Number(object.placement.scale.toFixed(2))}x`;
     row.append(label, meta);
     targetObjectList.append(row);
   }
@@ -813,6 +872,16 @@ function createTargetObjectId(): string {
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `object-${cryptoId}`;
+}
+
+function readTargetTextLanguage(): TargetTextLanguage {
+  const value = targetTextLanguageSelect?.value;
+  return isTargetTextLanguage(value) ? value : 'english';
+}
+
+function readTargetTextFont(): TargetTextFont {
+  const value = targetTextFontSelect?.value;
+  return isTargetTextFont(value) ? value : 'studio-sans';
 }
 
 function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
@@ -916,20 +985,25 @@ async function saveCurrentImageTarget(): Promise<void> {
     return;
   }
 
-  if (targetObjects.length === 0) {
+  updateSelectedTargetObjectPlacement(readTargetPlacement());
+  let objectsToSave = saveableModelObjects(targetObjects);
+  if (objectsToSave.length === 0) {
     const model = getSelectedTargetModel();
     if (model) {
-      addTargetObjectFromSelection();
+      const object = createTargetModelObject(model);
+      targetObjects = [...targetObjects, object];
+      objectsToSave = [object];
+      selectTargetObject(object.id, { refreshPreview: false });
+      renderTargetObjectList();
     }
   }
 
-  if (targetObjects.length === 0) {
-    updateImageTargetStatus('Add at least one Cloudflare model.', true);
+  if (objectsToSave.length === 0) {
+    updateImageTargetStatus('Add at least one Cloudflare model before saving. Text is local-only for now.', true);
     return;
   }
 
-  updateSelectedTargetObjectPlacement(readTargetPlacement());
-  const objects = targetObjects.map((object) => ({
+  const objects = objectsToSave.map((object) => ({
     ...object,
     placement: normalizePlacement(object.placement),
     animation: normalizeAnimation(object.animation),
@@ -948,10 +1022,28 @@ async function saveCurrentImageTarget(): Promise<void> {
       objects,
     });
     await refreshImageTargets({ rethrowOnError: true });
-    updateImageTargetStatus('Image target saved to Cloudflare.', false);
+    updateImageTargetStatus(
+      targetObjects.some(isTextTargetObject)
+        ? 'Image target saved to Cloudflare. Text objects stayed local.'
+        : 'Image target saved to Cloudflare.',
+      false,
+    );
   } catch (error) {
     updateImageTargetStatus(errorMessage(error, 'Unable to save image target'), true);
   }
+}
+
+function createCurrentDraftTarget(): LocalImageTargetDraft | undefined {
+  if (!targetImagePayload || targetObjects.length === 0) {
+    return undefined;
+  }
+
+  return {
+    id: 'current-target',
+    label: targetLabelInput?.value.trim() || 'Current target',
+    imageUrl: imageTargetDataUrl(targetImagePayload),
+    objects: targetObjects,
+  };
 }
 
 async function refreshImageTargets(options?: { rethrowOnError?: boolean }): Promise<void> {

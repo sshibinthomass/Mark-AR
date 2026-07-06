@@ -1,4 +1,5 @@
 import type { MarkerSpec } from '../ar/markerCatalog';
+import { TEXT_FONT_OPTIONS, TEXT_LANGUAGE_OPTIONS } from '../app/targetEditorObjects';
 import { hrefForRoute, type AppRoute } from './pageRoutes';
 
 type ModeCard = {
@@ -189,6 +190,32 @@ export function renderAppShell(markers: MarkerSpec[]): string {
             <div class="object-action-row">
               <button id="add-target-object" type="button">Add object</button>
               <button id="remove-target-object" type="button">Remove object</button>
+            </div>
+            <div class="target-text-panel">
+              <p class="eyebrow">Text</p>
+              <label>
+                <span>Text content</span>
+                <textarea id="target-text-value" rows="2" aria-label="Text content">${TEXT_LANGUAGE_OPTIONS[0].sample}</textarea>
+              </label>
+              <div class="target-text-options">
+                <label>
+                  <span>Language</span>
+                  <select id="target-text-language">
+                    ${TEXT_LANGUAGE_OPTIONS.map((option) => (
+                      `<option value="${option.id}">${option.label}</option>`
+                    )).join('')}
+                  </select>
+                </label>
+                <label>
+                  <span>Font</span>
+                  <select id="target-text-font">
+                    ${TEXT_FONT_OPTIONS.map((option) => (
+                      `<option value="${option.id}">${option.label}</option>`
+                    )).join('')}
+                  </select>
+                </label>
+              </div>
+              <button id="add-target-text" type="button">Add text</button>
             </div>
             <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
           </section>

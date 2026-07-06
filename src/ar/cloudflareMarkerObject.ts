@@ -17,16 +17,23 @@ import { processedImageDataUrl } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { normalizeAnimation } from '../app/imageTargetAnimation';
 import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
+import {
+  isTextTargetObject,
+  type LocalTextTargetObject,
+} from '../app/targetEditorObjects';
+import { createTextObject3D } from '../scene/textObject3d';
 import type { MarkerObject } from './arObjects';
 
 export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
 
-export type CloudflarePlacedObject = {
+export type CloudflareModelPlacedObject = {
   id?: string;
   model: CloudflareModelOption;
   placement?: ImageTargetPlacement;
   animation?: ImageTargetAnimation;
 };
+
+export type CloudflarePlacedObject = CloudflareModelPlacedObject | LocalTextTargetObject;
 
 export type CloudflarePlacedAsset = {
   model?: CloudflareModelOption;
@@ -34,6 +41,7 @@ export type CloudflarePlacedAsset = {
   placement?: ImageTargetPlacement;
   objects?: CloudflarePlacedObject[];
   loadModelGroup?: ModelGroupLoader;
+  createTextObject?: (text: LocalTextTargetObject['text']) => Group;
 };
 
 export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): MarkerObject {
@@ -45,6 +53,7 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
   }
 
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
+  const createTextObject = asset.createTextObject ?? createTextObject3D;
   const placedObjects = createPlacedObjects(asset);
   const animatedRoots = placedObjects.map((object, index) => {
     const modelRoot = new Group();
@@ -61,6 +70,16 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
       );
     }
     group.add(modelRoot);
+
+    if (isTextTargetObject(object)) {
+      modelRoot.add(createTextObject(object.text));
+      return {
+        root: modelRoot,
+        baseZ: modelRoot.position.z,
+        animation: normalizeAnimation(object.animation),
+        elapsedSeconds: 0,
+      };
+    }
 
     void loadModelGroup(object.model.url)
       .then((loadedModel) => {

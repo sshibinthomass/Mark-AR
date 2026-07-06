@@ -3,6 +3,7 @@ import type {
   CloudflareModelOption,
   ProcessedBaseImage,
 } from '../app/cloudflareModels';
+import type { LocalImageTargetDraft } from '../app/targetEditorObjects';
 import { AR_MARKERS, type MarkerSpec } from './markerCatalog';
 import type { CloudflarePlacedAsset } from './cloudflareMarkerObject';
 
@@ -14,6 +15,7 @@ export type RuntimeMarkerTarget = {
 type CreateRuntimeMarkerTargetsInput = {
   builtInMarkers?: MarkerSpec[];
   cloudTargets?: CloudImageTarget[];
+  draftTarget?: LocalImageTargetDraft;
   selectedModel?: CloudflareModelOption;
   processedBaseImage?: ProcessedBaseImage;
 };
@@ -21,6 +23,7 @@ type CreateRuntimeMarkerTargetsInput = {
 export function createRuntimeMarkerTargets({
   builtInMarkers = AR_MARKERS,
   cloudTargets = [],
+  draftTarget,
   selectedModel,
   processedBaseImage,
 }: CreateRuntimeMarkerTargetsInput = {}): RuntimeMarkerTarget[] {
@@ -51,5 +54,20 @@ export function createRuntimeMarkerTargets({
     },
   }));
 
-  return [...builtInTargets, ...cloudRuntimeTargets];
+  const draftRuntimeTargets = draftTarget
+    ? [{
+        marker: {
+          id: `draft-${draftTarget.id}`,
+          label: draftTarget.label,
+          targetIndex: builtInTargets.length + cloudRuntimeTargets.length,
+          imagePath: draftTarget.imageUrl,
+          object: { kind: 'orbitBeacon' as const, color: 0x78ffb6, accentColor: 0xff4f8b },
+        },
+        cloudflareAsset: {
+          objects: draftTarget.objects,
+        },
+      }]
+    : [];
+
+  return [...builtInTargets, ...cloudRuntimeTargets, ...draftRuntimeTargets];
 }

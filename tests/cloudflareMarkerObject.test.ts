@@ -116,4 +116,33 @@ describe('createCloudflareMarkerObject', () => {
     expect(modelRoot.position.y).toBeCloseTo(0.1);
     expect(modelRoot.position.z).toBeCloseTo(0.3);
   });
+
+  it('renders local text objects in AR without loading a GLB', async () => {
+    const textGroup = new Group();
+    textGroup.name = 'local-text-3d-object';
+    const loadModelGroup = async () => {
+      throw new Error('text should not load a GLB');
+    };
+
+    const markerObject = createCloudflareMarkerObject({
+      objects: [
+        {
+          kind: 'text',
+          id: 'text-object',
+          text: { value: 'வணக்கம் AR', language: 'tamil', font: 'tamil-ui' },
+          placement: { scale: 1.1, offsetX: 0.25, offsetY: -0.1, height: 0.22, rotationX: 0, rotationY: 15, rotationZ: 0 },
+        },
+      ],
+      loadModelGroup,
+      createTextObject: () => textGroup,
+    });
+
+    const textRoot = markerObject.group.getObjectByName('cloudflare-model-root-text-object') as Group;
+
+    expect(textRoot.children).toContain(textGroup);
+    expect(textRoot.position.x).toBeCloseTo(0.25);
+    expect(textRoot.position.y).toBeCloseTo(-0.1);
+    expect(textRoot.position.z).toBeCloseTo(0.22);
+    expect(textRoot.rotation.y).toBeCloseTo(Math.PI / 12);
+  });
 });

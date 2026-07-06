@@ -56,4 +56,42 @@ describe('marker target mapping', () => {
       },
     });
   });
+
+  it('adds the current local target draft as an in-memory AR target with text objects', () => {
+    const targets = createRuntimeMarkerTargets({
+      builtInMarkers: AR_MARKERS,
+      draftTarget: {
+        id: 'draft-target',
+        label: 'Draft target',
+        imageUrl: 'data:image/jpeg;base64,aW1hZ2U=',
+        objects: [
+          {
+            kind: 'text',
+            id: 'text-object',
+            text: { value: 'Hello AR', language: 'english', font: 'studio-sans' },
+            placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 },
+          },
+        ],
+      },
+    });
+
+    expect(targets.map((target) => target.marker.targetIndex)).toEqual([0, 1, 2]);
+    expect(targets.at(-1)).toMatchObject({
+      marker: {
+        id: 'draft-draft-target',
+        label: 'Draft target',
+        targetIndex: 2,
+        imagePath: 'data:image/jpeg;base64,aW1hZ2U=',
+      },
+      cloudflareAsset: {
+        objects: [
+          {
+            kind: 'text',
+            id: 'text-object',
+            text: { value: 'Hello AR', language: 'english', font: 'studio-sans' },
+          },
+        ],
+      },
+    });
+  });
 });

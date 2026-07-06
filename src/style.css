@@ -527,6 +527,8 @@ h1 {
 .target-workspace,
 .target-setup-fields,
 .object-action-row,
+.target-text-panel,
+.target-text-options,
 .target-object-list,
 .control-section,
 .transform-control-stack,
@@ -601,7 +603,19 @@ h1 {
   font-weight: 750;
 }
 
+.target-text-panel {
+  gap: 9px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+
+.target-text-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .target-setup-card input[type="text"],
+.target-setup-card textarea,
 .target-setup-card select,
 .target-controls-card select {
   width: 100%;
@@ -612,6 +626,12 @@ h1 {
   color: var(--ink);
   background: rgba(255, 255, 255, 0.9);
   font-weight: 700;
+}
+
+.target-setup-card textarea {
+  min-height: 66px;
+  resize: vertical;
+  line-height: 1.35;
 }
 
 .target-page .file-control input {
@@ -1190,6 +1210,7 @@ button:disabled {
   .mode-picker,
   .button-row,
   .object-action-row,
+  .target-text-options,
   .placement-grid {
     grid-template-columns: 1fr;
   }

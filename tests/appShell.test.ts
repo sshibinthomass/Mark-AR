@@ -35,6 +35,17 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#add-target-object')).toBeTruthy();
     expect(container.querySelector('#remove-target-object')).toBeTruthy();
     expect(container.querySelector('#target-object-list')).toBeTruthy();
+    expect(container.querySelector('#target-text-value')).toBeTruthy();
+    expect(container.querySelector('#target-text-language')).toBeTruthy();
+    expect(container.querySelector('#target-text-language option[value="english"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-language option[value="german"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-language option[value="tamil"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-font')).toBeTruthy();
+    expect(container.querySelector('#target-text-font option[value="studio-sans"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-font option[value="studio-serif"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-font option[value="studio-mono"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-font option[value="tamil-ui"]')).toBeTruthy();
+    expect(container.querySelector('#add-target-text')).toBeTruthy();
     expect(container.querySelector('#target-scale')).toBeTruthy();
     expect(container.querySelector('#target-scale-x')).toBeNull();
     expect(container.querySelector('#target-scale-y')).toBeNull();
