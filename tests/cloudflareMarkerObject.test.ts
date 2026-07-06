@@ -47,7 +47,7 @@ describe('createCloudflareMarkerObject', () => {
             label: 'Chair',
             url: 'https://worker.example/models/chair.glb',
           },
-          placement: { scale: 1.2, offsetX: 0.15, offsetY: -0.2, height: 0.16 },
+          placement: { scale: 1.2, offsetX: 0.15, offsetY: -0.2, height: 0.16, rotationX: 0, rotationY: 30, rotationZ: 0 },
         },
         {
           id: 'plant-object',
@@ -56,7 +56,7 @@ describe('createCloudflareMarkerObject', () => {
             label: 'Plant',
             url: 'https://worker.example/models/plant.glb',
           },
-          placement: { scale: 0.8, offsetX: -0.2, offsetY: 0.1, height: 0.08 },
+          placement: { scale: 0.8, offsetX: -0.2, offsetY: 0.1, height: 0.08, rotationX: -15, rotationY: 0, rotationZ: 45 },
         },
       ],
       baseImage: {
@@ -78,11 +78,14 @@ describe('createCloudflareMarkerObject', () => {
     expect(chairRoot.position.y).toBeCloseTo(-0.2);
     expect(chairRoot.position.z).toBeCloseTo(0.16);
     expect(chairRoot.scale.x).toBeCloseTo(1.2);
+    expect(chairRoot.rotation.y).toBeCloseTo(Math.PI / 6);
     expect(plantRoot.children).toContain(plantModel);
     expect(plantRoot.position.x).toBeCloseTo(-0.2);
     expect(plantRoot.position.y).toBeCloseTo(0.1);
     expect(plantRoot.position.z).toBeCloseTo(0.08);
     expect(plantRoot.scale.x).toBeCloseTo(0.8);
+    expect(plantRoot.rotation.x).toBeCloseTo(-Math.PI / 12);
+    expect(plantRoot.rotation.z).toBeCloseTo(Math.PI / 4);
   });
 
   it('applies per-object spin and bob animation in the AR runtime', async () => {

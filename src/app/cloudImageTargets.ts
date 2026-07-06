@@ -40,6 +40,9 @@ type WorkerImageTargetObject = {
     offset_x?: number;
     offset_y?: number;
     height?: number;
+    rotation_x?: number;
+    rotation_y?: number;
+    rotation_z?: number;
   };
   animation?: {
     spin_axis?: string;
@@ -60,6 +63,9 @@ type WorkerImageTargetEntry = {
     offset_x?: number;
     offset_y?: number;
     height?: number;
+    rotation_x?: number;
+    rotation_y?: number;
+    rotation_z?: number;
   };
   objects?: WorkerImageTargetObject[];
   owner_email?: string;
@@ -269,6 +275,9 @@ function mapImageTargetObject(object: WorkerImageTargetObject, index: number): C
       offsetX: object.placement?.offset_x,
       offsetY: object.placement?.offset_y,
       height: object.placement?.height,
+      rotationX: object.placement?.rotation_x,
+      rotationY: object.placement?.rotation_y,
+      rotationZ: object.placement?.rotation_z,
     }),
     ...(object.animation ? {
       animation: normalizeAnimation({
@@ -349,11 +358,15 @@ function animationRequestBody(animation: ImageTargetAnimation): Record<string, n
 }
 
 function placementRequestBody(placement: ImageTargetPlacement): Record<string, number> {
+  const normalized = normalizePlacement(placement);
   return {
-    scale: placement.scale,
-    offset_x: placement.offsetX,
-    offset_y: placement.offsetY,
-    height: placement.height,
+    scale: normalized.scale,
+    offset_x: normalized.offsetX,
+    offset_y: normalized.offsetY,
+    height: normalized.height,
+    rotation_x: normalized.rotationX,
+    rotation_y: normalized.rotationY,
+    rotation_z: normalized.rotationZ,
   };
 }
 

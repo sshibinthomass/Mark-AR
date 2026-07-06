@@ -16,7 +16,7 @@ import type {
 import { processedImageDataUrl } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { normalizeAnimation } from '../app/imageTargetAnimation';
-import type { ImageTargetPlacement } from '../app/imageTargetPayload';
+import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
 import type { MarkerObject } from './arObjects';
 
 export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
@@ -51,8 +51,14 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
     modelRoot.name = modelRootName(object, index, placedObjects.length);
     modelRoot.position.z = asset.baseImage ? 0.12 : 0.04;
     if (object.placement) {
-      modelRoot.position.set(object.placement.offsetX, object.placement.offsetY, object.placement.height);
-      modelRoot.scale.setScalar(object.placement.scale);
+      const placement = normalizePlacement(object.placement);
+      modelRoot.position.set(placement.offsetX, placement.offsetY, placement.height);
+      modelRoot.scale.setScalar(placement.scale);
+      modelRoot.rotation.set(
+        degreesToRadians(placement.rotationX),
+        degreesToRadians(placement.rotationY),
+        degreesToRadians(placement.rotationZ),
+      );
     }
     group.add(modelRoot);
 
@@ -88,6 +94,10 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
       }
     },
   };
+}
+
+function degreesToRadians(value: number): number {
+  return (value * Math.PI) / 180;
 }
 
 function applyAnimation(

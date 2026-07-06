@@ -3,18 +3,52 @@ import {
   DEFAULT_IMAGE_TARGET_PLACEMENT,
   imageTargetDataUrl,
   normalizePlacement,
+  resetPlacementTransform,
   validateTargetImagePayload,
 } from '../src/app/imageTargetPayload';
 
 describe('image target payload helpers', () => {
   it('normalizes placement values with safe defaults and bounds', () => {
     expect(normalizePlacement()).toEqual(DEFAULT_IMAGE_TARGET_PLACEMENT);
-    expect(normalizePlacement({ scale: 99, offsetX: -5, offsetY: 5, height: -1 })).toEqual({
+    expect(normalizePlacement({ scale: 99, offsetX: -5, offsetY: 5, height: -1, rotationX: -240, rotationY: 540, rotationZ: 45 })).toEqual({
       scale: 5,
       offsetX: -1,
       offsetY: 1,
       height: 0,
+      rotationX: 120,
+      rotationY: 180,
+      rotationZ: 45,
     });
+  });
+
+  it('resets move and rotate by axis while scale resets only overall scale', () => {
+    const placement = normalizePlacement({
+      scale: 2,
+      offsetX: 0.5,
+      offsetY: -0.4,
+      height: 0.6,
+      rotationX: 15,
+      rotationY: -30,
+      rotationZ: 60,
+    });
+
+    expect(placement).toMatchObject({
+      scale: 2,
+    });
+    expect(resetPlacementTransform(placement, 'move')).toMatchObject({
+      offsetX: DEFAULT_IMAGE_TARGET_PLACEMENT.offsetX,
+      offsetY: DEFAULT_IMAGE_TARGET_PLACEMENT.offsetY,
+      height: DEFAULT_IMAGE_TARGET_PLACEMENT.height,
+      rotationY: -30,
+      scale: 2,
+    });
+    expect(resetPlacementTransform(placement, 'move', 'x')).toMatchObject({ offsetX: 0 });
+    expect(resetPlacementTransform(placement, 'move', 'y')).toMatchObject({ height: 0.12, offsetX: 0.5 });
+    expect(resetPlacementTransform(placement, 'move', 'z')).toMatchObject({ offsetY: 0, height: 0.6 });
+    expect(resetPlacementTransform(placement, 'rotate')).toMatchObject({ rotationX: 0, rotationY: 0, rotationZ: 0 });
+    expect(resetPlacementTransform(placement, 'rotate', 'y')).toMatchObject({ rotationY: 0, rotationX: 15 });
+    expect(resetPlacementTransform(placement, 'scale')).toMatchObject({ scale: 1, rotationY: -30 });
+    expect(resetPlacementTransform(placement, 'scale', 'z')).toMatchObject({ scale: 1, offsetX: 0.5 });
   });
 
   it('validates supported target images and creates data URLs', () => {

@@ -8,8 +8,8 @@ export type ImageTargetAnimation = {
 };
 
 export const DEFAULT_IMAGE_TARGET_ANIMATION: ImageTargetAnimation = {
-  spinAxis: 'z',
-  spinSpeed: 0.22,
+  spinAxis: 'y',
+  spinSpeed: 0,
   bobHeight: 0,
   bobSpeed: 0,
 };

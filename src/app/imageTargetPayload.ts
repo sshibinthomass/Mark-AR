@@ -3,6 +3,9 @@ export type ImageTargetPlacement = {
   offsetX: number;
   offsetY: number;
   height: number;
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
 };
 
 export type ImageTargetImagePayload = {
@@ -15,6 +18,9 @@ export const DEFAULT_IMAGE_TARGET_PLACEMENT: ImageTargetPlacement = {
   offsetX: 0,
   offsetY: 0,
   height: 0.12,
+  rotationX: 0,
+  rotationY: 0,
+  rotationZ: 0,
 };
 
 const maxTargetImageBytes = 5 * 1024 * 1024;
@@ -26,7 +32,45 @@ export function normalizePlacement(value?: Partial<ImageTargetPlacement>): Image
     offsetX: clampFinite(value?.offsetX, DEFAULT_IMAGE_TARGET_PLACEMENT.offsetX, -1, 1),
     offsetY: clampFinite(value?.offsetY, DEFAULT_IMAGE_TARGET_PLACEMENT.offsetY, -1, 1),
     height: clampFinite(value?.height, DEFAULT_IMAGE_TARGET_PLACEMENT.height, 0, 1),
+    rotationX: normalizeDegrees(value?.rotationX, DEFAULT_IMAGE_TARGET_PLACEMENT.rotationX),
+    rotationY: normalizeDegrees(value?.rotationY, DEFAULT_IMAGE_TARGET_PLACEMENT.rotationY),
+    rotationZ: normalizeDegrees(value?.rotationZ, DEFAULT_IMAGE_TARGET_PLACEMENT.rotationZ),
   };
+}
+
+export type PlacementTransformReset = 'move' | 'rotate' | 'scale';
+export type PlacementTransformResetAxis = 'all' | 'x' | 'y' | 'z';
+
+export function resetPlacementTransform(
+  value: ImageTargetPlacement,
+  transform: PlacementTransformReset,
+  axis: PlacementTransformResetAxis = 'all',
+): ImageTargetPlacement {
+  const placement = normalizePlacement(value);
+  const defaults = DEFAULT_IMAGE_TARGET_PLACEMENT;
+
+  if (transform === 'move') {
+    return normalizePlacement({
+      ...placement,
+      ...(axis === 'all' || axis === 'x' ? { offsetX: defaults.offsetX } : {}),
+      ...(axis === 'all' || axis === 'y' ? { height: defaults.height } : {}),
+      ...(axis === 'all' || axis === 'z' ? { offsetY: defaults.offsetY } : {}),
+    });
+  }
+
+  if (transform === 'rotate') {
+    return normalizePlacement({
+      ...placement,
+      ...(axis === 'all' || axis === 'x' ? { rotationX: defaults.rotationX } : {}),
+      ...(axis === 'all' || axis === 'y' ? { rotationY: defaults.rotationY } : {}),
+      ...(axis === 'all' || axis === 'z' ? { rotationZ: defaults.rotationZ } : {}),
+    });
+  }
+
+  return normalizePlacement({
+    ...placement,
+    scale: defaults.scale,
+  });
 }
 
 export function validateTargetImagePayload(payload: ImageTargetImagePayload): string | null {
@@ -51,6 +95,14 @@ function clampFinite(value: unknown, fallback: number, min: number, max: number)
     return fallback;
   }
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeDegrees(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+  const wrapped = ((((value + 180) % 360) + 360) % 360) - 180;
+  return wrapped === -180 ? 180 : Number(wrapped.toFixed(3));
 }
 
 function decodedBase64Size(value: string): number {
