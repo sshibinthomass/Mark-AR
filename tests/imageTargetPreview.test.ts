@@ -1,6 +1,6 @@
-import { Group, Mesh, MeshBasicMaterial, PlaneGeometry, Texture } from 'three';
+import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Texture } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ImageTargetPreview } from '../src/scene/ImageTargetPreview';
+import { ImageTargetPreview, type PreviewCameraView } from '../src/scene/ImageTargetPreview';
 
 describe('ImageTargetPreview', () => {
   const originalRequestAnimationFrame = window.requestAnimationFrame;
@@ -124,7 +124,253 @@ describe('ImageTargetPreview', () => {
     expect(secondModel.materialDispose).toHaveBeenCalledTimes(1);
   });
 
-  it('moves a loaded model by dragging on the preview canvas', async () => {
+  it('uses a grey editor viewport background', () => {
+    const container = document.createElement('div');
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    const scene = (preview as unknown as { scene: { background: Color } }).scene;
+    expect(scene.background.getHexString()).toBe('6b6b6b');
+
+    preview.dispose();
+  });
+
+  it('selects a loaded model by clicking it in the preview canvas', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    mockCanvasRect(rendererElement, { width: 500, height: 500 });
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const selectionChanges: string[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onSelectionChange: (objectId) => selectionChanges.push(objectId),
+    });
+
+    await preview.update({
+      objects: [
+        {
+          id: 'chair-object',
+          model: { id: 'chair', label: 'Chair', url: 'https://example.com/chair.glb', visibility: 'public' },
+          placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+        },
+      ],
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 250, clientY: 250 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 250 });
+
+    expect(selectionChanges).toEqual(['chair-object']);
+
+    preview.dispose();
+  });
+
+  it('orbits the camera with a normal empty-space preview drag instead of moving the model', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const cameraChanges: PreviewCameraView[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+      onCameraChange: (camera) => cameraChanges.push(camera),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 460, clientY: 460 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 560, clientY: 420 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 560, clientY: 420 });
+
+    expect(placementChanges).toHaveLength(0);
+    expect(cameraChanges.at(-1)).toMatchObject({
+      yawDegrees: 45,
+      height: 1.5,
+    });
+    expect(model.group.position.x).toBeCloseTo(0);
+    expect(model.group.position.z).toBeCloseTo(0);
+
+    preview.dispose();
+  });
+
+  it('pans and zooms the camera with Blender-style viewport gestures', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const cameraChanges: PreviewCameraView[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+      onCameraChange: (camera) => cameraChanges.push(camera),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200, shiftKey: true });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 170, shiftKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 170, shiftKey: true });
+
+    expect(cameraChanges.at(-1)).toMatchObject({
+      targetX: -0.21,
+      targetHeight: -0.126,
+      targetZ: 0,
+    });
+
+    dispatchWheel(rendererElement, { deltaY: -240 });
+
+    expect(cameraChanges.at(-1)?.distance).toBeLessThan(2.1);
+    expect(placementChanges).toHaveLength(0);
+
+    preview.dispose();
+  });
+
+  it('zooms the camera with a two-pointer pinch by default', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const cameraChanges: PreviewCameraView[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+      onCameraChange: (camera) => cameraChanges.push(camera),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 2, clientX: 300, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 2, clientX: 400, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 2, clientX: 400, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 200, clientY: 200 });
+
+    expect(placementChanges).toHaveLength(0);
+    expect(cameraChanges.at(-1)?.distance).toBeCloseTo(1.05);
+    expect(model.group.scale.x).toBeCloseTo(1);
+
+    preview.dispose();
+  });
+
+  it('applies Blender numeric camera shortcuts while the preview has focus', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const cameraChanges: PreviewCameraView[] = [];
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => undefined),
+      onCameraChange: (camera) => cameraChanges.push(camera),
+    });
+
+    dispatchKeyboard(rendererElement, 'keydown', { key: '7' });
+
+    expect(cameraChanges.at(-1)).toMatchObject({
+      distance: 0.9,
+      height: 3,
+      yawDegrees: 0,
+    });
+
+    preview.dispose();
+  });
+
+  it('moves a loaded model with explicit Alt-drag transform on the preview canvas', async () => {
     const container = document.createElement('div');
     Object.defineProperties(container, {
       clientWidth: { value: 500 },
@@ -161,9 +407,9 @@ describe('ImageTargetPreview', () => {
       placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
     });
 
-    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
-    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 150 });
-    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150 });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 150, altKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150, altKey: true });
 
     expect(placementChanges.at(-1)).toMatchObject({
       objectId: 'object-1',
@@ -180,7 +426,62 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
-  it('scales a loaded model with a two-finger pinch on the preview canvas', async () => {
+  it('applies placement rotation and updates it from a direct rotate drag', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 15, rotationZ: 0 },
+    });
+
+    expect(model.group.rotation.y).toBeCloseTo(Math.PI / 12);
+
+    dispatchKeyboard(rendererElement, 'keydown', { key: 'e' });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 300, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 300, clientY: 200 });
+
+    expect(placementChanges.at(-1)).toMatchObject({
+      objectId: 'object-1',
+      placement: {
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        height: 0.12,
+        rotationX: 0,
+        rotationY: 60,
+        rotationZ: 0,
+      },
+    });
+    expect(model.group.rotation.y).toBeCloseTo(Math.PI / 3);
+
+    preview.dispose();
+  });
+
+  it('moves a loaded model after the Blender grab shortcut is pressed', async () => {
     const container = document.createElement('div');
     Object.defineProperties(container, {
       clientWidth: { value: 500 },
@@ -211,11 +512,166 @@ describe('ImageTargetPreview', () => {
       placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
     });
 
+    dispatchKeyboard(rendererElement, 'keydown', { key: 'g' });
     dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
-    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 2, clientX: 300, clientY: 200 });
-    dispatchPointer(rendererElement, 'pointermove', { pointerId: 2, clientX: 400, clientY: 200 });
-    dispatchPointer(rendererElement, 'pointerup', { pointerId: 2, clientX: 400, clientY: 200 });
-    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 200, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 150 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150 });
+
+    expect(placementChanges.at(-1)).toMatchObject({
+      objectId: 'object-1',
+      placement: {
+        scale: 1,
+        offsetX: 0.2,
+        offsetY: -0.2,
+        height: 0.12,
+      },
+    });
+    expect(model.group.position.x).toBeCloseTo(0.2);
+    expect(model.group.position.z).toBeCloseTo(-0.2);
+
+    preview.dispose();
+  });
+
+  it('scales a loaded model after the Blender scale shortcut is pressed', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+    });
+
+    dispatchKeyboard(rendererElement, 'keydown', { key: 's' });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 200, clientY: 100 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 200, clientY: 100 });
+
+    const placementChange = placementChanges.at(-1) as {
+      placement: { scale: number; offsetX: number; offsetY: number; height: number };
+    };
+    expect(placementChange.placement.scale).toBeCloseTo(Math.E);
+    expect(placementChange.placement.offsetX).toBeCloseTo(0);
+    expect(placementChange.placement.offsetY).toBeCloseTo(0);
+    expect(placementChange.placement.height).toBeCloseTo(0.12);
+    expect(model.group.scale.x).toBeCloseTo(Math.E);
+
+    preview.dispose();
+  });
+
+  it('switches transform mode in place without reloading the selected model', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const modeChanges: string[] = [];
+    const model = createDisposableModel();
+    const loadModel = vi.fn(async () => model.group);
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel,
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+      onTransformModeChange: (mode) => modeChanges.push(mode),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 },
+    });
+
+    preview.setTransformMode('rotate');
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 300, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 300, clientY: 200, altKey: true });
+
+    expect(loadModel).toHaveBeenCalledTimes(1);
+    expect(modeChanges).toEqual(['rotate']);
+    expect(placementChanges.at(-1)).toMatchObject({
+      objectId: 'object-1',
+      placement: {
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        height: 0.12,
+        rotationY: 45,
+      },
+    });
+    expect(model.group.rotation.y).toBeCloseTo(Math.PI / 4);
+
+    preview.dispose();
+  });
+
+  it('scales a loaded model with an explicit Alt two-pointer pinch on the preview canvas', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const placementChanges: unknown[] = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementChange: (placement) => placementChanges.push(placement),
+    });
+
+    await preview.update({
+      model: { id: 'model-1', label: 'Model 1', url: 'https://example.com/model-1.glb', visibility: 'public' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 2, clientX: 300, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 2, clientX: 400, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 2, clientX: 400, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 200, clientY: 200, altKey: true });
 
     expect(placementChanges.at(-1)).toMatchObject({
       objectId: 'object-1',
@@ -278,9 +734,9 @@ describe('ImageTargetPreview', () => {
       selectedObjectId: 'lamp-object',
     });
 
-    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200 });
-    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 150 });
-    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150 });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 200, altKey: true });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 1, clientX: 250, clientY: 150, altKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 150, altKey: true });
 
     const placementChange = placementChanges.at(-1) as {
       objectId: string;
@@ -386,11 +842,47 @@ function createDisposableModel() {
   return { group, geometryDispose, materialDispose };
 }
 
+function mockCanvasRect(target: HTMLElement, values: { width: number; height: number }): void {
+  target.getBoundingClientRect = vi.fn(() => ({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: values.width,
+    bottom: values.height,
+    width: values.width,
+    height: values.height,
+    toJSON: () => ({}),
+  }));
+}
+
 function dispatchPointer(
   target: HTMLElement,
   type: string,
-  values: { pointerId: number; clientX: number; clientY: number },
+  values: {
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    altKey?: boolean;
+    button?: number;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    pointerType?: string;
+    shiftKey?: boolean;
+  },
 ): void {
+  const event = new Event(type, { bubbles: true, cancelable: true }) as Event & typeof values;
+  Object.assign(event, { button: 0, pointerType: 'mouse', ...values });
+  target.dispatchEvent(event);
+}
+
+function dispatchWheel(target: HTMLElement, values: { deltaY: number }): void {
+  const event = new Event('wheel', { bubbles: true, cancelable: true }) as Event & typeof values;
+  Object.assign(event, values);
+  target.dispatchEvent(event);
+}
+
+function dispatchKeyboard(target: HTMLElement, type: string, values: { key: string }): void {
   const event = new Event(type, { bubbles: true, cancelable: true }) as Event & typeof values;
   Object.assign(event, values);
   target.dispatchEvent(event);

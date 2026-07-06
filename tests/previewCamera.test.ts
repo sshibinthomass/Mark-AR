@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cameraViewForPan,
+  cameraViewForPinchZoom,
   cameraViewForDrag,
   cameraViewForPreset,
+  cameraViewForZoom,
   DEFAULT_PREVIEW_CAMERA_VIEW,
   isCameraPreset,
 } from '../src/scene/previewCamera';
@@ -50,5 +53,33 @@ describe('preview camera presets', () => {
       yawDegrees: 135,
       height: 0.1,
     });
+  });
+
+  it('pans the preview target like a Blender viewport drag', () => {
+    expect(
+      cameraViewForPan(DEFAULT_PREVIEW_CAMERA_VIEW, {
+        deltaX: 100,
+        deltaY: -50,
+        viewportWidth: 500,
+        viewportHeight: 500,
+      }),
+    ).toMatchObject({
+      targetX: -0.42,
+      targetHeight: -0.21,
+      targetZ: 0,
+    });
+  });
+
+  it('zooms the camera with wheel and pinch directions used by viewport navigation', () => {
+    expect(cameraViewForZoom(DEFAULT_PREVIEW_CAMERA_VIEW, { deltaY: -240 }).distance).toBeLessThan(
+      DEFAULT_PREVIEW_CAMERA_VIEW.distance,
+    );
+    expect(cameraViewForZoom(DEFAULT_PREVIEW_CAMERA_VIEW, { deltaY: 4000 }).distance).toBe(5);
+    expect(
+      cameraViewForPinchZoom(DEFAULT_PREVIEW_CAMERA_VIEW, {
+        startDistance: 100,
+        currentDistance: 200,
+      }).distance,
+    ).toBeCloseTo(1.05);
   });
 });
