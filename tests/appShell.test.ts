@@ -29,6 +29,9 @@ describe('renderAppShell', () => {
     expect(html).toContain('id="cloudflare-model-select"');
     expect(container.querySelector('#target-image-file')).toBeTruthy();
     expect(container.querySelector('#target-model-select')).toBeTruthy();
+    expect(container.querySelector('#target-model-select')?.closest('label')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('#target-model-rail')).toBeTruthy();
+    expect(container.querySelector('#target-model-rail')?.closest('.target-preview-shell')).toBeTruthy();
     expect(container.querySelector('#add-target-object')).toBeTruthy();
     expect(container.querySelector('#remove-target-object')).toBeTruthy();
     expect(container.querySelector('#target-object-list')).toBeTruthy();

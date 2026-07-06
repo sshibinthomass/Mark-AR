@@ -179,7 +179,7 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                 <span>Target image</span>
                 <input id="target-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
               </label>
-              <label>
+              <label class="target-model-select-sentinel" hidden aria-hidden="true">
                 <span>Cloudflare model</span>
                 <select id="target-model-select">
                   <option value="">Loading models...</option>
@@ -205,6 +205,9 @@ export function renderAppShell(markers: MarkerSpec[]): string {
               <button type="button" class="gizmo-button gizmo-button-z" data-camera-preset="front" aria-label="Front camera view" title="Front view">Z</button>
               <button type="button" class="gizmo-button gizmo-button-x" data-camera-preset="right" aria-label="Right camera view" title="Right view">X</button>
               <button type="button" class="gizmo-home" data-camera-preset="home" aria-label="Reset camera view" title="Reset view">0</button>
+            </div>
+            <div id="target-model-rail" class="target-model-rail" role="listbox" aria-label="Cloudflare models">
+              <p class="target-model-rail-empty">Loading models...</p>
             </div>
           </div>
 

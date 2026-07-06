@@ -58,6 +58,7 @@ import {
 import { ImageTargetPreview } from './scene/ImageTargetPreview';
 import type { PreviewTransformMode } from './scene/ImageTargetPreview';
 import { renderAppShell } from './ui/appShell';
+import { renderTargetModelRail } from './ui/modelRail';
 import { routeFromHash } from './ui/pageRoutes';
 import { activateRoute } from './ui/pageRouter';
 
@@ -91,6 +92,7 @@ const targetImageFile = document.querySelector<HTMLInputElement>('#target-image-
 const targetLabelInput = document.querySelector<HTMLInputElement>('#target-label');
 const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-model-select');
 const targetPreviewStage = document.querySelector<HTMLElement>('#target-preview-stage');
+const targetModelRail = document.querySelector<HTMLElement>('#target-model-rail');
 const addTargetObjectButton = document.querySelector<HTMLButtonElement>('#add-target-object');
 const removeTargetObjectButton = document.querySelector<HTMLButtonElement>('#remove-target-object');
 const targetObjectList = document.querySelector<HTMLElement>('#target-object-list');
@@ -406,17 +408,7 @@ resetTargetAnimationButton?.addEventListener('click', () => {
 });
 
 targetModelSelect?.addEventListener('change', () => {
-  if (targetObjects.length === 0 && getSelectedTargetModel()) {
-    addTargetObjectFromSelection();
-    return;
-  }
-
-  const selectedModel = getSelectedTargetModel();
-  if (selectedModel) {
-    updateImageTargetStatus(`${selectedModel.label} ready to add.`, false);
-  }
-  renderTargetObjectList();
-  void updateTargetPreview();
+  handleTargetModelSelectionChange();
 });
 
 addTargetObjectButton?.addEventListener('click', () => {
@@ -486,6 +478,7 @@ async function refreshCloudflareModels(): Promise<void> {
     if (targetModelSelect) {
       targetModelSelect.innerHTML = '<option value="">Unable to load models</option>';
     }
+    renderTargetModelRailOptions([]);
     modelStatus.textContent = errorMessage(error, 'Unable to load models');
   } finally {
     reloadModelsButton.disabled = false;
@@ -552,6 +545,7 @@ function renderTargetModelOptions(models: CloudflareModelOption[]): void {
   }
 
   targetModelSelect.value = models.some((model) => model.id === selectedValue) ? selectedValue : '';
+  renderTargetModelRailOptions(models);
   renderTargetObjectList();
 }
 
@@ -619,6 +613,50 @@ function readTargetAnimation(): ImageTargetAnimation {
   });
 }
 
+function renderTargetModelRailOptions(models: CloudflareModelOption[]): void {
+  if (!targetModelRail) {
+    return;
+  }
+
+  renderTargetModelRail(targetModelRail, {
+    models,
+    selectedModelId: targetModelSelect?.value,
+    onSelect: (model) => selectTargetModel(model.id),
+  });
+}
+
+function selectTargetModel(modelId: string): void {
+  if (!targetModelSelect) {
+    return;
+  }
+
+  targetModelSelect.value = modelId;
+  handleTargetModelSelectionChange();
+}
+
+function syncTargetModelRailSelection(): void {
+  const selectedId = targetModelSelect?.value ?? '';
+  targetModelRail?.querySelectorAll<HTMLButtonElement>('.target-model-card').forEach((button) => {
+    button.setAttribute('aria-selected', String(button.dataset.modelId === selectedId));
+  });
+}
+
+function handleTargetModelSelectionChange(): void {
+  syncTargetModelRailSelection();
+
+  if (targetObjects.length === 0 && getSelectedTargetModel()) {
+    addTargetObjectFromSelection();
+    return;
+  }
+
+  const selectedModel = getSelectedTargetModel();
+  if (selectedModel) {
+    updateImageTargetStatus(`${selectedModel.label} ready to add.`, false);
+  }
+  renderTargetObjectList();
+  void updateTargetPreview();
+}
+
 function getSelectedTargetModel(): CloudflareModelOption | undefined {
   const selectedId = targetModelSelect?.value;
   return cloudflareModels.find((model) => model.id === selectedId);
@@ -661,6 +699,7 @@ function removeSelectedTargetObject(): void {
   if (targetModelSelect) {
     targetModelSelect.value = selectedObject?.model.id ?? '';
   }
+  syncTargetModelRailSelection();
   syncTargetPlacementInputs(targetPlacement);
   syncTargetAnimationInputs(targetAnimation);
   renderTargetObjectList();
@@ -685,6 +724,7 @@ function selectTargetObject(objectId: string, options?: { refreshPreview?: boole
   if (targetModelSelect) {
     targetModelSelect.value = object.model.id;
   }
+  syncTargetModelRailSelection();
   syncTargetPlacementInputs(object.placement);
   syncTargetAnimationInputs(targetAnimation);
   renderTargetObjectList();

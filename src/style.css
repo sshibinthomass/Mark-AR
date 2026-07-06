@@ -795,6 +795,95 @@ h1 {
   background: #facc15;
 }
 
+.target-model-rail {
+  position: absolute;
+  top: 72px;
+  bottom: 14px;
+  left: 14px;
+  z-index: 3;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  width: 116px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(202, 255, 248, 0.2);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(4, 18, 22, 0.76);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(10px);
+  scrollbar-width: thin;
+}
+
+.target-model-card {
+  display: grid;
+  gap: 6px;
+  min-height: 94px;
+  border-color: rgba(255, 255, 255, 0.16);
+  padding: 7px;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.target-model-card[aria-selected="true"] {
+  border-color: rgba(250, 204, 21, 0.9);
+  background:
+    linear-gradient(145deg, rgba(250, 204, 21, 0.24), rgba(20, 184, 166, 0.22)),
+    rgba(255, 255, 255, 0.1);
+}
+
+.target-model-thumb {
+  display: grid;
+  place-items: center;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(94, 234, 212, 0.34), transparent 38%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03));
+}
+
+.target-model-thumb-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.target-model-thumb-fallback {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  color: #071b1f;
+  background: var(--teal);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.target-model-card-label {
+  overflow: hidden;
+  color: #ffffff;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-model-rail-empty {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.78);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
 .target-camera-gizmo {
   position: absolute;
   top: 14px;
@@ -1149,6 +1238,36 @@ button:disabled {
   .target-transform-toolbar button {
     min-height: 30px;
     padding: 5px 8px;
+  }
+
+  .target-model-rail {
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    grid-auto-flow: column;
+    grid-auto-columns: 74px;
+    width: auto;
+    max-height: 92px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px;
+  }
+
+  .target-model-card {
+    min-height: 78px;
+    padding: 5px;
+    font-size: 10px;
+  }
+
+  .target-model-thumb {
+    height: 42px;
+  }
+
+  .target-model-thumb-fallback {
+    width: 30px;
+    height: 30px;
+    font-size: 10px;
   }
 
   .target-camera-gizmo {
