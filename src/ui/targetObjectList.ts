@@ -1,5 +1,7 @@
 import {
   fontOption,
+  fillModeOption,
+  gradientDirectionOption,
   isTextTargetObject,
   languageOption,
   normalizeTargetText,
@@ -41,10 +43,18 @@ export function renderTargetObjectListItem({
     const swatch = document.createElement('span');
     swatch.className = 'target-object-color-swatch';
     swatch.dataset.textColorSwatch = '';
-    swatch.style.backgroundColor = text.color ?? '';
+    if (text.fillMode === 'gradient') {
+      swatch.style.background = `linear-gradient(90deg, ${text.gradientStart}, ${text.gradientEnd})`;
+    } else {
+      swatch.style.backgroundColor = text.color ?? '';
+    }
     swatch.setAttribute('aria-hidden', 'true');
     label.textContent = text.value;
-    meta.textContent = `${languageOption(text.language).label} / ${fontOption(text.font).label}`;
+    const fillLabel = fillModeOption(text.fillMode ?? 'solid').label;
+    const directionLabel = gradientDirectionOption(text.gradientDirection ?? 'horizontal').label;
+    meta.textContent = text.fillMode === 'gradient'
+      ? `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel} ${directionLabel}`
+      : `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel}`;
     selectButton.append(swatch, label, meta);
 
     const deleteButton = document.createElement('button');

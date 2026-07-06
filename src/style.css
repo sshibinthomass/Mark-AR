@@ -610,7 +610,7 @@ h1 {
 }
 
 .target-text-options {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -630,8 +630,12 @@ h1 {
 }
 
 .target-text-color-control input[type="color"] {
-  min-width: 64px;
+  min-width: 100%;
   padding: 4px;
+}
+
+.target-text-options input[type="range"] {
+  width: 100%;
 }
 
 .target-setup-card textarea {
@@ -695,6 +699,20 @@ h1 {
 
 .target-object-row-model .target-object-select {
   grid-column: 1 / -1;
+}
+
+.target-object-row-text .target-object-select {
+  grid-template-columns: auto minmax(0, 1fr);
+  row-gap: 2px;
+}
+
+.target-object-row-text .target-object-color-swatch {
+  grid-row: 1 / span 2;
+}
+
+.target-object-row-text small {
+  grid-column: 2;
+  justify-self: start;
 }
 
 .target-object-color-swatch {

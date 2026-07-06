@@ -29,6 +29,47 @@ describe('createTextObject3D', () => {
       expect((materials[0] as MeshStandardMaterial).color.getHexString()).toBe('ef4444');
     }
   });
+
+  it('applies gradient fill, side color, depth, bevel, and gloss to 3D text geometry', async () => {
+    const group = createTextObject3D(
+      {
+        value: 'Gradient',
+        language: 'english',
+        font: 'studio-serif-bold',
+        color: '#2563eb',
+        fillMode: 'gradient',
+        gradientStart: '#ef4444',
+        gradientEnd: '#facc15',
+        gradientDirection: 'horizontal',
+        sideColor: '#111827',
+        depth: 0.11,
+        bevel: 0.012,
+        gloss: 0.95,
+        stylePreset: 'gold-bevel',
+      },
+      { loadFont: async () => testFont },
+    );
+
+    await settleTextBuild();
+
+    const mesh = collectMeshes(group).find((candidate) => candidate.geometry.type === 'TextGeometry');
+    expect(mesh).toBeTruthy();
+
+    const materials = Array.isArray(mesh?.material) ? mesh.material : [mesh?.material];
+    const frontMaterial = materials[0] as MeshStandardMaterial;
+    const sideMaterial = materials[1] as MeshStandardMaterial;
+    const geometryOptions = (mesh?.geometry as unknown as {
+      parameters: { options: { depth?: number; bevelEnabled?: boolean; bevelSize?: number } };
+    }).parameters.options;
+
+    expect(mesh?.geometry.getAttribute('color')).toBeTruthy();
+    expect(frontMaterial.vertexColors).toBe(true);
+    expect(frontMaterial.roughness).toBeLessThan(0.2);
+    expect(sideMaterial.color.getHexString()).toBe('111827');
+    expect(geometryOptions.depth).toBeCloseTo(0.11);
+    expect(geometryOptions.bevelEnabled).toBe(true);
+    expect(geometryOptions.bevelSize).toBeCloseTo(0.012);
+  });
 });
 
 async function settleTextBuild(): Promise<void> {

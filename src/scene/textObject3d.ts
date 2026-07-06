@@ -1,9 +1,26 @@
-import { Group, Mesh, MeshStandardMaterial, Vector3, type Material } from 'three';
+import {
+  Color,
+  Float32BufferAttribute,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  Vector3,
+  type BufferAttribute,
+  type Material,
+} from 'three';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { Font, FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { TTFLoader } from 'three/examples/jsm/loaders/TTFLoader.js';
+import droidSansBoldFontJson from 'three/examples/fonts/droid/droid_sans_bold.typeface.json?raw';
 import studioMonoFontJson from 'three/examples/fonts/droid/droid_sans_mono_regular.typeface.json?raw';
 import studioSansFontJson from 'three/examples/fonts/droid/droid_sans_regular.typeface.json?raw';
+import droidSerifBoldFontJson from 'three/examples/fonts/droid/droid_serif_bold.typeface.json?raw';
+import droidSerifFontJson from 'three/examples/fonts/droid/droid_serif_regular.typeface.json?raw';
+import gentilisBoldFontJson from 'three/examples/fonts/gentilis_bold.typeface.json?raw';
+import helvetikerBoldFontJson from 'three/examples/fonts/helvetiker_bold.typeface.json?raw';
+import helvetikerFontJson from 'three/examples/fonts/helvetiker_regular.typeface.json?raw';
+import optimerBoldFontJson from 'three/examples/fonts/optimer_bold.typeface.json?raw';
+import optimerFontJson from 'three/examples/fonts/optimer_regular.typeface.json?raw';
 import studioSerifFontJson from 'three/examples/fonts/gentilis_regular.typeface.json?raw';
 import { normalizeTargetText, type TargetTextContent, type TargetTextFont } from '../app/targetEditorObjects';
 
@@ -14,12 +31,19 @@ type TextObjectOptions = {
 const TARGET_WIDTH = 0.74;
 const TARGET_HEIGHT = 0.3;
 const TEXT_SIZE = 0.2;
-const TEXT_DEPTH = 0.055;
 const MAX_LINE_LENGTH = 18;
 
 const bundledFontJson: Partial<Record<TargetTextFont, string>> = {
   'studio-sans': studioSansFontJson,
+  'studio-sans-bold': droidSansBoldFontJson,
   'studio-serif': studioSerifFontJson,
+  'studio-serif-bold': gentilisBoldFontJson,
+  'droid-serif': droidSerifFontJson,
+  'droid-serif-bold': droidSerifBoldFontJson,
+  optimer: optimerFontJson,
+  'optimer-bold': optimerBoldFontJson,
+  helvetiker: helvetikerFontJson,
+  'helvetiker-bold': helvetikerBoldFontJson,
   'studio-mono': studioMonoFontJson,
 };
 
@@ -35,6 +59,14 @@ export function createTextObject3D(text: TargetTextContent, options: TextObjectO
     language: normalized.language,
     font: normalized.font,
     color: normalized.color,
+    fillMode: normalized.fillMode,
+    gradientStart: normalized.gradientStart,
+    gradientEnd: normalized.gradientEnd,
+    gradientDirection: normalized.gradientDirection,
+    sideColor: normalized.sideColor,
+    depth: normalized.depth,
+    bevel: normalized.bevel,
+    gloss: normalized.gloss,
   };
 
   void buildTextMesh(group, normalized, options.loadFont ?? loadTextFont);
@@ -54,27 +86,33 @@ async function buildTextMesh(
   }
 
   try {
-    group.add(createExtrudedTextMesh(renderableText(text.value), font, text.color ?? '#2563eb'));
+    group.add(createExtrudedTextMesh(renderableText(text.value), font, text));
   } catch {
-    group.add(createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans'), text.color ?? '#2563eb'));
+    group.add(createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans'), text));
   }
 }
 
-function createExtrudedTextMesh(value: string, font: Font, color: string): Mesh {
+function createExtrudedTextMesh(value: string, font: Font, text: TargetTextContent): Mesh {
+  const depth = text.depth ?? 0.055;
+  const bevelSize = text.bevel ?? 0.004;
+  const bevelEnabled = bevelSize > 0;
   const geometry = new TextGeometry(value, {
     font,
     size: TEXT_SIZE,
-    height: TEXT_DEPTH,
+    height: depth,
     curveSegments: 10,
-    bevelEnabled: true,
-    bevelThickness: 0.008,
-    bevelSize: 0.004,
-    bevelSegments: 2,
+    bevelEnabled,
+    bevelThickness: bevelEnabled ? bevelSize * 1.6 : 0,
+    bevelSize,
+    bevelSegments: bevelEnabled ? 2 : 0,
   });
 
   centerTextGeometry(geometry);
+  if (text.fillMode === 'gradient') {
+    applyGradientColors(geometry, text);
+  }
 
-  const mesh = new Mesh(geometry, textMaterials(color));
+  const mesh = new Mesh(geometry, textMaterials(text));
   mesh.name = 'local-text-3d-mesh';
   mesh.scale.setScalar(scaleForTextGeometry(geometry));
   return mesh;
@@ -104,18 +142,80 @@ function scaleForTextGeometry(geometry: TextGeometry): number {
   return Math.min(widthScale, heightScale, 1);
 }
 
-function textMaterials(color: string): Material[] {
+function textMaterials(text: TargetTextContent): Material[] {
+  const gloss = text.gloss ?? 0.68;
+  const roughness = Math.max(0.08, 0.82 - gloss * 0.74);
+  const metalness = Math.min(0.24, 0.04 + gloss * 0.16);
+  const useGradient = text.fillMode === 'gradient';
   const front = new MeshStandardMaterial({
-    color,
-    metalness: 0.04,
-    roughness: 0.32,
+    color: useGradient ? '#ffffff' : text.color ?? '#2563eb',
+    metalness,
+    roughness,
+    vertexColors: useGradient,
   });
   const sides = new MeshStandardMaterial({
-    color,
-    metalness: 0.08,
-    roughness: 0.4,
+    color: text.sideColor ?? text.color ?? '#2563eb',
+    metalness: Math.min(0.28, metalness + 0.04),
+    roughness: Math.min(0.92, roughness + 0.1),
   });
   return [front, sides];
+}
+
+function applyGradientColors(geometry: TextGeometry, text: TargetTextContent): void {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const position = geometry.getAttribute('position') as BufferAttribute;
+  if (!box || !position) {
+    return;
+  }
+
+  const startColor = new Color(text.gradientStart ?? text.color ?? '#2563eb');
+  const endColor = new Color(text.gradientEnd ?? text.color ?? '#60a5fa');
+  const color = new Color();
+  const colors: number[] = [];
+
+  for (let index = 0; index < position.count; index += 1) {
+    const factor = gradientFactor(
+      text.gradientDirection ?? 'horizontal',
+      position.getX(index),
+      position.getY(index),
+      position.getZ(index),
+      box.min,
+      box.max,
+    );
+    color.copy(startColor).lerp(endColor, factor);
+    colors.push(color.r, color.g, color.b);
+  }
+
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+}
+
+function gradientFactor(
+  direction: TargetTextContent['gradientDirection'],
+  x: number,
+  y: number,
+  z: number,
+  min: Vector3,
+  max: Vector3,
+): number {
+  const width = Math.max(0.0001, max.x - min.x);
+  const height = Math.max(0.0001, max.y - min.y);
+  const depth = Math.max(0.0001, max.z - min.z);
+
+  if (direction === 'vertical') {
+    return clamp01((y - min.y) / height);
+  }
+  if (direction === 'diagonal') {
+    return clamp01(((x - min.x) / width + (y - min.y) / height) / 2);
+  }
+  if (direction === 'depth') {
+    return clamp01((z - min.z) / depth);
+  }
+  return clamp01((x - min.x) / width);
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }
 
 function renderableText(value: string): string {

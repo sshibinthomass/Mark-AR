@@ -9,7 +9,21 @@ describe('renderTargetObjectListItem', () => {
       object: {
         kind: 'text',
         id: 'text-1',
-        text: { value: 'Hello AR', language: 'english', font: 'studio-sans', color: '#ef4444' },
+        text: {
+          value: 'Hello AR',
+          language: 'english',
+          font: 'studio-sans',
+          color: '#ef4444',
+          fillMode: 'gradient',
+          gradientStart: '#ef4444',
+          gradientEnd: '#facc15',
+          gradientDirection: 'horizontal',
+          sideColor: '#7f1d1d',
+          depth: 0.08,
+          bevel: 0.01,
+          gloss: 0.86,
+          stylePreset: 'red-gloss',
+        },
         placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 },
       },
       index: 0,
@@ -24,8 +38,11 @@ describe('renderTargetObjectListItem', () => {
 
     expect(row.getAttribute('role')).toBe('listitem');
     expect(selectButton?.textContent).toContain('Hello AR');
+    expect(selectButton?.textContent).toContain('Gradient');
     expect(deleteButton?.getAttribute('aria-label')).toBe('Delete text Hello AR');
-    expect(swatch?.style.backgroundColor).toBe('#ef4444');
+    expect(swatch?.getAttribute('style')).toContain('linear-gradient');
+    expect(swatch?.getAttribute('style')).toContain('#ef4444');
+    expect(swatch?.getAttribute('style')).toContain('#facc15');
 
     deleteButton?.click();
 

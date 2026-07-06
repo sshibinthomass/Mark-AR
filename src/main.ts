@@ -44,16 +44,23 @@ import {
 import {
   DEFAULT_TARGET_TEXT,
   createLocalTextObject,
+  isTargetTextFillMode,
   isTargetTextFont,
+  isTargetTextGradientDirection,
   isTargetTextColor,
   isTargetTextLanguage,
+  isTargetTextStylePreset,
   isTextTargetObject,
   languageOption,
   saveableModelObjects,
+  textStylePreset,
   type LocalImageTargetDraft,
   type TargetEditorObject,
+  type TargetTextFillMode,
   type TargetTextFont,
+  type TargetTextGradientDirection,
   type TargetTextLanguage,
+  type TargetTextStylePreset,
 } from './app/targetEditorObjects';
 import {
   captureVideoFrame,
@@ -112,9 +119,18 @@ const addTargetObjectButton = document.querySelector<HTMLButtonElement>('#add-ta
 const removeTargetObjectButton = document.querySelector<HTMLButtonElement>('#remove-target-object');
 const targetObjectList = document.querySelector<HTMLElement>('#target-object-list');
 const targetTextValueInput = document.querySelector<HTMLTextAreaElement>('#target-text-value');
+const targetTextPresetSelect = document.querySelector<HTMLSelectElement>('#target-text-preset');
 const targetTextLanguageSelect = document.querySelector<HTMLSelectElement>('#target-text-language');
 const targetTextFontSelect = document.querySelector<HTMLSelectElement>('#target-text-font');
 const targetTextColorInput = document.querySelector<HTMLInputElement>('#target-text-color');
+const targetTextFillModeSelect = document.querySelector<HTMLSelectElement>('#target-text-fill-mode');
+const targetTextGradientStartInput = document.querySelector<HTMLInputElement>('#target-text-gradient-start');
+const targetTextGradientEndInput = document.querySelector<HTMLInputElement>('#target-text-gradient-end');
+const targetTextGradientDirectionSelect = document.querySelector<HTMLSelectElement>('#target-text-gradient-direction');
+const targetTextSideColorInput = document.querySelector<HTMLInputElement>('#target-text-side-color');
+const targetTextDepthInput = document.querySelector<HTMLInputElement>('#target-text-depth');
+const targetTextBevelInput = document.querySelector<HTMLInputElement>('#target-text-bevel');
+const targetTextGlossInput = document.querySelector<HTMLInputElement>('#target-text-gloss');
 const addTargetTextButton = document.querySelector<HTMLButtonElement>('#add-target-text');
 const targetScaleInput = document.querySelector<HTMLInputElement>('#target-scale');
 const targetOffsetXInput = document.querySelector<HTMLInputElement>('#target-offset-x');
@@ -428,6 +444,10 @@ resetTargetAnimationButton?.addEventListener('click', () => {
   void updateTargetPreview();
 });
 
+targetTextPresetSelect?.addEventListener('change', () => {
+  applyTargetTextPreset(readTargetTextStylePreset());
+});
+
 targetModelSelect?.addEventListener('change', () => {
   handleTargetModelSelectionChange();
 });
@@ -720,6 +740,15 @@ function addTargetTextFromInput(): void {
       language: readTargetTextLanguage(),
       font: readTargetTextFont(),
       color: readTargetTextColor(),
+      fillMode: readTargetTextFillMode(),
+      gradientStart: readTargetTextGradientStart(),
+      gradientEnd: readTargetTextGradientEnd(),
+      gradientDirection: readTargetTextGradientDirection(),
+      sideColor: readTargetTextSideColor(),
+      depth: readTargetTextDepth(),
+      bevel: readTargetTextBevel(),
+      gloss: readTargetTextGloss(),
+      stylePreset: readTargetTextStylePreset(),
     },
     placement: nextTargetObjectPlacement(),
     animation: nextTargetObjectAnimation(),
@@ -898,6 +927,81 @@ function readTargetTextFont(): TargetTextFont {
 function readTargetTextColor(): string {
   const value = targetTextColorInput?.value;
   return isTargetTextColor(value) ? value.toLowerCase() : DEFAULT_TARGET_TEXT.color ?? '#2563eb';
+}
+
+function readTargetTextStylePreset(): TargetTextStylePreset {
+  const value = targetTextPresetSelect?.value;
+  return isTargetTextStylePreset(value) ? value : DEFAULT_TARGET_TEXT.stylePreset ?? 'blue-shine';
+}
+
+function readTargetTextFillMode(): TargetTextFillMode {
+  const value = targetTextFillModeSelect?.value;
+  return isTargetTextFillMode(value) ? value : DEFAULT_TARGET_TEXT.fillMode ?? 'solid';
+}
+
+function readTargetTextGradientStart(): string {
+  const value = targetTextGradientStartInput?.value;
+  return isTargetTextColor(value) ? value.toLowerCase() : DEFAULT_TARGET_TEXT.gradientStart ?? '#2563eb';
+}
+
+function readTargetTextGradientEnd(): string {
+  const value = targetTextGradientEndInput?.value;
+  return isTargetTextColor(value) ? value.toLowerCase() : DEFAULT_TARGET_TEXT.gradientEnd ?? '#60a5fa';
+}
+
+function readTargetTextGradientDirection(): TargetTextGradientDirection {
+  const value = targetTextGradientDirectionSelect?.value;
+  return isTargetTextGradientDirection(value) ? value : DEFAULT_TARGET_TEXT.gradientDirection ?? 'horizontal';
+}
+
+function readTargetTextSideColor(): string {
+  const value = targetTextSideColorInput?.value;
+  return isTargetTextColor(value) ? value.toLowerCase() : DEFAULT_TARGET_TEXT.sideColor ?? '#1d4ed8';
+}
+
+function readTargetTextDepth(): number {
+  return readRangeNumber(targetTextDepthInput, DEFAULT_TARGET_TEXT.depth ?? 0.055);
+}
+
+function readTargetTextBevel(): number {
+  return readRangeNumber(targetTextBevelInput, DEFAULT_TARGET_TEXT.bevel ?? 0.004);
+}
+
+function readTargetTextGloss(): number {
+  return readRangeNumber(targetTextGlossInput, DEFAULT_TARGET_TEXT.gloss ?? 0.68);
+}
+
+function applyTargetTextPreset(presetId: TargetTextStylePreset): void {
+  const preset = textStylePreset(presetId);
+  if (targetTextPresetSelect) {
+    targetTextPresetSelect.value = preset.id;
+  }
+  if (targetTextColorInput) {
+    targetTextColorInput.value = preset.color;
+  }
+  if (targetTextFillModeSelect) {
+    targetTextFillModeSelect.value = preset.fillMode;
+  }
+  if (targetTextGradientStartInput) {
+    targetTextGradientStartInput.value = preset.gradientStart;
+  }
+  if (targetTextGradientEndInput) {
+    targetTextGradientEndInput.value = preset.gradientEnd;
+  }
+  if (targetTextGradientDirectionSelect) {
+    targetTextGradientDirectionSelect.value = preset.gradientDirection;
+  }
+  if (targetTextSideColorInput) {
+    targetTextSideColorInput.value = preset.sideColor;
+  }
+  setRangeInputValue(targetTextDepthInput, preset.depth);
+  setRangeInputValue(targetTextBevelInput, preset.bevel);
+  setRangeInputValue(targetTextGlossInput, preset.gloss);
+}
+
+function readRangeNumber(input: HTMLInputElement | null, fallback: number): number {
+  const value = Number(input?.value);
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {

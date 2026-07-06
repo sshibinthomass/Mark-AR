@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TARGET_TEXT,
+  TEXT_FILL_MODE_OPTIONS,
   TEXT_FONT_OPTIONS,
+  TEXT_GRADIENT_DIRECTION_OPTIONS,
   TEXT_LANGUAGE_OPTIONS,
+  TEXT_STYLE_PRESETS,
   createLocalTextObject,
   isModelTargetObject,
   normalizeTargetText,
@@ -17,9 +20,31 @@ describe('target editor object helpers', () => {
     expect(TEXT_LANGUAGE_OPTIONS.find((option) => option.id === 'tamil')?.sample).toBe(TAMIL_HELLO);
     expect(TEXT_FONT_OPTIONS.map((option) => option.id)).toEqual([
       'studio-sans',
+      'studio-sans-bold',
       'studio-serif',
+      'studio-serif-bold',
+      'droid-serif',
+      'droid-serif-bold',
+      'optimer',
+      'optimer-bold',
+      'helvetiker',
+      'helvetiker-bold',
       'studio-mono',
       'tamil-ui',
+    ]);
+    expect(TEXT_FILL_MODE_OPTIONS.map((option) => option.id)).toEqual(['solid', 'gradient']);
+    expect(TEXT_GRADIENT_DIRECTION_OPTIONS.map((option) => option.id)).toEqual([
+      'horizontal',
+      'vertical',
+      'diagonal',
+      'depth',
+    ]);
+    expect(TEXT_STYLE_PRESETS.map((preset) => preset.id)).toEqual([
+      'blue-shine',
+      'gold-bevel',
+      'neon-cyan',
+      'red-gloss',
+      'tamil-classic',
     ]);
   });
 
@@ -29,12 +54,65 @@ describe('target editor object helpers', () => {
       language: 'german',
       font: 'studio-serif',
       color: '#2563eb',
+      fillMode: 'solid',
+      gradientStart: '#2563eb',
+      gradientEnd: '#60a5fa',
+      gradientDirection: 'horizontal',
+      sideColor: '#1d4ed8',
+      depth: 0.055,
+      bevel: 0.004,
+      gloss: 0.68,
+      stylePreset: 'blue-shine',
     });
     expect(normalizeTargetText({ value: '', language: 'unknown' as never, font: 'missing' as never })).toEqual(
       DEFAULT_TARGET_TEXT,
     );
-    expect(normalizeTargetText({ color: '#ef4444' }).color).toBe('#ef4444');
-    expect(normalizeTargetText({ color: 'tomato' }).color).toBe(DEFAULT_TARGET_TEXT.color);
+    expect(
+      normalizeTargetText({
+        color: '#ef4444',
+        fillMode: 'gradient',
+        gradientStart: '#ef4444',
+        gradientEnd: '#facc15',
+        gradientDirection: 'diagonal',
+        sideColor: '#111827',
+        depth: 0.11,
+        bevel: 0.012,
+        gloss: 0.95,
+        stylePreset: 'red-gloss',
+      }),
+    ).toMatchObject({
+      color: '#ef4444',
+      fillMode: 'gradient',
+      gradientStart: '#ef4444',
+      gradientEnd: '#facc15',
+      gradientDirection: 'diagonal',
+      sideColor: '#111827',
+      depth: 0.11,
+      bevel: 0.012,
+      gloss: 0.95,
+      stylePreset: 'red-gloss',
+    });
+    expect(
+      normalizeTargetText({
+        color: 'tomato',
+        fillMode: 'rainbow' as never,
+        gradientDirection: 'spiral' as never,
+        sideColor: 'blue',
+        depth: 9,
+        bevel: -1,
+        gloss: 2,
+        stylePreset: 'missing' as never,
+      }),
+    ).toMatchObject({
+      color: DEFAULT_TARGET_TEXT.color,
+      fillMode: DEFAULT_TARGET_TEXT.fillMode,
+      gradientDirection: DEFAULT_TARGET_TEXT.gradientDirection,
+      sideColor: DEFAULT_TARGET_TEXT.sideColor,
+      depth: 0.16,
+      bevel: 0,
+      gloss: 1,
+      stylePreset: DEFAULT_TARGET_TEXT.stylePreset,
+    });
   });
 
   it('creates local text objects and filters them out of saveable Cloudflare model objects', () => {
@@ -45,12 +123,36 @@ describe('target editor object helpers', () => {
     };
     const textObject = createLocalTextObject({
       id: 'text-1',
-      text: { value: TAMIL_HELLO, language: 'tamil', font: 'tamil-ui', color: '#14b8a6' },
+      text: {
+        value: TAMIL_HELLO,
+        language: 'tamil',
+        font: 'tamil-ui',
+        color: '#14b8a6',
+        fillMode: 'gradient',
+        gradientStart: '#14b8a6',
+        gradientEnd: '#a7f3d0',
+        gradientDirection: 'vertical',
+        sideColor: '#0f766e',
+        depth: 0.08,
+        bevel: 0.01,
+        gloss: 0.72,
+        stylePreset: 'tamil-classic',
+      },
       placement: { scale: 1.4, offsetX: 0.2, offsetY: -0.1, height: 0.3, rotationX: 0, rotationY: 30, rotationZ: 0 },
     });
 
     expect(textObject.kind).toBe('text');
-    expect(textObject.text.color).toBe('#14b8a6');
+    expect(textObject.text).toMatchObject({
+      color: '#14b8a6',
+      fillMode: 'gradient',
+      gradientEnd: '#a7f3d0',
+      gradientDirection: 'vertical',
+      sideColor: '#0f766e',
+      depth: 0.08,
+      bevel: 0.01,
+      gloss: 0.72,
+      stylePreset: 'tamil-classic',
+    });
     expect(isModelTargetObject(modelObject)).toBe(true);
     expect(isModelTargetObject(textObject)).toBe(false);
     expect(saveableModelObjects([textObject, modelObject])).toEqual([modelObject]);

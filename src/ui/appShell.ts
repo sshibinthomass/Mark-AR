@@ -1,5 +1,12 @@
 import type { MarkerSpec } from '../ar/markerCatalog';
-import { DEFAULT_TARGET_TEXT, TEXT_FONT_OPTIONS, TEXT_LANGUAGE_OPTIONS } from '../app/targetEditorObjects';
+import {
+  DEFAULT_TARGET_TEXT,
+  TEXT_FILL_MODE_OPTIONS,
+  TEXT_FONT_OPTIONS,
+  TEXT_GRADIENT_DIRECTION_OPTIONS,
+  TEXT_LANGUAGE_OPTIONS,
+  TEXT_STYLE_PRESETS,
+} from '../app/targetEditorObjects';
 import { hrefForRoute, type AppRoute } from './pageRoutes';
 
 type ModeCard = {
@@ -199,6 +206,14 @@ export function renderAppShell(markers: MarkerSpec[]): string {
               </label>
               <div class="target-text-options">
                 <label>
+                  <span>Style preset</span>
+                  <select id="target-text-preset">
+                    ${TEXT_STYLE_PRESETS.map((option) => (
+                      `<option value="${option.id}">${option.label}</option>`
+                    )).join('')}
+                  </select>
+                </label>
+                <label>
                   <span>Language</span>
                   <select id="target-text-language">
                     ${TEXT_LANGUAGE_OPTIONS.map((option) => (
@@ -217,6 +232,46 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                 <label class="target-text-color-control">
                   <span>Color</span>
                   <input id="target-text-color" type="color" value="${DEFAULT_TARGET_TEXT.color}" aria-label="Text color" />
+                </label>
+                <label>
+                  <span>Fill</span>
+                  <select id="target-text-fill-mode">
+                    ${TEXT_FILL_MODE_OPTIONS.map((option) => (
+                      `<option value="${option.id}">${option.label}</option>`
+                    )).join('')}
+                  </select>
+                </label>
+                <label class="target-text-color-control">
+                  <span>Gradient A</span>
+                  <input id="target-text-gradient-start" type="color" value="${DEFAULT_TARGET_TEXT.gradientStart}" aria-label="Gradient start color" />
+                </label>
+                <label class="target-text-color-control">
+                  <span>Gradient B</span>
+                  <input id="target-text-gradient-end" type="color" value="${DEFAULT_TARGET_TEXT.gradientEnd}" aria-label="Gradient end color" />
+                </label>
+                <label>
+                  <span>Direction</span>
+                  <select id="target-text-gradient-direction">
+                    ${TEXT_GRADIENT_DIRECTION_OPTIONS.map((option) => (
+                      `<option value="${option.id}">${option.label}</option>`
+                    )).join('')}
+                  </select>
+                </label>
+                <label class="target-text-color-control">
+                  <span>Side</span>
+                  <input id="target-text-side-color" type="color" value="${DEFAULT_TARGET_TEXT.sideColor}" aria-label="Side color" />
+                </label>
+                <label>
+                  <span>Depth</span>
+                  <input id="target-text-depth" type="range" min="0.02" max="0.16" step="0.005" value="${DEFAULT_TARGET_TEXT.depth}" />
+                </label>
+                <label>
+                  <span>Bevel</span>
+                  <input id="target-text-bevel" type="range" min="0" max="0.024" step="0.001" value="${DEFAULT_TARGET_TEXT.bevel}" />
+                </label>
+                <label>
+                  <span>Gloss</span>
+                  <input id="target-text-gloss" type="range" min="0" max="1" step="0.01" value="${DEFAULT_TARGET_TEXT.gloss}" />
                 </label>
               </div>
               <button id="add-target-text" type="button">Add text</button>
