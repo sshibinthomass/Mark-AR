@@ -148,6 +148,39 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
+  it('resizes the renderer when the browser viewport changes', () => {
+    let containerWidth = 714;
+    let containerHeight = 554;
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { get: () => containerWidth },
+      clientHeight: { get: () => containerHeight },
+    });
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    containerWidth = 366;
+    containerHeight = 420;
+    window.dispatchEvent(new Event('resize'));
+
+    expect(renderer.setSize).toHaveBeenLastCalledWith(366, 420);
+
+    preview.dispose();
+  });
+
   it('selects a loaded model by clicking it in the preview canvas', async () => {
     const container = document.createElement('div');
     Object.defineProperties(container, {

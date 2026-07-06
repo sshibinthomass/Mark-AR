@@ -124,6 +124,9 @@ export class ImageTargetPreview {
   private cameraDragStart?: { pointer: PointerPoint; view: PreviewCameraView; mode: CameraDragMode };
   private cameraPinchStart?: { distance: number; centroid: PointerPoint; view: PreviewCameraView };
   private transformControlDragging = false;
+  private readonly handleWindowResize = (): void => {
+    this.resize();
+  };
 
   constructor(container: HTMLElement, deps: PreviewDeps = {}) {
     this.container = container;
@@ -163,6 +166,7 @@ export class ImageTargetPreview {
     this.renderer.domElement.addEventListener('wheel', this.handleWheel, { passive: false });
     this.renderer.domElement.addEventListener('keydown', this.handleKeyDown);
     this.renderer.domElement.addEventListener('contextmenu', this.handleContextMenu);
+    window.addEventListener('resize', this.handleWindowResize);
     this.resize();
     this.render = this.render.bind(this);
     this.frameId = this.requestFrame(this.render);
@@ -262,6 +266,7 @@ export class ImageTargetPreview {
     this.renderer.domElement.removeEventListener('wheel', this.handleWheel);
     this.renderer.domElement.removeEventListener('keydown', this.handleKeyDown);
     this.renderer.domElement.removeEventListener('contextmenu', this.handleContextMenu);
+    window.removeEventListener('resize', this.handleWindowResize);
     this.transformControls.detach();
     this.transformControls.removeEventListener('objectChange', this.handleTransformControlObjectChange);
     this.transformControls.removeEventListener('dragging-changed', this.handleTransformControlDraggingChanged);

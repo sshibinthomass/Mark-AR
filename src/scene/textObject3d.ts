@@ -1,40 +1,32 @@
-import {
-  BoxGeometry,
-  CanvasTexture,
-  DoubleSide,
-  Group,
-  Mesh,
-  MeshBasicMaterial,
-  type Material,
-} from 'three';
-import {
-  fontOption,
-  normalizeTargetText,
-  type TargetTextContent,
-} from '../app/targetEditorObjects';
+import { Group, Mesh, MeshStandardMaterial, Vector3, type Material } from 'three';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import { Font, FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+import { TTFLoader } from 'three/examples/jsm/loaders/TTFLoader.js';
+import studioMonoFontJson from 'three/examples/fonts/droid/droid_sans_mono_regular.typeface.json?raw';
+import studioSansFontJson from 'three/examples/fonts/droid/droid_sans_regular.typeface.json?raw';
+import studioSerifFontJson from 'three/examples/fonts/gentilis_regular.typeface.json?raw';
+import { normalizeTargetText, type TargetTextContent, type TargetTextFont } from '../app/targetEditorObjects';
 
 type TextObjectOptions = {
-  createCanvas?: () => HTMLCanvasElement;
+  loadFont?: (font: TargetTextFont) => Promise<Font>;
 };
+
+const TARGET_WIDTH = 0.74;
+const TARGET_HEIGHT = 0.3;
+const TEXT_SIZE = 0.2;
+const TEXT_DEPTH = 0.055;
+const MAX_LINE_LENGTH = 18;
+
+const bundledFontJson: Partial<Record<TargetTextFont, string>> = {
+  'studio-sans': studioSansFontJson,
+  'studio-serif': studioSerifFontJson,
+  'studio-mono': studioMonoFontJson,
+};
+
+const loadedFonts = new Map<TargetTextFont, Promise<Font>>();
 
 export function createTextObject3D(text: TargetTextContent, options: TextObjectOptions = {}): Group {
   const normalized = normalizeTargetText(text);
-  const canvas = options.createCanvas?.() ?? document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 384;
-
-  const texture = drawTextTexture(canvas, normalized);
-  const frontMaterial = texture
-    ? new MeshBasicMaterial({ map: texture, transparent: true, side: DoubleSide })
-    : new MeshBasicMaterial({ color: 0x5eead4, transparent: true, opacity: 0.9, side: DoubleSide });
-  const sideMaterial = new MeshBasicMaterial({ color: 0x102326, transparent: true, opacity: 0.82 });
-  const backMaterial = frontMaterial.clone();
-  const mesh = new Mesh(
-    new BoxGeometry(0.74, 0.28, 0.035),
-    [sideMaterial, sideMaterial, sideMaterial, sideMaterial, frontMaterial, backMaterial] as Material[],
-  );
-  mesh.name = 'local-text-3d-mesh';
-
   const group = new Group();
   group.name = 'local-text-3d-object';
   group.userData = {
@@ -43,60 +35,109 @@ export function createTextObject3D(text: TargetTextContent, options: TextObjectO
     language: normalized.language,
     font: normalized.font,
   };
-  group.add(mesh);
+
+  void buildTextMesh(group, normalized, options.loadFont ?? loadTextFont);
   return group;
 }
 
-function drawTextTexture(canvas: HTMLCanvasElement, text: TargetTextContent): CanvasTexture | undefined {
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return undefined;
+async function buildTextMesh(
+  group: Group,
+  text: TargetTextContent,
+  loadFont: (font: TargetTextFont) => Promise<Font>,
+): Promise<void> {
+  let font: Font;
+  try {
+    font = await loadFont(text.font);
+  } catch {
+    font = parseBundledFont('studio-sans');
   }
 
-  const fontStack = fontOption(text.font).stack;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = 'rgba(255, 255, 255, 0.94)';
-  roundRect(context, 52, 58, canvas.width - 104, canvas.height - 116, 32);
-  context.fill();
-  context.strokeStyle = 'rgba(15, 118, 110, 0.34)';
-  context.lineWidth = 8;
-  context.stroke();
-
-  const lines = wrappedTextLines(context, text.value, fontStack);
-  const fontSize = lines.length > 1 ? 82 : 104;
-  const lineHeight = fontSize * 1.08;
-  const firstBaseline = canvas.height / 2 - ((lines.length - 1) * lineHeight) / 2;
-
-  context.font = `900 ${fontSize}px ${fontStack}`;
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.lineJoin = 'round';
-  context.strokeStyle = 'rgba(255, 255, 255, 0.82)';
-  context.lineWidth = 12;
-  context.fillStyle = '#102326';
-
-  lines.forEach((line, index) => {
-    const y = firstBaseline + index * lineHeight;
-    context.strokeText(line, canvas.width / 2, y);
-    context.fillText(line, canvas.width / 2, y);
-  });
-
-  const texture = new CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
+  try {
+    group.add(createExtrudedTextMesh(renderableText(text.value), font));
+  } catch {
+    group.add(createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans')));
+  }
 }
 
-function wrappedTextLines(context: CanvasRenderingContext2D, value: string, fontStack: string): string[] {
-  const maxWidth = 760;
+function createExtrudedTextMesh(value: string, font: Font): Mesh {
+  const geometry = new TextGeometry(value, {
+    font,
+    size: TEXT_SIZE,
+    height: TEXT_DEPTH,
+    curveSegments: 10,
+    bevelEnabled: true,
+    bevelThickness: 0.008,
+    bevelSize: 0.004,
+    bevelSegments: 2,
+  });
+
+  centerTextGeometry(geometry);
+
+  const mesh = new Mesh(geometry, textMaterials());
+  mesh.name = 'local-text-3d-mesh';
+  mesh.scale.setScalar(scaleForTextGeometry(geometry));
+  return mesh;
+}
+
+function centerTextGeometry(geometry: TextGeometry): void {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (!box) {
+    return;
+  }
+  const center = box.getCenter(new Vector3());
+  geometry.translate(-center.x, -center.y, -box.min.z);
+  geometry.computeBoundingBox();
+  geometry.computeVertexNormals();
+}
+
+function scaleForTextGeometry(geometry: TextGeometry): number {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (!box) {
+    return 1;
+  }
+  const size = box.getSize(new Vector3());
+  const widthScale = size.x > 0 ? TARGET_WIDTH / size.x : 1;
+  const heightScale = size.y > 0 ? TARGET_HEIGHT / size.y : 1;
+  return Math.min(widthScale, heightScale, 1);
+}
+
+function textMaterials(): Material[] {
+  const front = new MeshStandardMaterial({
+    color: 0xf8fafc,
+    metalness: 0.04,
+    roughness: 0.32,
+  });
+  const sides = new MeshStandardMaterial({
+    color: 0x2563eb,
+    metalness: 0.08,
+    roughness: 0.4,
+  });
+  return [front, sides];
+}
+
+function renderableText(value: string): string {
+  const explicitLines = value.replace(/\r\n/g, '\n').split('\n');
+  const lines = explicitLines.flatMap((line) => wrapLine(line.trim())).filter(Boolean);
+  return lines.slice(0, 4).join('\n') || 'Text';
+}
+
+function wrapLine(value: string): string[] {
+  if (value.length <= MAX_LINE_LENGTH) {
+    return [value];
+  }
+
   const words = value.split(/\s+/).filter(Boolean);
-  const sourceLines = words.length ? words : [value];
+  if (!words.length) {
+    return [value];
+  }
+
   const lines: string[] = [];
   let current = '';
-
-  context.font = `900 92px ${fontStack}`;
-  for (const word of sourceLines) {
+  for (const word of words) {
     const next = current ? `${current} ${word}` : word;
-    if (context.measureText(next).width <= maxWidth || !current) {
+    if (next.length <= MAX_LINE_LENGTH || !current) {
       current = next;
       continue;
     }
@@ -106,27 +147,29 @@ function wrappedTextLines(context: CanvasRenderingContext2D, value: string, font
   if (current) {
     lines.push(current);
   }
-
-  return lines.slice(0, 3);
+  return lines;
 }
 
-function roundRect(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-): void {
-  context.beginPath();
-  context.moveTo(x + radius, y);
-  context.lineTo(x + width - radius, y);
-  context.quadraticCurveTo(x + width, y, x + width, y + radius);
-  context.lineTo(x + width, y + height - radius);
-  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  context.lineTo(x + radius, y + height);
-  context.quadraticCurveTo(x, y + height, x, y + height - radius);
-  context.lineTo(x, y + radius);
-  context.quadraticCurveTo(x, y, x + radius, y);
-  context.closePath();
+function loadTextFont(font: TargetTextFont): Promise<Font> {
+  const cached = loadedFonts.get(font);
+  if (cached) {
+    return cached;
+  }
+
+  const loaded = font === 'tamil-ui' ? loadTamilFont() : Promise.resolve(parseBundledFont(font));
+  loadedFonts.set(font, loaded);
+  return loaded;
+}
+
+function loadTamilFont(): Promise<Font> {
+  const loader = new TTFLoader();
+  return loader.loadAsync(`${import.meta.env.BASE_URL}fonts/NotoSansTamil.ttf`).then((json) => new Font(json));
+}
+
+function parseBundledFont(font: TargetTextFont): Font {
+  const rawJson = bundledFontJson[font] ?? bundledFontJson['studio-sans'];
+  if (!rawJson) {
+    throw new Error('Missing bundled 3D text font');
+  }
+  return new FontLoader().parse(JSON.parse(rawJson));
 }
