@@ -1,4 +1,4 @@
-import { Mesh, type Group } from 'three';
+import { Mesh, MeshStandardMaterial, type Group } from 'three';
 import { FontLoader, type Font } from 'three/examples/jsm/loaders/FontLoader.js';
 import testFontJson from 'three/examples/fonts/helvetiker_regular.typeface.json?raw';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +14,7 @@ describe('createTextObject3D', () => {
         value: 'Hello AR',
         language: 'english',
         font: fontOption.id,
+        color: '#ef4444',
       };
       const group = createTextObject3D(text, { loadFont: async () => testFont });
 
@@ -22,6 +23,10 @@ describe('createTextObject3D', () => {
       const geometryTypes = collectMeshes(group).map((mesh) => mesh.geometry.type);
       expect(geometryTypes).toContain('TextGeometry');
       expect(geometryTypes).not.toContain('BoxGeometry');
+
+      const mesh = collectMeshes(group).find((candidate) => candidate.geometry.type === 'TextGeometry');
+      const materials = Array.isArray(mesh?.material) ? mesh.material : [mesh?.material];
+      expect((materials[0] as MeshStandardMaterial).color.getHexString()).toBe('ef4444');
     }
   });
 });

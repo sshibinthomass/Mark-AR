@@ -46,6 +46,7 @@ export type TargetTextContent = {
   value: string;
   language: TargetTextLanguage;
   font: TargetTextFont;
+  color?: string;
 };
 
 export type LocalTextTargetObject = {
@@ -69,17 +70,20 @@ export const DEFAULT_TARGET_TEXT: TargetTextContent = {
   value: TEXT_LANGUAGE_OPTIONS[0].sample,
   language: TEXT_LANGUAGE_OPTIONS[0].id,
   font: TEXT_FONT_OPTIONS[0].id,
+  color: '#2563eb',
 };
 
 export function normalizeTargetText(value: Partial<TargetTextContent> = {}): TargetTextContent {
   const language = isTargetTextLanguage(value.language) ? value.language : DEFAULT_TARGET_TEXT.language;
   const font = isTargetTextFont(value.font) ? value.font : DEFAULT_TARGET_TEXT.font;
+  const color = isTargetTextColor(value.color) ? value.color.toLowerCase() : DEFAULT_TARGET_TEXT.color;
   const textValue = value.value?.trim() || languageOption(language).sample;
 
   return {
     value: textValue,
     language,
     font,
+    color,
   };
 }
 
@@ -134,4 +138,8 @@ export function isTargetTextLanguage(value: unknown): value is TargetTextLanguag
 
 export function isTargetTextFont(value: unknown): value is TargetTextFont {
   return TEXT_FONT_OPTIONS.some((option) => option.id === value);
+}
+
+export function isTargetTextColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value);
 }

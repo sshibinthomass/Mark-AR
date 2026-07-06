@@ -1,5 +1,5 @@
 import type { MarkerSpec } from '../ar/markerCatalog';
-import { TEXT_FONT_OPTIONS, TEXT_LANGUAGE_OPTIONS } from '../app/targetEditorObjects';
+import { DEFAULT_TARGET_TEXT, TEXT_FONT_OPTIONS, TEXT_LANGUAGE_OPTIONS } from '../app/targetEditorObjects';
 import { hrefForRoute, type AppRoute } from './pageRoutes';
 
 type ModeCard = {
@@ -213,6 +213,10 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                       `<option value="${option.id}">${option.label}</option>`
                     )).join('')}
                   </select>
+                </label>
+                <label class="target-text-color-control">
+                  <span>Color</span>
+                  <input id="target-text-color" type="color" value="${DEFAULT_TARGET_TEXT.color}" aria-label="Text color" />
                 </label>
               </div>
               <button id="add-target-text" type="button">Add text</button>

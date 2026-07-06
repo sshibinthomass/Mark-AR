@@ -45,6 +45,8 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-text-font option[value="studio-serif"]')).toBeTruthy();
     expect(container.querySelector('#target-text-font option[value="studio-mono"]')).toBeTruthy();
     expect(container.querySelector('#target-text-font option[value="tamil-ui"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-color')).toBeTruthy();
+    expect((container.querySelector('#target-text-color') as HTMLInputElement).type).toBe('color');
     expect(container.querySelector('#add-target-text')).toBeTruthy();
     expect(container.querySelector('#target-scale')).toBeTruthy();
     expect(container.querySelector('#target-scale-x')).toBeNull();

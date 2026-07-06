@@ -42,9 +42,10 @@ import {
   saveWorkerAuthToken,
 } from './app/webArAuth';
 import {
+  DEFAULT_TARGET_TEXT,
   createLocalTextObject,
-  fontOption,
   isTargetTextFont,
+  isTargetTextColor,
   isTargetTextLanguage,
   isTextTargetObject,
   languageOption,
@@ -74,6 +75,7 @@ import { renderAppShell } from './ui/appShell';
 import { renderTargetModelRail } from './ui/modelRail';
 import { routeFromHash } from './ui/pageRoutes';
 import { activateRoute } from './ui/pageRouter';
+import { renderTargetObjectListItem } from './ui/targetObjectList';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -112,6 +114,7 @@ const targetObjectList = document.querySelector<HTMLElement>('#target-object-lis
 const targetTextValueInput = document.querySelector<HTMLTextAreaElement>('#target-text-value');
 const targetTextLanguageSelect = document.querySelector<HTMLSelectElement>('#target-text-language');
 const targetTextFontSelect = document.querySelector<HTMLSelectElement>('#target-text-font');
+const targetTextColorInput = document.querySelector<HTMLInputElement>('#target-text-color');
 const addTargetTextButton = document.querySelector<HTMLButtonElement>('#add-target-text');
 const targetScaleInput = document.querySelector<HTMLInputElement>('#target-scale');
 const targetOffsetXInput = document.querySelector<HTMLInputElement>('#target-offset-x');
@@ -716,6 +719,7 @@ function addTargetTextFromInput(): void {
       value: targetTextValueInput?.value,
       language: readTargetTextLanguage(),
       font: readTargetTextFont(),
+      color: readTargetTextColor(),
     },
     placement: nextTargetObjectPlacement(),
     animation: nextTargetObjectAnimation(),
@@ -744,8 +748,23 @@ function removeSelectedTargetObject(): void {
 
   const selectedIndex = targetObjects.findIndex((object) => object.id === selectedTargetObjectId);
   const removeIndex = selectedIndex >= 0 ? selectedIndex : targetObjects.length - 1;
-  targetObjects = targetObjects.filter((_, index) => index !== removeIndex);
-  selectedTargetObjectId = targetObjects[Math.min(removeIndex, targetObjects.length - 1)]?.id;
+  const object = targetObjects[removeIndex];
+  if (object) {
+    removeTargetObjectById(object.id);
+  }
+}
+
+function removeTargetObjectById(objectId: string): void {
+  const removeIndex = targetObjects.findIndex((object) => object.id === objectId);
+  if (removeIndex < 0) {
+    return;
+  }
+
+  const removedObject = targetObjects[removeIndex];
+  targetObjects = targetObjects.filter((object) => object.id !== objectId);
+  if (selectedTargetObjectId === objectId) {
+    selectedTargetObjectId = targetObjects[Math.min(removeIndex, targetObjects.length - 1)]?.id;
+  }
 
   const selectedObject = getSelectedTargetObject();
   targetPlacement = selectedObject?.placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT;
@@ -759,7 +778,7 @@ function removeSelectedTargetObject(): void {
   renderTargetObjectList();
   updateImageTargetStatus(
     targetObjects.length > 0
-      ? `${targetObjects.length} object${targetObjects.length === 1 ? '' : 's'} placed.`
+      ? `${isTextTargetObject(removedObject) ? 'Text' : 'Object'} removed. ${targetObjects.length} object${targetObjects.length === 1 ? '' : 's'} placed.`
       : 'No objects placed yet.',
     false,
   );
@@ -832,21 +851,13 @@ function renderTargetObjectList(): void {
   }
 
   for (const [index, object] of targetObjects.entries()) {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'target-object-row';
-    row.dataset.objectId = object.id;
-    row.setAttribute('aria-selected', String(object.id === selectedTargetObjectId));
-    row.addEventListener('click', () => selectTargetObject(object.id));
-
-    const label = document.createElement('strong');
-    label.textContent = isTextTargetObject(object) ? object.text.value : object.model.label;
-    const meta = document.createElement('small');
-    meta.textContent = isTextTargetObject(object)
-      ? `${languageOption(object.text.language).label} / ${fontOption(object.text.font).label}`
-      : `${index + 1} / ${Number(object.placement.scale.toFixed(2))}x`;
-    row.append(label, meta);
-    targetObjectList.append(row);
+    targetObjectList.append(renderTargetObjectListItem({
+      object,
+      index,
+      selectedObjectId: selectedTargetObjectId,
+      onSelect: selectTargetObject,
+      onDeleteText: removeTargetObjectById,
+    }));
   }
 }
 
@@ -882,6 +893,11 @@ function readTargetTextLanguage(): TargetTextLanguage {
 function readTargetTextFont(): TargetTextFont {
   const value = targetTextFontSelect?.value;
   return isTargetTextFont(value) ? value : 'studio-sans';
+}
+
+function readTargetTextColor(): string {
+  const value = targetTextColorInput?.value;
+  return isTargetTextColor(value) ? value.toLowerCase() : DEFAULT_TARGET_TEXT.color ?? '#2563eb';
 }
 
 function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {

@@ -34,6 +34,7 @@ export function createTextObject3D(text: TargetTextContent, options: TextObjectO
     text: normalized.value,
     language: normalized.language,
     font: normalized.font,
+    color: normalized.color,
   };
 
   void buildTextMesh(group, normalized, options.loadFont ?? loadTextFont);
@@ -53,13 +54,13 @@ async function buildTextMesh(
   }
 
   try {
-    group.add(createExtrudedTextMesh(renderableText(text.value), font));
+    group.add(createExtrudedTextMesh(renderableText(text.value), font, text.color ?? '#2563eb'));
   } catch {
-    group.add(createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans')));
+    group.add(createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans'), text.color ?? '#2563eb'));
   }
 }
 
-function createExtrudedTextMesh(value: string, font: Font): Mesh {
+function createExtrudedTextMesh(value: string, font: Font, color: string): Mesh {
   const geometry = new TextGeometry(value, {
     font,
     size: TEXT_SIZE,
@@ -73,7 +74,7 @@ function createExtrudedTextMesh(value: string, font: Font): Mesh {
 
   centerTextGeometry(geometry);
 
-  const mesh = new Mesh(geometry, textMaterials());
+  const mesh = new Mesh(geometry, textMaterials(color));
   mesh.name = 'local-text-3d-mesh';
   mesh.scale.setScalar(scaleForTextGeometry(geometry));
   return mesh;
@@ -103,14 +104,14 @@ function scaleForTextGeometry(geometry: TextGeometry): number {
   return Math.min(widthScale, heightScale, 1);
 }
 
-function textMaterials(): Material[] {
+function textMaterials(color: string): Material[] {
   const front = new MeshStandardMaterial({
-    color: 0xf8fafc,
+    color,
     metalness: 0.04,
     roughness: 0.32,
   });
   const sides = new MeshStandardMaterial({
-    color: 0x2563eb,
+    color,
     metalness: 0.08,
     roughness: 0.4,
   });
