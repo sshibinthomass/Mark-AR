@@ -27,6 +27,7 @@ export function renderTargetModelRail(
     option.dataset.modelId = model.id;
     option.setAttribute('role', 'option');
     option.setAttribute('aria-selected', String(model.id === selectedModelId));
+    option.setAttribute('aria-label', model.label);
     option.title = model.label;
     option.addEventListener('click', () => onSelect(model));
 
@@ -48,6 +49,7 @@ export function renderTargetModelRail(
 
     const label = document.createElement('span');
     label.className = 'target-model-card-label';
+    label.setAttribute('aria-hidden', 'true');
     label.textContent = model.label;
 
     option.append(thumb, label);

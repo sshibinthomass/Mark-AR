@@ -983,17 +983,21 @@ h1 {
 }
 
 .target-model-card {
+  position: relative;
   display: grid;
-  gap: 6px;
-  min-height: 94px;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+  overflow: hidden;
   border-color: rgba(255, 255, 255, 0.16);
-  padding: 7px;
+  padding: 6px;
   color: #f8fafc;
   background: rgba(255, 255, 255, 0.08);
   box-shadow: none;
   font-size: 11px;
   line-height: 1.15;
-  text-align: left;
+  text-align: center;
 }
 
 .target-model-card[aria-selected="true"] {
@@ -1006,7 +1010,8 @@ h1 {
 .target-model-thumb {
   display: grid;
   place-items: center;
-  height: 54px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
@@ -1016,18 +1021,20 @@ h1 {
 }
 
 .target-model-thumb-image {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .target-model-thumb-fallback {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 100%;
+  height: 100%;
   border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 8px;
+  border-radius: 7px;
   color: #071b1f;
   background: var(--teal);
   font-size: 12px;
@@ -1035,10 +1042,11 @@ h1 {
 }
 
 .target-model-card-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
-  color: #ffffff;
-  font-weight: 850;
-  text-overflow: ellipsis;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
@@ -1456,18 +1464,17 @@ button:disabled {
   }
 
   .target-model-card {
-    min-height: 78px;
     padding: 5px;
     font-size: 10px;
   }
 
   .target-model-thumb {
-    height: 42px;
+    width: 100%;
   }
 
   .target-model-thumb-fallback {
-    width: 30px;
-    height: 30px;
+    width: 100%;
+    height: 100%;
     font-size: 10px;
   }
 
