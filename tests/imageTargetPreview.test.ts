@@ -226,6 +226,81 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
+  it('clears the selected object when clicking empty preview space', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    mockCanvasRect(rendererElement, { width: 500, height: 500 });
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const selectionChanges: Array<string | undefined> = [];
+    const model = createDisposableModel();
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+      onSelectionChange: (objectId) => selectionChanges.push(objectId),
+    });
+
+    await preview.update({
+      objects: [
+        {
+          id: 'chair-object',
+          model: { id: 'chair', label: 'Chair', url: 'https://example.com/chair.glb', visibility: 'public' },
+          placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+        },
+      ],
+      selectedObjectId: 'chair-object',
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 20, clientY: 20 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 20, clientY: 20 });
+
+    expect(selectionChanges).toEqual([undefined]);
+
+    preview.dispose();
+  });
+
+  it('adds a visible target midpoint marker at the preview origin', () => {
+    const container = document.createElement('div');
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    const scene = (preview as unknown as { scene: { getObjectByName: (name: string) => Group | undefined } }).scene;
+    const marker = scene.getObjectByName('target-midpoint-marker');
+
+    expect(marker).toBeTruthy();
+    expect(marker?.position.x).toBeCloseTo(0);
+    expect(marker?.position.z).toBeCloseTo(0);
+    expect(marker?.children.length).toBeGreaterThanOrEqual(3);
+
+    preview.dispose();
+  });
+
   it('orbits the camera with a normal empty-space preview drag instead of moving the model', async () => {
     const container = document.createElement('div');
     Object.defineProperties(container, {

@@ -7,6 +7,7 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  RingGeometry,
   type Material,
   Object3D,
   PerspectiveCamera,
@@ -70,7 +71,7 @@ type PreviewDeps = {
   createTextObject?: (text: TargetTextContent) => Group;
   onPlacementChange?: (change: PreviewPlacementChange) => void;
   onCameraChange?: (camera: PreviewCameraView) => void;
-  onSelectionChange?: (objectId: string) => void;
+  onSelectionChange?: (objectId: string | undefined) => void;
   onTransformModeChange?: (mode: PreviewTransformMode) => void;
 };
 
@@ -95,12 +96,13 @@ export class ImageTargetPreview {
   private readonly createTextObject: (text: TargetTextContent) => Group;
   private readonly onPlacementChange?: (change: PreviewPlacementChange) => void;
   private readonly onCameraChange?: (camera: PreviewCameraView) => void;
-  private readonly onSelectionChange?: (objectId: string) => void;
+  private readonly onSelectionChange?: (objectId: string | undefined) => void;
   private readonly onTransformModeChange?: (mode: PreviewTransformMode) => void;
   private readonly container: HTMLElement;
   private readonly imageRoot = new Group();
   private readonly modelRoot = new Group();
   private readonly grid = new GridHelper(4, 16, 0x747474, 0x5f5f5f);
+  private readonly targetMidpointMarker = createTargetMidpointMarker();
   private readonly raycaster = new Raycaster();
   private readonly pointerNdc = new Vector2();
   private readonly transformControls: TransformControls;
@@ -123,6 +125,7 @@ export class ImageTargetPreview {
   private scaleDragStart?: { pointer: PointerPoint; objectId: string; placement: ImageTargetPlacement };
   private cameraDragStart?: { pointer: PointerPoint; view: PreviewCameraView; mode: CameraDragMode };
   private cameraPinchStart?: { distance: number; centroid: PointerPoint; view: PreviewCameraView };
+  private emptySelectionClick?: { pointerId: number; pointer: PointerPoint };
   private transformControlDragging = false;
   private readonly handleWindowResize = (): void => {
     this.resize();
@@ -152,7 +155,7 @@ export class ImageTargetPreview {
     this.transformControls.setMode(this.previewTransformMode);
     this.transformControls.addEventListener('objectChange', this.handleTransformControlObjectChange);
     this.transformControls.addEventListener('dragging-changed', this.handleTransformControlDraggingChanged);
-    this.scene.add(keyLight, this.grid, this.imageRoot, this.modelRoot, this.transformControls);
+    this.scene.add(keyLight, this.grid, this.targetMidpointMarker, this.imageRoot, this.modelRoot, this.transformControls);
 
     this.container.append(this.renderer.domElement);
     this.renderer.domElement.style.touchAction = 'none';
@@ -197,7 +200,12 @@ export class ImageTargetPreview {
     this.scaleDragStart = undefined;
     this.cameraDragStart = undefined;
     this.cameraPinchStart = undefined;
-    this.selectedObjectId = selectPreviewObjectId(previewObjects, state.selectedObjectId);
+    this.emptySelectionClick = undefined;
+    this.selectedObjectId = selectPreviewObjectId(
+      previewObjects,
+      state.selectedObjectId,
+      Object.prototype.hasOwnProperty.call(state, 'selectedObjectId'),
+    );
 
     for (const object of previewObjects) {
       this.placements.set(object.id, normalizePlacement(object.placement));
@@ -323,6 +331,9 @@ export class ImageTargetPreview {
       this.pointerObjectHits.set(event.pointerId, pickedObjectId);
       this.selectObject(pickedObjectId, true);
     }
+    this.emptySelectionClick = !pickedObjectId && shouldPickObject && this.selectedObjectId
+      ? { pointerId: event.pointerId, pointer }
+      : undefined;
     this.activePointers.set(event.pointerId, pointer);
     if (this.activePointers.size >= 2) {
       this.startTwoPointerGesture(event);
@@ -352,6 +363,12 @@ export class ImageTargetPreview {
     event.stopImmediatePropagation();
     const pointer = pointerFromEvent(event);
     this.activePointers.set(event.pointerId, pointer);
+    if (
+      this.emptySelectionClick?.pointerId === event.pointerId &&
+      Math.hypot(pointer.x - this.emptySelectionClick.pointer.x, pointer.y - this.emptySelectionClick.pointer.y) > 4
+    ) {
+      this.emptySelectionClick = undefined;
+    }
 
     if (this.activePointers.size >= 2) {
       if (this.pinchStart) {
@@ -438,6 +455,16 @@ export class ImageTargetPreview {
     if (this.activePointers.has(event.pointerId)) {
       event.preventDefault();
       event.stopImmediatePropagation();
+    }
+    const pointer = pointerFromEvent(event);
+    if (
+      this.emptySelectionClick?.pointerId === event.pointerId &&
+      Math.hypot(pointer.x - this.emptySelectionClick.pointer.x, pointer.y - this.emptySelectionClick.pointer.y) <= 4
+    ) {
+      this.clearSelection(true);
+    }
+    if (this.emptySelectionClick?.pointerId === event.pointerId) {
+      this.emptySelectionClick = undefined;
     }
     this.activePointers.delete(event.pointerId);
     this.pointerObjectHits.delete(event.pointerId);
@@ -774,6 +801,18 @@ export class ImageTargetPreview {
     }
   }
 
+  private clearSelection(emitChange: boolean): void {
+    if (!this.selectedObjectId) {
+      return;
+    }
+
+    this.selectedObjectId = undefined;
+    this.attachTransformControls();
+    if (emitChange) {
+      this.onSelectionChange?.(undefined);
+    }
+  }
+
   private attachTransformControls(): void {
     const selectedModel = this.selectedLoadedModel();
     if (!selectedModel) {
@@ -847,9 +886,17 @@ function previewObjectsFromState(state: PreviewState): TargetEditorObject[] {
   ];
 }
 
-function selectPreviewObjectId(objects: TargetEditorObject[], requestedId?: string): string | undefined {
+function selectPreviewObjectId(
+  objects: TargetEditorObject[],
+  requestedId: string | undefined,
+  hasExplicitSelection: boolean,
+): string | undefined {
   if (requestedId && objects.some((object) => object.id === requestedId)) {
     return requestedId;
+  }
+
+  if (hasExplicitSelection) {
+    return undefined;
   }
 
   return objects[0]?.id;
@@ -1002,6 +1049,41 @@ function createNormalizedModelGroup(scene: Group): Group {
   scene.position.set(-center.x, -scaledBounds.min.y, -center.z);
   wrapper.add(scene);
   return wrapper;
+}
+
+function createTargetMidpointMarker(): Group {
+  const marker = new Group();
+  marker.name = 'target-midpoint-marker';
+  marker.position.set(0, 0.008, 0);
+
+  const ringMaterial = new MeshBasicMaterial({
+    color: 0xfacc15,
+    depthTest: false,
+    transparent: true,
+    opacity: 0.95,
+  });
+  const crossMaterial = new MeshBasicMaterial({
+    color: 0x14b8a6,
+    depthTest: false,
+    transparent: true,
+    opacity: 0.9,
+  });
+
+  const ring = new Mesh(new RingGeometry(0.055, 0.075, 48), ringMaterial);
+  ring.name = 'target-midpoint-ring';
+  ring.rotation.x = -Math.PI / 2;
+
+  const xAxis = new Mesh(new PlaneGeometry(0.28, 0.012), crossMaterial);
+  xAxis.name = 'target-midpoint-x-axis';
+  xAxis.rotation.x = -Math.PI / 2;
+
+  const zAxis = new Mesh(new PlaneGeometry(0.28, 0.012), crossMaterial);
+  zAxis.name = 'target-midpoint-z-axis';
+  zAxis.rotation.x = -Math.PI / 2;
+  zAxis.rotation.z = Math.PI / 2;
+
+  marker.add(ring, xAxis, zAxis);
+  return marker;
 }
 
 function disposeObject3D(object: Object3D): void {

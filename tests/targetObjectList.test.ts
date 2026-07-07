@@ -4,7 +4,7 @@ import { renderTargetObjectListItem } from '../src/ui/targetObjectList';
 describe('renderTargetObjectListItem', () => {
   it('renders a text row with a separate delete button next to the text', () => {
     const onSelect = vi.fn();
-    const onDeleteText = vi.fn();
+    const onDelete = vi.fn();
     const row = renderTargetObjectListItem({
       object: {
         kind: 'text',
@@ -29,11 +29,11 @@ describe('renderTargetObjectListItem', () => {
       index: 0,
       selectedObjectId: 'text-1',
       onSelect,
-      onDeleteText,
+      onDelete,
     });
 
     const selectButton = row.querySelector<HTMLButtonElement>('[data-select-target-object="text-1"]');
-    const deleteButton = row.querySelector<HTMLButtonElement>('[data-delete-text-object="text-1"]');
+    const deleteButton = row.querySelector<HTMLButtonElement>('[data-delete-target-object="text-1"]');
     const swatch = row.querySelector<HTMLElement>('[data-text-color-swatch]');
 
     expect(row.getAttribute('role')).toBe('listitem');
@@ -46,12 +46,13 @@ describe('renderTargetObjectListItem', () => {
 
     deleteButton?.click();
 
-    expect(onDeleteText).toHaveBeenCalledWith('text-1');
+    expect(onDelete).toHaveBeenCalledWith('text-1');
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('keeps model rows selectable without adding a text delete button', () => {
+  it('renders a model row with its own delete button', () => {
     const onSelect = vi.fn();
+    const onDelete = vi.fn();
     const row = renderTargetObjectListItem({
       object: {
         id: 'model-1',
@@ -61,13 +62,17 @@ describe('renderTargetObjectListItem', () => {
       index: 1,
       selectedObjectId: undefined,
       onSelect,
-      onDeleteText: vi.fn(),
+      onDelete,
     });
 
     expect(row.querySelector('[data-delete-text-object]')).toBeNull();
+    const deleteButton = row.querySelector<HTMLButtonElement>('[data-delete-target-object="model-1"]');
+    expect(deleteButton?.getAttribute('aria-label')).toBe('Delete object Chair');
 
     row.querySelector<HTMLButtonElement>('[data-select-target-object="model-1"]')?.click();
-
     expect(onSelect).toHaveBeenCalledWith('model-1');
+
+    deleteButton?.click();
+    expect(onDelete).toHaveBeenCalledWith('model-1');
   });
 });

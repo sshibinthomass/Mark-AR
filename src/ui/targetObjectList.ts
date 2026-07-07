@@ -13,7 +13,7 @@ export type TargetObjectListItemOptions = {
   index: number;
   selectedObjectId?: string;
   onSelect: (objectId: string) => void;
-  onDeleteText: (objectId: string) => void;
+  onDelete: (objectId: string) => void;
 };
 
 export function renderTargetObjectListItem({
@@ -21,7 +21,7 @@ export function renderTargetObjectListItem({
   index,
   selectedObjectId,
   onSelect,
-  onDeleteText,
+  onDelete,
 }: TargetObjectListItemOptions): HTMLElement {
   const row = document.createElement('div');
   row.className = 'target-object-row';
@@ -57,14 +57,7 @@ export function renderTargetObjectListItem({
       : `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel}`;
     selectButton.append(swatch, label, meta);
 
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'target-object-delete';
-    deleteButton.dataset.deleteTextObject = object.id;
-    deleteButton.textContent = 'Delete';
-    deleteButton.setAttribute('aria-label', `Delete text ${text.value}`);
-    deleteButton.addEventListener('click', () => onDeleteText(object.id));
-    row.append(selectButton, deleteButton);
+    row.append(selectButton, createDeleteButton(object.id, `Delete text ${text.value}`, onDelete));
     return row;
   }
 
@@ -72,6 +65,21 @@ export function renderTargetObjectListItem({
   label.textContent = object.model.label;
   meta.textContent = `${index + 1} / ${Number(object.placement.scale.toFixed(2))}x`;
   selectButton.append(label, meta);
-  row.append(selectButton);
+  row.append(selectButton, createDeleteButton(object.id, `Delete object ${object.model.label}`, onDelete));
   return row;
+}
+
+function createDeleteButton(
+  objectId: string,
+  label: string,
+  onDelete: (objectId: string) => void,
+): HTMLButtonElement {
+  const deleteButton = document.createElement('button');
+  deleteButton.type = 'button';
+  deleteButton.className = 'target-object-delete';
+  deleteButton.dataset.deleteTargetObject = objectId;
+  deleteButton.textContent = 'Delete';
+  deleteButton.setAttribute('aria-label', label);
+  deleteButton.addEventListener('click', () => onDelete(objectId));
+  return deleteButton;
 }

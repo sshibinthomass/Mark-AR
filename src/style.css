@@ -792,7 +792,7 @@ h1 {
 }
 
 .target-object-row-model .target-object-select {
-  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .target-object-row-text .target-object-select {

@@ -662,7 +662,11 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
       syncTargetCameraInputs(cameraView);
     },
     onSelectionChange: (objectId) => {
-      selectTargetObject(objectId, { refreshPreview: false });
+      if (objectId) {
+        selectTargetObject(objectId, { refreshPreview: false });
+        return;
+      }
+      clearSelectedTargetObject({ refreshPreview: false });
     },
     onTransformModeChange: (mode) => {
       targetTransformMode = mode;
@@ -877,6 +881,24 @@ function selectTargetObject(objectId: string, options?: { refreshPreview?: boole
   }
 }
 
+function clearSelectedTargetObject(options?: { refreshPreview?: boolean }): void {
+  selectedTargetObjectId = undefined;
+  targetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
+  targetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
+  if (targetModelSelect) {
+    targetModelSelect.value = '';
+  }
+  syncTargetModelRailSelection();
+  syncTargetPlacementInputs(targetPlacement);
+  syncTargetAnimationInputs(targetAnimation);
+  syncTargetTextAction();
+  renderTargetObjectList();
+  updateImageTargetStatus('No object selected.', false);
+  if (options?.refreshPreview !== false) {
+    void updateTargetPreview();
+  }
+}
+
 function updateSelectedTargetObjectPlacement(placement: ImageTargetPlacement): void {
   targetPlacement = normalizePlacement(placement);
   const object = getSelectedTargetObject();
@@ -928,7 +950,7 @@ function renderTargetObjectList(): void {
       index,
       selectedObjectId: selectedTargetObjectId,
       onSelect: selectTargetObject,
-      onDeleteText: removeTargetObjectById,
+      onDelete: removeTargetObjectById,
     }));
   }
 }
