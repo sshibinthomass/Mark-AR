@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cameraViewForNudge,
+  cameraViewForArrowOrbit,
   cameraViewForPan,
   cameraViewForPinchZoom,
   cameraViewForDrag,
   cameraViewForPreset,
   cameraViewForZoom,
   DEFAULT_PREVIEW_CAMERA_VIEW,
-  isCameraNudgeDirection,
+  isCameraArrowDirection,
   isCameraPreset,
 } from '../src/scene/previewCamera';
 
@@ -37,18 +37,85 @@ describe('preview camera presets', () => {
     expect(isCameraPreset('sideways')).toBe(false);
   });
 
-  it('nudges the visible preview one step for every arrow click', () => {
-    const once = cameraViewForNudge(DEFAULT_PREVIEW_CAMERA_VIEW, 'left');
-    const twice = cameraViewForNudge(once, 'left');
-    const up = cameraViewForNudge(DEFAULT_PREVIEW_CAMERA_VIEW, 'up');
-    const down = cameraViewForNudge(up, 'down');
+  it('uses left and right arrows for 90-degree horizontal orbit only', () => {
+    const startView = {
+      ...DEFAULT_PREVIEW_CAMERA_VIEW,
+      yawDegrees: 46,
+      height: 1.4,
+      targetHeight: 0.2,
+    };
+    const right = cameraViewForArrowOrbit(startView, 'right');
+    const left = cameraViewForArrowOrbit(startView, 'left');
 
-    expect(once.targetX).toBeGreaterThan(DEFAULT_PREVIEW_CAMERA_VIEW.targetX);
-    expect(twice.targetX).toBeGreaterThan(once.targetX);
-    expect(up.targetHeight).toBeLessThan(DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight);
-    expect(down.targetHeight).toBe(DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight);
-    expect(isCameraNudgeDirection('right')).toBe(true);
-    expect(isCameraNudgeDirection('top')).toBe(false);
+    expect([right, left].map((view) => yawAsCompassDegrees(view.yawDegrees))).toEqual([
+      180,
+      0,
+    ]);
+    expect([right, left].every((view) => view.height === startView.height)).toBe(true);
+    expect(left.targetX).toBe(startView.targetX);
+    expect(isCameraArrowDirection('right')).toBe(true);
+    expect(isCameraArrowDirection('top')).toBe(false);
+  });
+
+  it('uses up and down arrows for 90-degree vertical orbit without changing yaw', () => {
+    const startView = {
+      ...DEFAULT_PREVIEW_CAMERA_VIEW,
+      yawDegrees: 46,
+      height: 1.4,
+      targetHeight: 0.2,
+    };
+    const up = cameraViewForArrowOrbit(startView, 'up');
+    const down = cameraViewForArrowOrbit(startView, 'down');
+
+    expect(up.yawDegrees).toBe(startView.yawDegrees);
+    expect(down.yawDegrees).toBe(startView.yawDegrees);
+    expect(up.height).toBeGreaterThan(startView.height);
+    expect(down.height).toBeLessThan(startView.height);
+    expect(up.distance).toBeLessThan(startView.distance);
+    expect(down.distance).toBeLessThan(startView.distance);
+    expect(up.targetHeight).toBe(startView.targetHeight);
+    expect(down.targetHeight).toBe(startView.targetHeight);
+  });
+
+  it('keeps stepping to the next cardinal angle when an arrow is pressed repeatedly', () => {
+    const firstLeft = cameraViewForArrowOrbit(DEFAULT_PREVIEW_CAMERA_VIEW, 'left');
+    const secondLeft = cameraViewForArrowOrbit(firstLeft, 'left');
+    const thirdLeft = cameraViewForArrowOrbit(secondLeft, 'left');
+    const fourthLeft = cameraViewForArrowOrbit(thirdLeft, 'left');
+    const firstRight = cameraViewForArrowOrbit(DEFAULT_PREVIEW_CAMERA_VIEW, 'right');
+    const secondRight = cameraViewForArrowOrbit(firstRight, 'right');
+    const thirdRight = cameraViewForArrowOrbit(secondRight, 'right');
+    const fourthRight = cameraViewForArrowOrbit(thirdRight, 'right');
+
+    expect([firstLeft, secondLeft, thirdLeft, fourthLeft].map((view) => yawAsCompassDegrees(view.yawDegrees))).toEqual([
+      270,
+      180,
+      90,
+      0,
+    ]);
+    expect([firstRight, secondRight, thirdRight, fourthRight].map((view) => yawAsCompassDegrees(view.yawDegrees))).toEqual([
+      90,
+      180,
+      270,
+      0,
+    ]);
+    expect([firstLeft, secondLeft, thirdLeft, fourthLeft].every((view) => view.height === DEFAULT_PREVIEW_CAMERA_VIEW.height)).toBe(true);
+  });
+
+  it('keeps vertical arrow clicks on the same horizontal angle', () => {
+    const firstUp = cameraViewForArrowOrbit(DEFAULT_PREVIEW_CAMERA_VIEW, 'up');
+    const secondUp = cameraViewForArrowOrbit(firstUp, 'up');
+    const firstDown = cameraViewForArrowOrbit(DEFAULT_PREVIEW_CAMERA_VIEW, 'down');
+    const secondDown = cameraViewForArrowOrbit(firstDown, 'down');
+
+    expect([firstUp, secondUp, firstDown, secondDown].map((view) => yawAsCompassDegrees(view.yawDegrees))).toEqual([
+      0,
+      0,
+      0,
+      0,
+    ]);
+    expect(secondUp.height).toBeGreaterThanOrEqual(firstUp.height);
+    expect(secondDown.height).toBeLessThanOrEqual(firstDown.height);
   });
 
   it('orbits and raises the camera from gizmo drag movement', () => {
@@ -99,3 +166,7 @@ describe('preview camera presets', () => {
     ).toBeCloseTo(1.05);
   });
 });
+
+function yawAsCompassDegrees(yawDegrees: number): number {
+  return ((yawDegrees % 360) + 360) % 360;
+}

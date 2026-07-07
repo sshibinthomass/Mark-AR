@@ -931,12 +931,63 @@ h1 {
   height: 100%;
 }
 
-.target-transform-toolbar {
+.target-preview-controls {
   position: absolute;
   top: 14px;
   left: 14px;
-  z-index: 3;
+  right: auto;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  width: min(520px, calc(100% - 170px));
+  min-width: 0;
+}
+
+.target-camera-view-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(202, 255, 248, 0.24);
+  border-radius: 8px;
+  padding: 10px;
+  color: #f8fafc;
+  background: rgba(4, 18, 22, 0.78);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(12px);
+}
+
+.target-camera-view-controls .eyebrow {
+  color: #5eead4;
+}
+
+.target-camera-view-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 12px;
+}
+
+.target-camera-view-grid label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: rgba(248, 250, 252, 0.82);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.target-camera-view-grid input[type="range"] {
+  width: 100%;
+}
+
+.target-transform-toolbar {
   display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  align-items: stretch;
+  width: max-content;
+  min-width: 92px;
   gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 8px;
@@ -947,6 +998,7 @@ h1 {
 }
 
 .target-transform-toolbar button {
+  flex: 1 1 0;
   min-height: 32px;
   border-color: rgba(255, 255, 255, 0.18);
   padding: 6px 10px;
@@ -964,7 +1016,7 @@ h1 {
 .target-model-rail {
   --target-model-card-size: 96px;
   position: absolute;
-  top: 72px;
+  top: 168px;
   bottom: 14px;
   left: 14px;
   z-index: 3;
@@ -1067,7 +1119,7 @@ h1 {
   position: absolute;
   top: 14px;
   right: 14px;
-  z-index: 3;
+  z-index: 4;
   display: grid;
   grid-template-areas:
     ". up ."
@@ -1225,6 +1277,19 @@ button,
   min-height: 40px;
   padding: 8px 10px;
   font-size: 13px;
+}
+
+.target-page .target-inspector-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 5px;
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .target-page .target-model-card {
@@ -1450,11 +1515,31 @@ button:disabled {
     gap: 9px;
   }
 
+  .target-preview-controls {
+    position: static;
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .target-camera-view-controls {
+    padding: 8px;
+  }
+
+  .target-camera-view-grid {
+    gap: 6px 8px;
+  }
+
+  .target-camera-view-grid label {
+    font-size: 10px;
+  }
+
   .target-transform-toolbar {
-    top: 8px;
-    left: 8px;
-    transform: scale(0.9);
-    transform-origin: top left;
+    flex-direction: row;
+    width: 100%;
+    min-width: 0;
+    transform: none;
   }
 
   .target-transform-toolbar button {
@@ -1494,10 +1579,15 @@ button:disabled {
   }
 
   .target-camera-gizmo {
-    top: 8px;
-    right: 8px;
+    position: absolute;
+    top: auto;
+    right: 10px;
+    bottom: calc(8px + 92px);
+    z-index: 5;
+    width: max-content;
+    height: max-content;
     transform: scale(0.82);
-    transform-origin: top right;
+    transform-origin: bottom right;
   }
 
   .target-preview-stage {

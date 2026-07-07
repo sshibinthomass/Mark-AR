@@ -25,19 +25,19 @@ const CAMERA_TARGET_MAX = 2;
 const CAMERA_DRAG_YAW_DEGREES_PER_PIXEL = 0.45;
 const CAMERA_DRAG_HEIGHT_PER_PIXEL = 0.01;
 const CAMERA_WHEEL_ZOOM_PER_DELTA = 0.0015;
-const CAMERA_NUDGE_STEP = 0.12;
 const CAMERA_PRESETS = ['top', 'front', 'right', 'home'] as const;
-const CAMERA_NUDGE_DIRECTIONS = ['up', 'down', 'left', 'right'] as const;
+const CAMERA_ARROW_DIRECTIONS = ['up', 'down', 'left', 'right'] as const;
+const CAMERA_CARDINAL_STEP_DEGREES = 90;
 
 export type CameraPreset = (typeof CAMERA_PRESETS)[number];
-export type CameraNudgeDirection = (typeof CAMERA_NUDGE_DIRECTIONS)[number];
+export type CameraArrowDirection = (typeof CAMERA_ARROW_DIRECTIONS)[number];
 
 export function isCameraPreset(value: string | undefined): value is CameraPreset {
   return CAMERA_PRESETS.includes(value as CameraPreset);
 }
 
-export function isCameraNudgeDirection(value: string | undefined): value is CameraNudgeDirection {
-  return CAMERA_NUDGE_DIRECTIONS.includes(value as CameraNudgeDirection);
+export function isCameraArrowDirection(value: string | undefined): value is CameraArrowDirection {
+  return CAMERA_ARROW_DIRECTIONS.includes(value as CameraArrowDirection);
 }
 
 export function cameraViewForPreset(preset: CameraPreset): PreviewCameraView {
@@ -66,32 +66,45 @@ export function cameraViewForPreset(preset: CameraPreset): PreviewCameraView {
   }
 }
 
-export function cameraViewForNudge(
+export function cameraViewForArrowOrbit(
   startView: PreviewCameraView,
-  direction: CameraNudgeDirection,
+  direction: CameraArrowDirection,
 ): PreviewCameraView {
-  switch (direction) {
-    case 'up':
-      return {
-        ...startView,
-        targetHeight: clamp(startView.targetHeight - CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
-      };
-    case 'down':
-      return {
-        ...startView,
-        targetHeight: clamp(startView.targetHeight + CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
-      };
-    case 'left':
-      return {
-        ...startView,
-        targetX: clamp(startView.targetX + CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
-      };
-    case 'right':
-      return {
-        ...startView,
-        targetX: clamp(startView.targetX - CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
-      };
+  if (direction === 'up' || direction === 'down') {
+    return cameraViewForVerticalArrowOrbit(startView, direction);
   }
+
+  const nearestCardinalYaw = nearestCardinalYawDegrees(startView.yawDegrees);
+  const yawStep = direction === 'right' ? CAMERA_CARDINAL_STEP_DEGREES : -CAMERA_CARDINAL_STEP_DEGREES;
+  const yawDegrees = nearestCardinalYaw + yawStep;
+
+  return {
+    ...startView,
+    yawDegrees: normalizeYaw(yawDegrees),
+  };
+}
+
+function cameraViewForVerticalArrowOrbit(
+  startView: PreviewCameraView,
+  direction: Extract<CameraArrowDirection, 'up' | 'down'>,
+): PreviewCameraView {
+  const currentPitch = verticalPitchDegrees(startView);
+  const nearestPitch = nearestVerticalCardinalPitchDegrees(currentPitch);
+  const pitchStep = direction === 'up' ? CAMERA_CARDINAL_STEP_DEGREES : -CAMERA_CARDINAL_STEP_DEGREES;
+  const nextPitch = clamp(nearestPitch + pitchStep, -CAMERA_CARDINAL_STEP_DEGREES, CAMERA_CARDINAL_STEP_DEGREES);
+  const pitchRadians = (nextPitch * Math.PI) / 180;
+  const verticalOffset = startView.height - startView.targetHeight;
+  const orbitRadius = Math.max(CAMERA_DISTANCE_MIN, Math.hypot(startView.distance, verticalOffset));
+
+  return {
+    ...startView,
+    distance: clamp(Math.abs(Math.cos(pitchRadians) * orbitRadius), CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX),
+    height: clamp(
+      startView.targetHeight + Math.sin(pitchRadians) * orbitRadius,
+      CAMERA_HEIGHT_MIN,
+      CAMERA_HEIGHT_MAX,
+    ),
+  };
 }
 
 export function cameraViewForDrag(
@@ -170,6 +183,23 @@ export function cameraViewForPinchZoom(
 function normalizeYaw(value: number): number {
   const wrapped = ((((value + 180) % 360) + 360) % 360) - 180;
   return wrapped === -180 ? 180 : Number(wrapped.toFixed(3));
+}
+
+function nearestCardinalYawDegrees(value: number): number {
+  const compassYaw = ((value % 360) + 360) % 360;
+  return Math.round(compassYaw / CAMERA_CARDINAL_STEP_DEGREES) * CAMERA_CARDINAL_STEP_DEGREES;
+}
+
+function verticalPitchDegrees(view: PreviewCameraView): number {
+  return (Math.atan2(view.height - view.targetHeight, view.distance) * 180) / Math.PI;
+}
+
+function nearestVerticalCardinalPitchDegrees(value: number): number {
+  return clamp(
+    Math.round(value / CAMERA_CARDINAL_STEP_DEGREES) * CAMERA_CARDINAL_STEP_DEGREES,
+    -CAMERA_CARDINAL_STEP_DEGREES,
+    CAMERA_CARDINAL_STEP_DEGREES,
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -75,9 +75,9 @@ import {
 import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
   type PreviewCameraView,
+  cameraViewForArrowOrbit,
   cameraViewForDrag,
-  cameraViewForNudge,
-  isCameraNudgeDirection,
+  isCameraArrowDirection,
 } from './scene/previewCamera';
 import { ImageTargetPreview } from './scene/ImageTargetPreview';
 import type { PreviewTransformMode } from './scene/ImageTargetPreview';
@@ -385,12 +385,12 @@ targetCameraGizmo?.addEventListener('click', (event) => {
     }
   }
 
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-camera-nudge]');
-  if (!button || !isCameraNudgeDirection(button.dataset.cameraNudge)) {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-camera-orbit]');
+  if (!button || !isCameraArrowDirection(button.dataset.cameraOrbit)) {
     return;
   }
 
-  targetCameraView = cameraViewForNudge(targetCameraView, button.dataset.cameraNudge);
+  targetCameraView = cameraViewForArrowOrbit(targetCameraView, button.dataset.cameraOrbit);
   syncTargetCameraInputs(targetCameraView);
   void updateTargetPreview();
 });
@@ -775,7 +775,7 @@ function addTargetTextFromInput(): void {
     id: createTargetObjectId(),
     text: readTargetTextInput(),
     placement: nextTargetObjectPlacement(),
-    animation: nextTargetObjectAnimation(),
+    animation: DEFAULT_IMAGE_TARGET_ANIMATION,
   });
   targetObjects = [...targetObjects, object];
   selectTargetObject(object.id, { refreshPreview: false });
@@ -797,7 +797,7 @@ function createTargetModelObject(model: CloudflareModelOption): CloudImageTarget
     id: createTargetObjectId(),
     model,
     placement: nextTargetObjectPlacement(),
-    animation: nextTargetObjectAnimation(),
+    animation: normalizeAnimation(DEFAULT_IMAGE_TARGET_ANIMATION),
   };
 }
 
@@ -964,10 +964,6 @@ function nextTargetObjectPlacement(): ImageTargetPlacement {
     offsetX: Math.max(-0.8, Math.min(0.8, -0.24 + index * 0.18)),
     offsetY: Math.max(-0.8, Math.min(0.8, (index % 3) * 0.12)),
   });
-}
-
-function nextTargetObjectAnimation(): ImageTargetAnimation {
-  return normalizeAnimation(readTargetAnimation());
 }
 
 function createTargetObjectId(): string {

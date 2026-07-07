@@ -174,18 +174,29 @@ export function renderAppShell(markers: MarkerSpec[]): string {
         ${renderPageHeader('Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
         <section class="target-workspace">
           <div class="target-preview-shell">
-            <div class="target-transform-toolbar" aria-label="Transform tools">
-              <button type="button" data-transform-mode="translate" aria-pressed="true">Move</button>
-              <button type="button" data-transform-mode="rotate" aria-pressed="false">Rotate</button>
-              <button type="button" data-transform-mode="scale" aria-pressed="false">Scale</button>
+            <div class="target-preview-controls">
+              <div class="target-transform-toolbar" aria-label="Transform tools">
+                <button type="button" data-transform-mode="translate" aria-pressed="true">Move</button>
+                <button type="button" data-transform-mode="rotate" aria-pressed="false">Rotate</button>
+                <button type="button" data-transform-mode="scale" aria-pressed="false">Scale</button>
+              </div>
+              <div class="target-camera-view-controls" aria-label="Camera view">
+                <p class="eyebrow">Camera view</p>
+                <div class="target-camera-view-grid">
+                  <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
+                  <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
+                  <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
+                  <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
+                </div>
+              </div>
+            </div>
+            <div id="target-camera-gizmo" class="target-camera-gizmo" aria-label="Camera view controls">
+              <button type="button" class="gizmo-button gizmo-button-up" data-camera-orbit="up" aria-label="Orbit view up 90 degrees" title="Orbit view up 90 degrees"><span class="gizmo-arrow gizmo-arrow-up" aria-hidden="true"></span></button>
+              <button type="button" class="gizmo-button gizmo-button-left" data-camera-orbit="left" aria-label="Orbit view left 90 degrees" title="Orbit view left 90 degrees"><span class="gizmo-arrow gizmo-arrow-left" aria-hidden="true"></span></button>
+              <button type="button" class="gizmo-button gizmo-button-right" data-camera-orbit="right" aria-label="Orbit view right 90 degrees" title="Orbit view right 90 degrees"><span class="gizmo-arrow gizmo-arrow-right" aria-hidden="true"></span></button>
+              <button type="button" class="gizmo-button gizmo-button-down" data-camera-orbit="down" aria-label="Orbit view down 90 degrees" title="Orbit view down 90 degrees"><span class="gizmo-arrow gizmo-arrow-down" aria-hidden="true"></span></button>
             </div>
             <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
-            <div id="target-camera-gizmo" class="target-camera-gizmo" aria-label="Camera view controls">
-              <button type="button" class="gizmo-button gizmo-button-up" data-camera-nudge="up" aria-label="Move view up" title="Move view up"><span class="gizmo-arrow gizmo-arrow-up" aria-hidden="true"></span></button>
-              <button type="button" class="gizmo-button gizmo-button-left" data-camera-nudge="left" aria-label="Move view left" title="Move view left"><span class="gizmo-arrow gizmo-arrow-left" aria-hidden="true"></span></button>
-              <button type="button" class="gizmo-button gizmo-button-right" data-camera-nudge="right" aria-label="Move view right" title="Move view right"><span class="gizmo-arrow gizmo-arrow-right" aria-hidden="true"></span></button>
-              <button type="button" class="gizmo-button gizmo-button-down" data-camera-nudge="down" aria-label="Move view down" title="Move view down"><span class="gizmo-arrow gizmo-arrow-down" aria-hidden="true"></span></button>
-            </div>
             <div id="target-model-rail" class="target-model-rail" role="listbox" aria-label="Cloudflare models">
               <p class="target-model-rail-empty">Loading models...</p>
             </div>
@@ -384,15 +395,6 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                         <button type="button" data-reset-transform="scale" data-reset-axis="all" title="Reset overall scale">Overall</button>
                       </div>
                     </div>
-                  </div>
-                </div>
-                <div class="control-section">
-                  <p class="eyebrow">Camera view</p>
-                  <div class="placement-grid">
-                    <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
-                    <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
-                    <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
-                    <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
                   </div>
                 </div>
               </section>

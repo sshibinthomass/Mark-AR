@@ -110,10 +110,31 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-camera-distance')).toBeTruthy();
     expect(container.querySelector('#target-camera-height')).toBeTruthy();
     expect(container.querySelector('#target-camera-yaw')).toBeTruthy();
+    const cameraViewControls = container.querySelector('.target-camera-view-controls');
+    const previewControls = container.querySelector('.target-preview-controls');
+    const targetPreviewShell = container.querySelector('.target-preview-shell');
+    const transformToolbar = container.querySelector('.target-transform-toolbar');
+    const cameraGizmo = container.querySelector('#target-camera-gizmo');
+    expect(cameraViewControls?.closest('.target-preview-shell')).toBe(targetPreviewShell);
+    expect(cameraViewControls?.closest('[data-target-inspector-panel="transform"]')).toBeNull();
+    expect(cameraViewControls?.closest('.target-preview-controls')).toBe(previewControls);
+    expect(transformToolbar?.closest('.target-preview-controls')).toBe(previewControls);
+    expect(cameraGizmo?.closest('.target-preview-shell')).toBe(targetPreviewShell);
+    expect(cameraGizmo?.closest('.target-preview-controls')).toBeNull();
+    expect(previewControls && transformToolbar && cameraViewControls && cameraGizmo
+      ? [...previewControls.children].indexOf(transformToolbar) <
+          [...previewControls.children].indexOf(cameraViewControls)
+      : false).toBe(true);
     expect(container.querySelector('#target-camera-gizmo')).toBeTruthy();
-    const cameraNudges = [...container.querySelectorAll<HTMLButtonElement>('[data-camera-nudge]')];
-    expect(cameraNudges.map((button) => button.dataset.cameraNudge)).toEqual(['up', 'left', 'right', 'down']);
-    expect(cameraNudges.every((button) => button.textContent?.trim() === '')).toBe(true);
+    const cameraArrows = [...container.querySelectorAll<HTMLButtonElement>('[data-camera-orbit]')];
+    expect(cameraArrows.map((button) => button.dataset.cameraOrbit)).toEqual(['up', 'left', 'right', 'down']);
+    expect(cameraArrows.every((button) => button.textContent?.trim() === '')).toBe(true);
+    expect(cameraArrows.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Orbit view up 90 degrees',
+      'Orbit view left 90 degrees',
+      'Orbit view right 90 degrees',
+      'Orbit view down 90 degrees',
+    ]);
     expect(container.querySelector('[data-camera-preset]')).toBeNull();
     expect(container.querySelector('#target-spin-axis')).toBeTruthy();
     expect(container.querySelector('#target-spin-axis')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
