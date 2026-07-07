@@ -110,10 +110,10 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-camera-height')).toBeTruthy();
     expect(container.querySelector('#target-camera-yaw')).toBeTruthy();
     expect(container.querySelector('#target-camera-gizmo')).toBeTruthy();
-    expect(container.querySelector('[data-camera-preset="top"]')).toBeTruthy();
-    expect(container.querySelector('[data-camera-preset="front"]')).toBeTruthy();
-    expect(container.querySelector('[data-camera-preset="right"]')).toBeTruthy();
-    expect(container.querySelector('[data-camera-preset="home"]')).toBeTruthy();
+    const cameraNudges = [...container.querySelectorAll<HTMLButtonElement>('[data-camera-nudge]')];
+    expect(cameraNudges.map((button) => button.dataset.cameraNudge)).toEqual(['up', 'left', 'right', 'down']);
+    expect(cameraNudges.every((button) => button.textContent?.trim() === '')).toBe(true);
+    expect(container.querySelector('[data-camera-preset]')).toBeNull();
     expect(container.querySelector('#target-spin-axis')).toBeTruthy();
     expect(container.querySelector('#target-spin-speed')).toBeTruthy();
     expect(container.querySelector('#target-spin-axis option[value="y"]')?.hasAttribute('selected')).toBe(true);

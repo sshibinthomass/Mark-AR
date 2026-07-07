@@ -181,10 +181,10 @@ export function renderAppShell(markers: MarkerSpec[]): string {
             </div>
             <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
             <div id="target-camera-gizmo" class="target-camera-gizmo" aria-label="Camera view controls">
-              <button type="button" class="gizmo-button gizmo-button-y" data-camera-preset="top" aria-label="Top camera view" title="Top view">Y</button>
-              <button type="button" class="gizmo-button gizmo-button-z" data-camera-preset="front" aria-label="Front camera view" title="Front view">Z</button>
-              <button type="button" class="gizmo-button gizmo-button-x" data-camera-preset="right" aria-label="Right camera view" title="Right view">X</button>
-              <button type="button" class="gizmo-home" data-camera-preset="home" aria-label="Reset camera view" title="Reset view">0</button>
+              <button type="button" class="gizmo-button gizmo-button-up" data-camera-nudge="up" aria-label="Move view up" title="Move view up"><span class="gizmo-arrow gizmo-arrow-up" aria-hidden="true"></span></button>
+              <button type="button" class="gizmo-button gizmo-button-left" data-camera-nudge="left" aria-label="Move view left" title="Move view left"><span class="gizmo-arrow gizmo-arrow-left" aria-hidden="true"></span></button>
+              <button type="button" class="gizmo-button gizmo-button-right" data-camera-nudge="right" aria-label="Move view right" title="Move view right"><span class="gizmo-arrow gizmo-arrow-right" aria-hidden="true"></span></button>
+              <button type="button" class="gizmo-button gizmo-button-down" data-camera-nudge="down" aria-label="Move view down" title="Move view down"><span class="gizmo-arrow gizmo-arrow-down" aria-hidden="true"></span></button>
             </div>
             <div id="target-model-rail" class="target-model-rail" role="listbox" aria-label="Cloudflare models">
               <p class="target-model-rail-empty">Loading models...</p>

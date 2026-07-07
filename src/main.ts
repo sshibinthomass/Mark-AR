@@ -76,8 +76,8 @@ import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
   type PreviewCameraView,
   cameraViewForDrag,
-  cameraViewForPreset,
-  isCameraPreset,
+  cameraViewForNudge,
+  isCameraNudgeDirection,
 } from './scene/previewCamera';
 import { ImageTargetPreview } from './scene/ImageTargetPreview';
 import type { PreviewTransformMode } from './scene/ImageTargetPreview';
@@ -385,12 +385,12 @@ targetCameraGizmo?.addEventListener('click', (event) => {
     }
   }
 
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-camera-preset]');
-  if (!button || !isCameraPreset(button.dataset.cameraPreset)) {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-camera-nudge]');
+  if (!button || !isCameraNudgeDirection(button.dataset.cameraNudge)) {
     return;
   }
 
-  targetCameraView = cameraViewForPreset(button.dataset.cameraPreset);
+  targetCameraView = cameraViewForNudge(targetCameraView, button.dataset.cameraNudge);
   syncTargetCameraInputs(targetCameraView);
   void updateTargetPreview();
 });

@@ -25,12 +25,19 @@ const CAMERA_TARGET_MAX = 2;
 const CAMERA_DRAG_YAW_DEGREES_PER_PIXEL = 0.45;
 const CAMERA_DRAG_HEIGHT_PER_PIXEL = 0.01;
 const CAMERA_WHEEL_ZOOM_PER_DELTA = 0.0015;
+const CAMERA_NUDGE_STEP = 0.12;
 const CAMERA_PRESETS = ['top', 'front', 'right', 'home'] as const;
+const CAMERA_NUDGE_DIRECTIONS = ['up', 'down', 'left', 'right'] as const;
 
 export type CameraPreset = (typeof CAMERA_PRESETS)[number];
+export type CameraNudgeDirection = (typeof CAMERA_NUDGE_DIRECTIONS)[number];
 
 export function isCameraPreset(value: string | undefined): value is CameraPreset {
   return CAMERA_PRESETS.includes(value as CameraPreset);
+}
+
+export function isCameraNudgeDirection(value: string | undefined): value is CameraNudgeDirection {
+  return CAMERA_NUDGE_DIRECTIONS.includes(value as CameraNudgeDirection);
 }
 
 export function cameraViewForPreset(preset: CameraPreset): PreviewCameraView {
@@ -56,6 +63,34 @@ export function cameraViewForPreset(preset: CameraPreset): PreviewCameraView {
       };
     case 'home':
       return { ...DEFAULT_PREVIEW_CAMERA_VIEW };
+  }
+}
+
+export function cameraViewForNudge(
+  startView: PreviewCameraView,
+  direction: CameraNudgeDirection,
+): PreviewCameraView {
+  switch (direction) {
+    case 'up':
+      return {
+        ...startView,
+        targetHeight: clamp(startView.targetHeight - CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
+      };
+    case 'down':
+      return {
+        ...startView,
+        targetHeight: clamp(startView.targetHeight + CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
+      };
+    case 'left':
+      return {
+        ...startView,
+        targetX: clamp(startView.targetX + CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
+      };
+    case 'right':
+      return {
+        ...startView,
+        targetX: clamp(startView.targetX - CAMERA_NUDGE_STEP, CAMERA_TARGET_MIN, CAMERA_TARGET_MAX),
+      };
   }
 }
 

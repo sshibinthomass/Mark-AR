@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cameraViewForNudge,
   cameraViewForPan,
   cameraViewForPinchZoom,
   cameraViewForDrag,
   cameraViewForPreset,
   cameraViewForZoom,
   DEFAULT_PREVIEW_CAMERA_VIEW,
+  isCameraNudgeDirection,
   isCameraPreset,
 } from '../src/scene/previewCamera';
 
@@ -33,6 +35,20 @@ describe('preview camera presets', () => {
     expect(isCameraPreset('right')).toBe(true);
     expect(isCameraPreset('home')).toBe(true);
     expect(isCameraPreset('sideways')).toBe(false);
+  });
+
+  it('nudges the visible preview one step for every arrow click', () => {
+    const once = cameraViewForNudge(DEFAULT_PREVIEW_CAMERA_VIEW, 'left');
+    const twice = cameraViewForNudge(once, 'left');
+    const up = cameraViewForNudge(DEFAULT_PREVIEW_CAMERA_VIEW, 'up');
+    const down = cameraViewForNudge(up, 'down');
+
+    expect(once.targetX).toBeGreaterThan(DEFAULT_PREVIEW_CAMERA_VIEW.targetX);
+    expect(twice.targetX).toBeGreaterThan(once.targetX);
+    expect(up.targetHeight).toBeLessThan(DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight);
+    expect(down.targetHeight).toBe(DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight);
+    expect(isCameraNudgeDirection('right')).toBe(true);
+    expect(isCameraNudgeDirection('top')).toBe(false);
   });
 
   it('orbits and raises the camera from gizmo drag movement', () => {

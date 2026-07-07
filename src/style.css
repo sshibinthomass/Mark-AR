@@ -1057,9 +1057,11 @@ h1 {
   z-index: 3;
   display: grid;
   grid-template-areas:
-    ". y ."
-    "z home x";
+    ". up ."
+    "left . right"
+    ". down .";
   grid-template-columns: repeat(3, 30px);
+  grid-template-rows: repeat(3, 30px);
   gap: 5px;
   align-items: center;
   justify-items: center;
@@ -1074,22 +1076,11 @@ h1 {
   user-select: none;
 }
 
-.target-camera-gizmo::before {
-  content: "";
-  position: absolute;
-  inset: 50% auto auto 50%;
-  width: 46px;
-  height: 1px;
-  transform: translate(-50%, -50%) rotate(-22deg);
-  background: rgba(255, 255, 255, 0.18);
-}
-
 .target-camera-gizmo.is-dragging {
   cursor: grabbing;
 }
 
-.gizmo-button,
-.gizmo-home {
+.gizmo-button {
   position: relative;
   display: grid;
   place-items: center;
@@ -1106,26 +1097,51 @@ h1 {
   touch-action: none;
 }
 
-.gizmo-button-y {
-  grid-area: y;
+.gizmo-button-up {
+  grid-area: up;
   background: #86efac;
 }
 
-.gizmo-button-z {
-  grid-area: z;
+.gizmo-button-left {
+  grid-area: left;
   background: #93c5fd;
 }
 
-.gizmo-button-x {
-  grid-area: x;
+.gizmo-button-right {
+  grid-area: right;
   background: #fca5a5;
 }
 
-.gizmo-home {
-  grid-area: home;
-  border-color: rgba(255, 255, 255, 0.4);
-  color: #d7fffa;
-  background: rgba(255, 255, 255, 0.1);
+.gizmo-button-down {
+  grid-area: down;
+  background: #fcd34d;
+}
+
+.gizmo-arrow {
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.gizmo-arrow-up {
+  border-width: 0 6px 9px;
+  border-color: transparent transparent currentColor;
+}
+
+.gizmo-arrow-down {
+  border-width: 9px 6px 0;
+  border-color: currentColor transparent transparent;
+}
+
+.gizmo-arrow-left {
+  border-width: 6px 9px 6px 0;
+  border-color: transparent currentColor transparent transparent;
+}
+
+.gizmo-arrow-right {
+  border-width: 6px 0 6px 9px;
+  border-color: transparent transparent transparent currentColor;
 }
 
 .saved-target-list {
