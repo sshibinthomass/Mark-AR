@@ -716,17 +716,8 @@ function renderTargetModelRailOptions(models: CloudflareModelOption[]): void {
   renderTargetModelRail(targetModelRail, {
     models,
     selectedModelId: targetModelSelect?.value,
-    onSelect: (model) => selectTargetModel(model.id),
+    onSelect: addTargetObjectForModel,
   });
-}
-
-function selectTargetModel(modelId: string): void {
-  if (!targetModelSelect) {
-    return;
-  }
-
-  targetModelSelect.value = modelId;
-  handleTargetModelSelectionChange();
 }
 
 function syncTargetModelRailSelection(): void {
@@ -764,6 +755,13 @@ function addTargetObjectFromSelection(): void {
     return;
   }
 
+  addTargetObjectForModel(model);
+}
+
+function addTargetObjectForModel(model: CloudflareModelOption): void {
+  if (targetModelSelect) {
+    targetModelSelect.value = model.id;
+  }
   const object = createTargetModelObject(model);
   targetObjects = [...targetObjects, object];
   selectTargetObject(object.id, { refreshPreview: false });
