@@ -289,6 +289,26 @@ export function saveableModelObjects(objects: TargetEditorObject[]): CloudImageT
   return objects.filter(isModelTargetObject);
 }
 
+export function updateTargetTextObject(
+  objects: TargetEditorObject[],
+  objectId: string,
+  text: Partial<TargetTextContent>,
+): TargetEditorObject[] {
+  return objects.map((object) => {
+    if (!isTextTargetObject(object) || object.id !== objectId) {
+      return object;
+    }
+
+    return {
+      ...object,
+      text: normalizeTargetText({
+        ...object.text,
+        ...text,
+      }),
+    };
+  });
+}
+
 export function languageOption(language: TargetTextLanguage): (typeof TEXT_LANGUAGE_OPTIONS)[number] {
   return TEXT_LANGUAGE_OPTIONS.find((option) => option.id === language) ?? TEXT_LANGUAGE_OPTIONS[0];
 }

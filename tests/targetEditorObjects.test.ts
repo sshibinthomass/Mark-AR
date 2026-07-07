@@ -10,6 +10,7 @@ import {
   isModelTargetObject,
   normalizeTargetText,
   saveableModelObjects,
+  updateTargetTextObject,
 } from '../src/app/targetEditorObjects';
 
 const TAMIL_HELLO = '\u0bb5\u0ba3\u0b95\u0bcd\u0b95\u0bae\u0bcd AR';
@@ -156,5 +157,48 @@ describe('target editor object helpers', () => {
     expect(isModelTargetObject(modelObject)).toBe(true);
     expect(isModelTargetObject(textObject)).toBe(false);
     expect(saveableModelObjects([textObject, modelObject])).toEqual([modelObject]);
+  });
+
+  it('updates an existing local text object while preserving placement and model objects', () => {
+    const modelObject = {
+      id: 'object-chair',
+      model: { id: 'chair', label: 'Chair', url: 'https://example.com/chair.glb' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 },
+    };
+    const textObject = createLocalTextObject({
+      id: 'text-1',
+      text: { value: 'Hello AR', language: 'english', font: 'studio-sans' },
+      placement: { scale: 1.4, offsetX: 0.2, offsetY: -0.1, height: 0.3, rotationX: 0, rotationY: 30, rotationZ: 0 },
+    });
+
+    const updatedObjects = updateTargetTextObject([modelObject, textObject], 'text-1', {
+      value: 'Edited AR',
+      fillMode: 'gradient',
+      gradientStart: '#ef4444',
+      gradientEnd: '#facc15',
+      gradientDirection: 'diagonal',
+      sideColor: '#7f1d1d',
+      depth: 0.12,
+      bevel: 0.018,
+      gloss: 0.9,
+    });
+
+    expect(updatedObjects[0]).toBe(modelObject);
+    expect(updatedObjects[1]).toMatchObject({
+      kind: 'text',
+      id: 'text-1',
+      text: {
+        value: 'Edited AR',
+        fillMode: 'gradient',
+        gradientStart: '#ef4444',
+        gradientEnd: '#facc15',
+        gradientDirection: 'diagonal',
+        sideColor: '#7f1d1d',
+        depth: 0.12,
+        bevel: 0.018,
+        gloss: 0.9,
+      },
+      placement: textObject.placement,
+    });
   });
 });

@@ -52,10 +52,13 @@ import {
   isTargetTextStylePreset,
   isTextTargetObject,
   languageOption,
+  normalizeTargetText,
   saveableModelObjects,
   textStylePreset,
+  updateTargetTextObject,
   type LocalImageTargetDraft,
   type TargetEditorObject,
+  type TargetTextContent,
   type TargetTextFillMode,
   type TargetTextFont,
   type TargetTextGradientDirection,
@@ -82,6 +85,7 @@ import { renderAppShell } from './ui/appShell';
 import { renderTargetModelRail } from './ui/modelRail';
 import { routeFromHash } from './ui/pageRoutes';
 import { activateRoute } from './ui/pageRouter';
+import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectListItem } from './ui/targetObjectList';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -91,6 +95,7 @@ if (!app) {
 }
 
 app.innerHTML = renderAppShell(AR_MARKERS);
+setupTargetInspectorTabs(app);
 
 const shell = queryRequired<HTMLElement>('[data-app-shell]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
@@ -446,6 +451,7 @@ resetTargetAnimationButton?.addEventListener('click', () => {
 
 targetTextPresetSelect?.addEventListener('change', () => {
   applyTargetTextPreset(readTargetTextStylePreset());
+  updateSelectedTextObjectFromInput();
 });
 
 targetModelSelect?.addEventListener('change', () => {
@@ -468,10 +474,39 @@ targetTextLanguageSelect?.addEventListener('change', () => {
   if (targetTextFontSelect && language === 'tamil') {
     targetTextFontSelect.value = 'tamil-ui';
   }
+  updateSelectedTextObjectFromInput();
 });
 
 addTargetTextButton?.addEventListener('click', () => {
-  addTargetTextFromInput();
+  commitTargetTextFromInput();
+});
+
+targetTextValueInput?.addEventListener('input', () => {
+  updateSelectedTextObjectFromInput();
+});
+
+targetTextFontSelect?.addEventListener('change', () => {
+  updateSelectedTextObjectFromInput();
+});
+
+[
+  targetTextColorInput,
+  targetTextGradientStartInput,
+  targetTextGradientEndInput,
+  targetTextSideColorInput,
+  targetTextDepthInput,
+  targetTextBevelInput,
+  targetTextGlossInput,
+].forEach((input) => {
+  input?.addEventListener('input', () => {
+    updateSelectedTextObjectFromInput();
+  });
+});
+
+[targetTextFillModeSelect, targetTextGradientDirectionSelect].forEach((input) => {
+  input?.addEventListener('change', () => {
+    updateSelectedTextObjectFromInput();
+  });
 });
 
 saveImageTargetButton?.addEventListener('click', async () => {
@@ -486,6 +521,7 @@ renderTargetObjectList();
 syncTargetCameraInputs(targetCameraView);
 syncTargetTransformModeButtons(targetTransformMode);
 syncTargetAnimationInputs(targetAnimation);
+syncTargetTextAction();
 
 async function initializeCloudflareControls(): Promise<void> {
   if (authToken) {
@@ -735,21 +771,7 @@ function addTargetObjectFromSelection(): void {
 function addTargetTextFromInput(): void {
   const object = createLocalTextObject({
     id: createTargetObjectId(),
-    text: {
-      value: targetTextValueInput?.value,
-      language: readTargetTextLanguage(),
-      font: readTargetTextFont(),
-      color: readTargetTextColor(),
-      fillMode: readTargetTextFillMode(),
-      gradientStart: readTargetTextGradientStart(),
-      gradientEnd: readTargetTextGradientEnd(),
-      gradientDirection: readTargetTextGradientDirection(),
-      sideColor: readTargetTextSideColor(),
-      depth: readTargetTextDepth(),
-      bevel: readTargetTextBevel(),
-      gloss: readTargetTextGloss(),
-      stylePreset: readTargetTextStylePreset(),
-    },
+    text: readTargetTextInput(),
     placement: nextTargetObjectPlacement(),
     animation: nextTargetObjectAnimation(),
   });
@@ -758,6 +780,14 @@ function addTargetTextFromInput(): void {
   renderTargetObjectList();
   updateImageTargetStatus(`Text "${object.text.value}" added locally.`, false);
   void updateTargetPreview();
+}
+
+function commitTargetTextFromInput(): void {
+  if (updateSelectedTextObjectFromInput({ announce: true })) {
+    return;
+  }
+
+  addTargetTextFromInput();
 }
 
 function createTargetModelObject(model: CloudflareModelOption): CloudImageTargetObject {
@@ -801,9 +831,13 @@ function removeTargetObjectById(objectId: string): void {
   if (targetModelSelect) {
     targetModelSelect.value = selectedObject && !isTextTargetObject(selectedObject) ? selectedObject.model.id : '';
   }
+  if (selectedObject && isTextTargetObject(selectedObject)) {
+    syncTargetTextInputs(selectedObject.text);
+  }
   syncTargetModelRailSelection();
   syncTargetPlacementInputs(targetPlacement);
   syncTargetAnimationInputs(targetAnimation);
+  syncTargetTextAction();
   renderTargetObjectList();
   updateImageTargetStatus(
     targetObjects.length > 0
@@ -826,9 +860,13 @@ function selectTargetObject(objectId: string, options?: { refreshPreview?: boole
   if (targetModelSelect) {
     targetModelSelect.value = isTextTargetObject(object) ? '' : object.model.id;
   }
+  if (isTextTargetObject(object)) {
+    syncTargetTextInputs(object.text);
+  }
   syncTargetModelRailSelection();
   syncTargetPlacementInputs(object.placement);
   syncTargetAnimationInputs(targetAnimation);
+  syncTargetTextAction();
   renderTargetObjectList();
   updateImageTargetStatus(
     isTextTargetObject(object) ? `${object.text.value} text selected.` : `${object.model.label} selected.`,
@@ -859,6 +897,11 @@ function updateSelectedTargetObjectAnimation(animation: ImageTargetAnimation): v
 
 function getSelectedTargetObject(): TargetEditorObject | undefined {
   return targetObjects.find((object) => object.id === selectedTargetObjectId);
+}
+
+function getSelectedTextTargetObject(): ReturnType<typeof createLocalTextObject> | undefined {
+  const object = getSelectedTargetObject();
+  return object && isTextTargetObject(object) ? object : undefined;
 }
 
 function renderTargetObjectList(): void {
@@ -971,6 +1014,47 @@ function readTargetTextGloss(): number {
   return readRangeNumber(targetTextGlossInput, DEFAULT_TARGET_TEXT.gloss ?? 0.68);
 }
 
+function readTargetTextInput(): TargetTextContent {
+  return normalizeTargetText({
+    value: targetTextValueInput?.value,
+    language: readTargetTextLanguage(),
+    font: readTargetTextFont(),
+    color: readTargetTextColor(),
+    fillMode: readTargetTextFillMode(),
+    gradientStart: readTargetTextGradientStart(),
+    gradientEnd: readTargetTextGradientEnd(),
+    gradientDirection: readTargetTextGradientDirection(),
+    sideColor: readTargetTextSideColor(),
+    depth: readTargetTextDepth(),
+    bevel: readTargetTextBevel(),
+    gloss: readTargetTextGloss(),
+    stylePreset: readTargetTextStylePreset(),
+  });
+}
+
+function updateSelectedTextObjectFromInput(
+  options: { refreshPreview?: boolean; announce?: boolean } = {},
+): boolean {
+  const object = getSelectedTextTargetObject();
+  if (!object) {
+    syncTargetTextAction();
+    return false;
+  }
+
+  const nextText = readTargetTextInput();
+  targetObjects = updateTargetTextObject(targetObjects, object.id, nextText);
+  renderTargetObjectList();
+  syncTargetTextAction();
+
+  if (options.announce) {
+    updateImageTargetStatus(`Text "${nextText.value}" updated.`, false);
+  }
+  if (options.refreshPreview !== false) {
+    void updateTargetPreview();
+  }
+  return true;
+}
+
 function applyTargetTextPreset(presetId: TargetTextStylePreset): void {
   const preset = textStylePreset(presetId);
   if (targetTextPresetSelect) {
@@ -997,6 +1081,53 @@ function applyTargetTextPreset(presetId: TargetTextStylePreset): void {
   setRangeInputValue(targetTextDepthInput, preset.depth);
   setRangeInputValue(targetTextBevelInput, preset.bevel);
   setRangeInputValue(targetTextGlossInput, preset.gloss);
+}
+
+function syncTargetTextInputs(text: Partial<TargetTextContent>): void {
+  const normalized = normalizeTargetText(text);
+  if (targetTextValueInput) {
+    targetTextValueInput.value = normalized.value;
+  }
+  if (targetTextLanguageSelect) {
+    targetTextLanguageSelect.value = normalized.language;
+  }
+  if (targetTextFontSelect) {
+    targetTextFontSelect.value = normalized.font;
+  }
+  if (targetTextPresetSelect) {
+    targetTextPresetSelect.value = normalized.stylePreset ?? DEFAULT_TARGET_TEXT.stylePreset ?? 'blue-shine';
+  }
+  if (targetTextColorInput) {
+    targetTextColorInput.value = normalized.color ?? DEFAULT_TARGET_TEXT.color ?? '#2563eb';
+  }
+  if (targetTextFillModeSelect) {
+    targetTextFillModeSelect.value = normalized.fillMode ?? DEFAULT_TARGET_TEXT.fillMode ?? 'solid';
+  }
+  if (targetTextGradientStartInput) {
+    targetTextGradientStartInput.value = normalized.gradientStart ?? DEFAULT_TARGET_TEXT.gradientStart ?? '#2563eb';
+  }
+  if (targetTextGradientEndInput) {
+    targetTextGradientEndInput.value = normalized.gradientEnd ?? DEFAULT_TARGET_TEXT.gradientEnd ?? '#60a5fa';
+  }
+  if (targetTextGradientDirectionSelect) {
+    targetTextGradientDirectionSelect.value = normalized.gradientDirection ?? DEFAULT_TARGET_TEXT.gradientDirection ?? 'horizontal';
+  }
+  if (targetTextSideColorInput) {
+    targetTextSideColorInput.value = normalized.sideColor ?? DEFAULT_TARGET_TEXT.sideColor ?? '#1d4ed8';
+  }
+  setRangeInputValue(targetTextDepthInput, normalized.depth ?? DEFAULT_TARGET_TEXT.depth ?? 0.055);
+  setRangeInputValue(targetTextBevelInput, normalized.bevel ?? DEFAULT_TARGET_TEXT.bevel ?? 0.004);
+  setRangeInputValue(targetTextGlossInput, normalized.gloss ?? DEFAULT_TARGET_TEXT.gloss ?? 0.68);
+}
+
+function syncTargetTextAction(): void {
+  if (!addTargetTextButton) {
+    return;
+  }
+
+  const selectedText = getSelectedTextTargetObject();
+  addTargetTextButton.textContent = selectedText ? 'Update text' : 'Add text';
+  addTargetTextButton.dataset.targetTextAction = selectedText ? 'update' : 'add';
 }
 
 function readRangeNumber(input: HTMLInputElement | null, fallback: number): number {

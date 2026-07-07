@@ -173,112 +173,6 @@ export function renderAppShell(markers: MarkerSpec[]): string {
       <section class="page target-page" data-page="targets" hidden aria-label="Cloud image targets">
         ${renderPageHeader('Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
         <section class="target-workspace">
-          <section class="tool-card target-setup-card">
-            <div class="tool-card-head">
-              <p class="eyebrow">Cloud target</p>
-              <p id="image-target-status">Sign in, choose an image, and select a model.</p>
-            </div>
-            <div class="target-setup-fields">
-              <label>
-                <span>Target label</span>
-                <input id="target-label" type="text" value="" aria-label="Target label" />
-              </label>
-              <label class="file-control">
-                <span>Target image</span>
-                <input id="target-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
-              </label>
-              <label class="target-model-select-sentinel" hidden aria-hidden="true">
-                <span>Cloudflare model</span>
-                <select id="target-model-select">
-                  <option value="">Loading models...</option>
-                </select>
-              </label>
-            </div>
-            <div class="object-action-row">
-              <button id="add-target-object" type="button">Add object</button>
-              <button id="remove-target-object" type="button">Remove object</button>
-            </div>
-            <div class="target-text-panel">
-              <p class="eyebrow">Text</p>
-              <label>
-                <span>Text content</span>
-                <textarea id="target-text-value" rows="2" aria-label="Text content">${TEXT_LANGUAGE_OPTIONS[0].sample}</textarea>
-              </label>
-              <div class="target-text-options">
-                <label>
-                  <span>Style preset</span>
-                  <select id="target-text-preset">
-                    ${TEXT_STYLE_PRESETS.map((option) => (
-                      `<option value="${option.id}">${option.label}</option>`
-                    )).join('')}
-                  </select>
-                </label>
-                <label>
-                  <span>Language</span>
-                  <select id="target-text-language">
-                    ${TEXT_LANGUAGE_OPTIONS.map((option) => (
-                      `<option value="${option.id}">${option.label}</option>`
-                    )).join('')}
-                  </select>
-                </label>
-                <label>
-                  <span>Font</span>
-                  <select id="target-text-font">
-                    ${TEXT_FONT_OPTIONS.map((option) => (
-                      `<option value="${option.id}">${option.label}</option>`
-                    )).join('')}
-                  </select>
-                </label>
-                <label class="target-text-color-control">
-                  <span>Color</span>
-                  <input id="target-text-color" type="color" value="${DEFAULT_TARGET_TEXT.color}" aria-label="Text color" />
-                </label>
-                <label>
-                  <span>Fill</span>
-                  <select id="target-text-fill-mode">
-                    ${TEXT_FILL_MODE_OPTIONS.map((option) => (
-                      `<option value="${option.id}">${option.label}</option>`
-                    )).join('')}
-                  </select>
-                </label>
-                <label class="target-text-color-control">
-                  <span>Gradient A</span>
-                  <input id="target-text-gradient-start" type="color" value="${DEFAULT_TARGET_TEXT.gradientStart}" aria-label="Gradient start color" />
-                </label>
-                <label class="target-text-color-control">
-                  <span>Gradient B</span>
-                  <input id="target-text-gradient-end" type="color" value="${DEFAULT_TARGET_TEXT.gradientEnd}" aria-label="Gradient end color" />
-                </label>
-                <label>
-                  <span>Direction</span>
-                  <select id="target-text-gradient-direction">
-                    ${TEXT_GRADIENT_DIRECTION_OPTIONS.map((option) => (
-                      `<option value="${option.id}">${option.label}</option>`
-                    )).join('')}
-                  </select>
-                </label>
-                <label class="target-text-color-control">
-                  <span>Side</span>
-                  <input id="target-text-side-color" type="color" value="${DEFAULT_TARGET_TEXT.sideColor}" aria-label="Side color" />
-                </label>
-                <label>
-                  <span>Depth</span>
-                  <input id="target-text-depth" type="range" min="0.02" max="0.16" step="0.005" value="${DEFAULT_TARGET_TEXT.depth}" />
-                </label>
-                <label>
-                  <span>Bevel</span>
-                  <input id="target-text-bevel" type="range" min="0" max="0.024" step="0.001" value="${DEFAULT_TARGET_TEXT.bevel}" />
-                </label>
-                <label>
-                  <span>Gloss</span>
-                  <input id="target-text-gloss" type="range" min="0" max="1" step="0.01" value="${DEFAULT_TARGET_TEXT.gloss}" />
-                </label>
-              </div>
-              <button id="add-target-text" type="button">Add text</button>
-            </div>
-            <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
-          </section>
-
           <div class="target-preview-shell">
             <div class="target-transform-toolbar" aria-label="Transform tools">
               <button type="button" data-transform-mode="translate" aria-pressed="true">Move</button>
@@ -297,104 +191,229 @@ export function renderAppShell(markers: MarkerSpec[]): string {
             </div>
           </div>
 
-          <section class="tool-card target-controls-card">
-            <div class="tool-card-head target-controls-head">
-              <p class="eyebrow">Adjust placement</p>
-              <p>Selected object controls</p>
+          <section class="tool-card target-inspector-card target-setup-card">
+            <div class="tool-card-head target-inspector-head">
+              <p class="eyebrow">Cloud target</p>
+              <p id="image-target-status">Sign in, choose an image, and select a model.</p>
             </div>
-            <div class="transform-control-stack">
-              <div class="transform-control-group">
-                <div class="transform-control-head">
-                  <p class="eyebrow">Move</p>
-                  <button type="button" data-reset-transform="move" data-reset-axis="all">Reset move</button>
-                </div>
-                <div class="placement-grid">
-                  <div class="axis-control">
-                    <label><span>X offset</span><input id="target-offset-x" type="range" min="-1" max="1" step="0.05" value="0" /></label>
-                    <button type="button" data-reset-transform="move" data-reset-axis="x" title="Reset move X">X</button>
-                  </div>
-                  <div class="axis-control">
-                    <label><span>Y height</span><input id="target-height" type="range" min="0" max="1" step="0.02" value="0.12" /></label>
-                    <button type="button" data-reset-transform="move" data-reset-axis="y" title="Reset move Y">Y</button>
-                  </div>
-                  <div class="axis-control">
-                    <label><span>Z offset</span><input id="target-offset-y" type="range" min="-1" max="1" step="0.05" value="0" /></label>
-                    <button type="button" data-reset-transform="move" data-reset-axis="z" title="Reset move Z">Z</button>
-                  </div>
-                </div>
-              </div>
-              <div class="transform-control-group">
-                <div class="transform-control-head">
-                  <p class="eyebrow">Rotate</p>
-                  <button type="button" data-reset-transform="rotate" data-reset-axis="all">Reset rotate</button>
-                </div>
-                <div class="placement-grid">
-                  <div class="axis-control">
-                    <label><span>Rotate X</span><input id="target-rotation-x" type="range" min="-180" max="180" step="1" value="0" /></label>
-                    <button type="button" data-reset-transform="rotate" data-reset-axis="x" title="Reset rotate X">X</button>
-                  </div>
-                  <div class="axis-control">
-                    <label><span>Rotate Y</span><input id="target-rotation-y" type="range" min="-180" max="180" step="1" value="0" /></label>
-                    <button type="button" data-reset-transform="rotate" data-reset-axis="y" title="Reset rotate Y">Y</button>
-                  </div>
-                  <div class="axis-control">
-                    <label><span>Rotate Z</span><input id="target-rotation-z" type="range" min="-180" max="180" step="1" value="0" /></label>
-                    <button type="button" data-reset-transform="rotate" data-reset-axis="z" title="Reset rotate Z">Z</button>
-                  </div>
-                </div>
-              </div>
-              <div class="transform-control-group">
-                <div class="transform-control-head">
-                  <p class="eyebrow">Scale</p>
-                  <button type="button" data-reset-transform="scale" data-reset-axis="all">Reset scale</button>
-                </div>
-                <div class="placement-grid">
-                  <div class="axis-control">
-                    <label><span>Overall</span><input id="target-scale" type="range" min="0.1" max="5" step="0.1" value="1" /></label>
-                    <button type="button" data-reset-transform="scale" data-reset-axis="all" title="Reset overall scale">Overall</button>
-                  </div>
-                </div>
-              </div>
+            <div class="target-inspector-tabs" role="tablist" aria-label="Target editor sections">
+              <button type="button" id="target-tab-target" role="tab" data-target-inspector-tab="target" aria-selected="true" aria-controls="target-inspector-target">Target</button>
+              <button type="button" id="target-tab-objects" role="tab" data-target-inspector-tab="objects" aria-selected="false" aria-controls="target-inspector-objects">Objects</button>
+              <button type="button" id="target-tab-text" role="tab" data-target-inspector-tab="text" aria-selected="false" aria-controls="target-inspector-text">Text</button>
+              <button type="button" id="target-tab-transform" role="tab" data-target-inspector-tab="transform" aria-selected="false" aria-controls="target-inspector-transform">Transform</button>
             </div>
-            <div class="control-section">
-              <p class="eyebrow">Camera view</p>
-              <div class="placement-grid">
-                <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
-                <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
-                <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
-                <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
-              </div>
-            </div>
-            <div class="control-section">
-              <p class="eyebrow">Animation</p>
-              <label>
-                <span>Spin axis</span>
-                <select id="target-spin-axis" value="y">
-                  <option value="none">None</option>
-                  <option value="x">X</option>
-                  <option value="y" selected>Y</option>
-                  <option value="z">Z</option>
-                </select>
-              </label>
-              <div class="placement-grid">
-                <label><span>Spin speed</span><input id="target-spin-speed" type="range" min="-6" max="6" step="0.05" value="0" /></label>
-                <label><span>Bob height</span><input id="target-bob-height" type="range" min="0" max="1" step="0.02" value="0" /></label>
-                <label><span>Bob speed</span><input id="target-bob-speed" type="range" min="0" max="8" step="0.05" value="0" /></label>
-                <button id="reset-target-animation" type="button">Reset animation</button>
-              </div>
-            </div>
-            <div class="button-row">
-              <button id="save-image-target" class="primary" type="button">Save target</button>
-              <button id="refresh-image-targets" type="button">Refresh targets</button>
-            </div>
-          </section>
+            <div class="target-inspector-panels">
+              <section id="target-inspector-target" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="target" aria-labelledby="target-tab-target">
+                <div class="target-setup-fields">
+                  <label>
+                    <span>Target label</span>
+                    <input id="target-label" type="text" value="" aria-label="Target label" />
+                  </label>
+                  <label class="file-control">
+                    <span>Target image</span>
+                    <input id="target-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
+                  </label>
+                  <label class="target-model-select-sentinel" hidden aria-hidden="true">
+                    <span>Cloudflare model</span>
+                    <select id="target-model-select">
+                      <option value="">Loading models...</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="button-row target-save-strip">
+                  <button id="save-image-target" class="primary" type="button">Save target</button>
+                  <button id="refresh-image-targets" type="button">Refresh targets</button>
+                </div>
+                <div class="saved-target-compact">
+                  <div class="tool-card-head">
+                    <p class="eyebrow">Saved</p>
+                    <p>Cloud image targets</p>
+                  </div>
+                  <div id="saved-image-target-list" class="saved-target-list"></div>
+                </div>
+              </section>
 
-          <section class="tool-card saved-target-card">
-            <div class="tool-card-head">
-              <p class="eyebrow">Saved</p>
-              <p>Cloud image targets</p>
+              <section id="target-inspector-objects" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="objects" aria-labelledby="target-tab-objects" hidden>
+                <div class="object-action-row">
+                  <button id="add-target-object" type="button">Add object</button>
+                  <button id="remove-target-object" type="button">Remove object</button>
+                </div>
+                <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
+              </section>
+
+              <section id="target-inspector-text" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="text" aria-labelledby="target-tab-text" hidden>
+                <div class="target-text-panel">
+                  <label>
+                    <span>Text content</span>
+                    <textarea id="target-text-value" rows="2" aria-label="Text content">${TEXT_LANGUAGE_OPTIONS[0].sample}</textarea>
+                  </label>
+                  <div class="target-text-quick-grid">
+                    <label>
+                      <span>Style preset</span>
+                      <select id="target-text-preset">
+                        ${TEXT_STYLE_PRESETS.map((option) => (
+                          `<option value="${option.id}">${option.label}</option>`
+                        )).join('')}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Language</span>
+                      <select id="target-text-language">
+                        ${TEXT_LANGUAGE_OPTIONS.map((option) => (
+                          `<option value="${option.id}">${option.label}</option>`
+                        )).join('')}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Font</span>
+                      <select id="target-text-font">
+                        ${TEXT_FONT_OPTIONS.map((option) => (
+                          `<option value="${option.id}">${option.label}</option>`
+                        )).join('')}
+                      </select>
+                    </label>
+                  </div>
+                  <button id="add-target-text" type="button">Add text</button>
+                  <details class="target-text-advanced">
+                    <summary>Customize style</summary>
+                    <div class="target-text-options">
+                      <label class="target-text-color-control target-style-swatch-field">
+                        <span>Color</span>
+                        <input id="target-text-color" type="color" value="${DEFAULT_TARGET_TEXT.color}" aria-label="Text color" />
+                      </label>
+                      <label>
+                        <span>Fill</span>
+                        <select id="target-text-fill-mode">
+                          ${TEXT_FILL_MODE_OPTIONS.map((option) => (
+                            `<option value="${option.id}">${option.label}</option>`
+                          )).join('')}
+                        </select>
+                      </label>
+                      <label class="target-text-color-control target-style-swatch-field">
+                        <span>Gradient A</span>
+                        <input id="target-text-gradient-start" type="color" value="${DEFAULT_TARGET_TEXT.gradientStart}" aria-label="Gradient start color" />
+                      </label>
+                      <label class="target-text-color-control target-style-swatch-field">
+                        <span>Gradient B</span>
+                        <input id="target-text-gradient-end" type="color" value="${DEFAULT_TARGET_TEXT.gradientEnd}" aria-label="Gradient end color" />
+                      </label>
+                      <label>
+                        <span>Direction</span>
+                        <select id="target-text-gradient-direction">
+                          ${TEXT_GRADIENT_DIRECTION_OPTIONS.map((option) => (
+                            `<option value="${option.id}">${option.label}</option>`
+                          )).join('')}
+                        </select>
+                      </label>
+                      <label class="target-text-color-control target-style-swatch-field">
+                        <span>Side</span>
+                        <input id="target-text-side-color" type="color" value="${DEFAULT_TARGET_TEXT.sideColor}" aria-label="Side color" />
+                      </label>
+                      <label>
+                        <span>Depth</span>
+                        <input id="target-text-depth" type="range" min="0.02" max="0.16" step="0.005" value="${DEFAULT_TARGET_TEXT.depth}" />
+                      </label>
+                      <label>
+                        <span>Bevel</span>
+                        <input id="target-text-bevel" type="range" min="0" max="0.024" step="0.001" value="${DEFAULT_TARGET_TEXT.bevel}" />
+                      </label>
+                      <label>
+                        <span>Gloss</span>
+                        <input id="target-text-gloss" type="range" min="0" max="1" step="0.01" value="${DEFAULT_TARGET_TEXT.gloss}" />
+                      </label>
+                    </div>
+                  </details>
+                </div>
+              </section>
+
+              <section id="target-inspector-transform" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="transform" aria-labelledby="target-tab-transform" hidden>
+                <div class="tool-card-head target-controls-head">
+                  <p class="eyebrow">Adjust placement</p>
+                  <p>Selected object controls</p>
+                </div>
+                <div class="transform-control-stack">
+                  <div class="transform-control-group">
+                    <div class="transform-control-head">
+                      <p class="eyebrow">Move</p>
+                      <button type="button" data-reset-transform="move" data-reset-axis="all">Reset move</button>
+                    </div>
+                    <div class="placement-grid">
+                      <div class="axis-control">
+                        <label><span>X offset</span><input id="target-offset-x" type="range" min="-1" max="1" step="0.05" value="0" /></label>
+                        <button type="button" data-reset-transform="move" data-reset-axis="x" title="Reset move X">X</button>
+                      </div>
+                      <div class="axis-control">
+                        <label><span>Y height</span><input id="target-height" type="range" min="0" max="1" step="0.02" value="0.12" /></label>
+                        <button type="button" data-reset-transform="move" data-reset-axis="y" title="Reset move Y">Y</button>
+                      </div>
+                      <div class="axis-control">
+                        <label><span>Z offset</span><input id="target-offset-y" type="range" min="-1" max="1" step="0.05" value="0" /></label>
+                        <button type="button" data-reset-transform="move" data-reset-axis="z" title="Reset move Z">Z</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="transform-control-group">
+                    <div class="transform-control-head">
+                      <p class="eyebrow">Rotate</p>
+                      <button type="button" data-reset-transform="rotate" data-reset-axis="all">Reset rotate</button>
+                    </div>
+                    <div class="placement-grid">
+                      <div class="axis-control">
+                        <label><span>Rotate X</span><input id="target-rotation-x" type="range" min="-180" max="180" step="1" value="0" /></label>
+                        <button type="button" data-reset-transform="rotate" data-reset-axis="x" title="Reset rotate X">X</button>
+                      </div>
+                      <div class="axis-control">
+                        <label><span>Rotate Y</span><input id="target-rotation-y" type="range" min="-180" max="180" step="1" value="0" /></label>
+                        <button type="button" data-reset-transform="rotate" data-reset-axis="y" title="Reset rotate Y">Y</button>
+                      </div>
+                      <div class="axis-control">
+                        <label><span>Rotate Z</span><input id="target-rotation-z" type="range" min="-180" max="180" step="1" value="0" /></label>
+                        <button type="button" data-reset-transform="rotate" data-reset-axis="z" title="Reset rotate Z">Z</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="transform-control-group">
+                    <div class="transform-control-head">
+                      <p class="eyebrow">Scale</p>
+                      <button type="button" data-reset-transform="scale" data-reset-axis="all">Reset scale</button>
+                    </div>
+                    <div class="placement-grid">
+                      <div class="axis-control">
+                        <label><span>Overall</span><input id="target-scale" type="range" min="0.1" max="5" step="0.1" value="1" /></label>
+                        <button type="button" data-reset-transform="scale" data-reset-axis="all" title="Reset overall scale">Overall</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="control-section">
+                  <p class="eyebrow">Camera view</p>
+                  <div class="placement-grid">
+                    <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
+                    <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
+                    <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
+                    <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
+                  </div>
+                </div>
+                <div class="control-section">
+                  <p class="eyebrow">Animation</p>
+                  <label>
+                    <span>Spin axis</span>
+                    <select id="target-spin-axis" value="y">
+                      <option value="none">None</option>
+                      <option value="x">X</option>
+                      <option value="y" selected>Y</option>
+                      <option value="z">Z</option>
+                    </select>
+                  </label>
+                  <div class="placement-grid">
+                    <label><span>Spin speed</span><input id="target-spin-speed" type="range" min="-6" max="6" step="0.05" value="0" /></label>
+                    <label><span>Bob height</span><input id="target-bob-height" type="range" min="0" max="1" step="0.02" value="0" /></label>
+                    <label><span>Bob speed</span><input id="target-bob-speed" type="range" min="0" max="8" step="0.05" value="0" /></label>
+                    <button id="reset-target-animation" type="button">Reset animation</button>
+                  </div>
+                </div>
+              </section>
             </div>
-            <div id="saved-image-target-list" class="saved-target-list"></div>
           </section>
         </section>
       </section>

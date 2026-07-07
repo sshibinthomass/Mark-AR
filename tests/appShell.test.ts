@@ -32,10 +32,23 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-model-select')?.closest('label')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('#target-model-rail')).toBeTruthy();
     expect(container.querySelector('#target-model-rail')?.closest('.target-preview-shell')).toBeTruthy();
+    expect(
+      [...container.querySelectorAll<HTMLElement>('[data-target-inspector-tab]')].map((tab) => (
+        tab.dataset.targetInspectorTab
+      )),
+    ).toEqual(['target', 'objects', 'text', 'transform']);
+    expect(container.querySelector('[data-target-inspector-tab="target"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[data-target-inspector-panel="target"]')?.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('[data-target-inspector-panel="objects"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-target-inspector-panel="text"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-target-inspector-panel="transform"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('#add-target-object')).toBeTruthy();
     expect(container.querySelector('#remove-target-object')).toBeTruthy();
     expect(container.querySelector('#target-object-list')).toBeTruthy();
+    expect(container.querySelector('#target-object-list')?.closest('[data-target-inspector-panel="objects"]')).toBeTruthy();
     expect(container.querySelector('#target-text-value')).toBeTruthy();
+    expect(container.querySelector('#target-text-value')?.closest('[data-target-inspector-panel="text"]')).toBeTruthy();
+    expect(container.querySelector('.target-text-advanced')?.hasAttribute('open')).toBe(false);
     expect(container.querySelector('#target-text-language')).toBeTruthy();
     expect(container.querySelector('#target-text-language option[value="english"]')).toBeTruthy();
     expect(container.querySelector('#target-text-language option[value="german"]')).toBeTruthy();
@@ -56,6 +69,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-text-preset')).toBeTruthy();
     expect(container.querySelector('#target-text-preset option[value="gold-bevel"]')).toBeTruthy();
     expect(container.querySelector('#target-text-fill-mode')).toBeTruthy();
+    expect(container.querySelector('#target-text-fill-mode')?.closest('.target-text-advanced')).toBeTruthy();
     expect(container.querySelector('#target-text-fill-mode option[value="solid"]')).toBeTruthy();
     expect(container.querySelector('#target-text-fill-mode option[value="gradient"]')).toBeTruthy();
     expect(container.querySelector('#target-text-color')).toBeTruthy();
@@ -70,6 +84,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-text-gloss')).toBeTruthy();
     expect(container.querySelector('#add-target-text')).toBeTruthy();
     expect(container.querySelector('#target-scale')).toBeTruthy();
+    expect(container.querySelector('#target-scale')?.closest('[data-target-inspector-panel="transform"]')).toBeTruthy();
     expect(container.querySelector('#target-scale-x')).toBeNull();
     expect(container.querySelector('#target-scale-y')).toBeNull();
     expect(container.querySelector('#target-scale-z')).toBeNull();
@@ -109,6 +124,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
     expect(container.querySelector('#save-image-target')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();
+    expect(container.querySelector('#saved-image-target-list')?.closest('[data-target-inspector-panel="target"]')).toBeTruthy();
     expect(html).toContain('id="reload-cloudflare-models"');
     expect(html).toContain('Marker AR studio');
     expect(html).toContain('Web-AR Worker');

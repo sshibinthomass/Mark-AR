@@ -526,6 +526,10 @@ h1 {
 
 .target-workspace,
 .target-setup-fields,
+.target-inspector-card,
+.target-inspector-panels,
+.target-inspector-panel,
+.target-text-quick-grid,
 .object-action-row,
 .target-text-panel,
 .target-text-options,
@@ -555,17 +559,14 @@ h1 {
 }
 
 .target-workspace {
-  grid-template-areas:
-    "preview setup"
-    "preview controls"
-    "preview saved";
+  grid-template-areas: "preview inspector";
   grid-template-columns: minmax(450px, 1fr) minmax(340px, 410px);
   gap: 14px;
   align-items: start;
 }
 
 .target-setup-card {
-  grid-area: setup;
+  grid-area: inspector;
 }
 
 .target-controls-card {
@@ -581,6 +582,59 @@ h1 {
 .saved-target-card {
   gap: 12px;
   padding: 14px;
+}
+
+.target-inspector-card {
+  max-height: calc(100svh - 104px);
+  overflow: hidden;
+}
+
+.target-inspector-head {
+  min-width: 0;
+}
+
+.target-inspector-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 8px;
+  padding: 5px;
+  background: rgba(9, 73, 76, 0.06);
+}
+
+.target-inspector-tabs button {
+  min-height: 34px;
+  border-color: transparent;
+  padding: 6px 8px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.target-inspector-tabs button[aria-selected="true"] {
+  border-color: rgba(15, 118, 110, 0.24);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.target-inspector-panels {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.target-inspector-panel {
+  gap: 12px;
+  min-width: 0;
+}
+
+.target-inspector-panel[hidden] {
+  display: none;
 }
 
 .target-setup-fields {
@@ -605,13 +659,34 @@ h1 {
 
 .target-text-panel {
   gap: 9px;
+}
+
+.target-text-quick-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.target-text-quick-grid label:first-child {
+  grid-column: 1 / -1;
+}
+
+.target-text-advanced {
   border-top: 1px solid var(--line);
-  padding-top: 11px;
+  padding-top: 10px;
+}
+
+.target-text-advanced summary {
+  cursor: pointer;
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .target-text-options {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  padding-top: 10px;
 }
 
 .target-setup-card input[type="text"],
@@ -630,8 +705,16 @@ h1 {
 }
 
 .target-text-color-control input[type="color"] {
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
+  max-width: 72px;
+  justify-self: end;
   padding: 4px;
+}
+
+.target-style-swatch-field {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .target-text-options input[type="range"] {
@@ -647,6 +730,17 @@ h1 {
 .target-page .file-control input {
   min-height: 40px;
   padding: 6px 8px;
+}
+
+.target-save-strip,
+.saved-target-compact {
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+
+.saved-target-compact {
+  display: grid;
+  gap: 10px;
 }
 
 .file-control input::file-selector-button {
@@ -1215,10 +1309,8 @@ button:disabled {
   .target-workspace {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "setup"
       "preview"
-      "controls"
-      "saved";
+      "inspector";
   }
 
   .target-preview-shell {
@@ -1227,8 +1319,17 @@ button:disabled {
   }
 
   .target-preview-stage {
-    height: clamp(320px, 58svh, 480px);
+    height: clamp(300px, 46svh, 440px);
     min-height: 0;
+  }
+
+  .target-inspector-card {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .target-inspector-panels {
+    overflow: visible;
   }
 
   .target-camera-gizmo {
@@ -1263,6 +1364,7 @@ button:disabled {
   .button-row,
   .object-action-row,
   .target-text-options,
+  .target-text-quick-grid,
   .placement-grid {
     grid-template-columns: 1fr;
   }
@@ -1289,6 +1391,16 @@ button:disabled {
   .target-controls-card,
   .saved-target-card {
     padding: 12px;
+  }
+
+  .target-inspector-tabs {
+    grid-template-columns: repeat(4, minmax(68px, 1fr));
+    gap: 4px;
+  }
+
+  .target-inspector-tabs button {
+    padding-inline: 5px;
+    font-size: 11px;
   }
 
   .target-page .button-row,
