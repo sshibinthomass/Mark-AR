@@ -36,12 +36,13 @@ describe('renderAppShell', () => {
       [...container.querySelectorAll<HTMLElement>('[data-target-inspector-tab]')].map((tab) => (
         tab.dataset.targetInspectorTab
       )),
-    ).toEqual(['target', 'objects', 'text', 'transform']);
+    ).toEqual(['target', 'objects', 'text', 'transform', 'animation']);
     expect(container.querySelector('[data-target-inspector-tab="target"]')?.getAttribute('aria-selected')).toBe('true');
     expect(container.querySelector('[data-target-inspector-panel="target"]')?.hasAttribute('hidden')).toBe(false);
     expect(container.querySelector('[data-target-inspector-panel="objects"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('[data-target-inspector-panel="text"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('[data-target-inspector-panel="transform"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-target-inspector-panel="animation"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('#add-target-object')).toBeTruthy();
     expect(container.querySelector('#remove-target-object')).toBeTruthy();
     expect(container.querySelector('#target-object-list')).toBeTruthy();
@@ -115,12 +116,17 @@ describe('renderAppShell', () => {
     expect(cameraNudges.every((button) => button.textContent?.trim() === '')).toBe(true);
     expect(container.querySelector('[data-camera-preset]')).toBeNull();
     expect(container.querySelector('#target-spin-axis')).toBeTruthy();
+    expect(container.querySelector('#target-spin-axis')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
     expect(container.querySelector('#target-spin-speed')).toBeTruthy();
+    expect(container.querySelector('#target-spin-speed')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
     expect(container.querySelector('#target-spin-axis option[value="y"]')?.hasAttribute('selected')).toBe(true);
     expect((container.querySelector('#target-spin-speed') as HTMLInputElement).value).toBe('0');
     expect(container.querySelector('#target-bob-height')).toBeTruthy();
+    expect(container.querySelector('#target-bob-height')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
     expect(container.querySelector('#target-bob-speed')).toBeTruthy();
+    expect(container.querySelector('#target-bob-speed')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
     expect(container.querySelector('#reset-target-animation')).toBeTruthy();
+    expect(container.querySelector('#reset-target-animation')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
     expect(container.querySelector('#save-image-target')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();

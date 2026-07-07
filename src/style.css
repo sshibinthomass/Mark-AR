@@ -595,7 +595,7 @@ h1 {
 
 .target-inspector-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   border: 1px solid rgba(15, 118, 110, 0.16);
   border-radius: 8px;
@@ -606,11 +606,11 @@ h1 {
 .target-inspector-tabs button {
   min-height: 34px;
   border-color: transparent;
-  padding: 6px 8px;
+  padding: 6px 5px;
   color: var(--muted);
   background: transparent;
   box-shadow: none;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .target-inspector-tabs button[aria-selected="true"] {
@@ -1418,7 +1418,7 @@ button:disabled {
   }
 
   .target-inspector-tabs {
-    grid-template-columns: repeat(4, minmax(68px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
     gap: 4px;
   }
 

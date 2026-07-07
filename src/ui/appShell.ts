@@ -201,6 +201,7 @@ export function renderAppShell(markers: MarkerSpec[]): string {
               <button type="button" id="target-tab-objects" role="tab" data-target-inspector-tab="objects" aria-selected="false" aria-controls="target-inspector-objects">Objects</button>
               <button type="button" id="target-tab-text" role="tab" data-target-inspector-tab="text" aria-selected="false" aria-controls="target-inspector-text">Text</button>
               <button type="button" id="target-tab-transform" role="tab" data-target-inspector-tab="transform" aria-selected="false" aria-controls="target-inspector-transform">Transform</button>
+              <button type="button" id="target-tab-animation" role="tab" data-target-inspector-tab="animation" aria-selected="false" aria-controls="target-inspector-animation">Animation</button>
             </div>
             <div class="target-inspector-panels">
               <section id="target-inspector-target" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="target" aria-labelledby="target-tab-target">
@@ -393,6 +394,13 @@ export function renderAppShell(markers: MarkerSpec[]): string {
                     <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
                     <label><span>Look height</span><input id="target-camera-target" type="range" min="-0.5" max="1.5" step="0.02" value="0" /></label>
                   </div>
+                </div>
+              </section>
+
+              <section id="target-inspector-animation" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="animation" aria-labelledby="target-tab-animation" hidden>
+                <div class="tool-card-head target-controls-head">
+                  <p class="eyebrow">Animate object</p>
+                  <p>Selected object motion</p>
                 </div>
                 <div class="control-section">
                   <p class="eyebrow">Animation</p>
