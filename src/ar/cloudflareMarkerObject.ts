@@ -5,15 +5,10 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
-  TextureLoader,
   Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type {
-  CloudflareModelOption,
-  ProcessedBaseImage,
-} from '../app/cloudflareModels';
-import { processedImageDataUrl } from '../app/cloudflareModels';
+import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { normalizeAnimation } from '../app/imageTargetAnimation';
 import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
@@ -37,7 +32,6 @@ export type CloudflarePlacedObject = CloudflareModelPlacedObject | LocalTextTarg
 
 export type CloudflarePlacedAsset = {
   model?: CloudflareModelOption;
-  baseImage?: ProcessedBaseImage;
   placement?: ImageTargetPlacement;
   objects?: CloudflarePlacedObject[];
   loadModelGroup?: ModelGroupLoader;
@@ -48,17 +42,13 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
   const group = new Group();
   group.name = 'cloudflare-model-object';
 
-  if (asset.baseImage) {
-    group.add(createProcessedBasePlane(asset.baseImage));
-  }
-
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
   const createTextObject = asset.createTextObject ?? createTextObject3D;
   const placedObjects = createPlacedObjects(asset);
   const animatedRoots = placedObjects.map((object, index) => {
     const modelRoot = new Group();
     modelRoot.name = modelRootName(object, index, placedObjects.length);
-    modelRoot.position.z = asset.baseImage ? 0.12 : 0.04;
+    modelRoot.position.z = 0.04;
     if (object.placement) {
       const placement = normalizePlacement(object.placement);
       modelRoot.position.set(placement.offsetX, placement.offsetY, placement.height);
@@ -160,19 +150,6 @@ async function loadGltfModelGroup(modelUrl: string): Promise<Group> {
   wrapper.rotation.x = Math.PI / 2;
   wrapper.add(normalizeGltfScene(gltf.scene));
   return wrapper;
-}
-
-function createProcessedBasePlane(baseImage: ProcessedBaseImage): Mesh {
-  const texture = new TextureLoader().load(processedImageDataUrl(baseImage));
-  const material = new MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    side: DoubleSide,
-  });
-  const plane = new Mesh(new PlaneGeometry(0.94, 0.62), material);
-  plane.name = 'processed-base-plane';
-  plane.position.z = 0.01;
-  return plane;
 }
 
 function normalizeGltfScene(scene: Group): Group {

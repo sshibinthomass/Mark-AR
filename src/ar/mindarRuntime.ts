@@ -1,10 +1,7 @@
 import { AmbientLight, Clock, DirectionalLight, Group, Scene } from 'three';
 import { createMarkerObject, type MarkerObject } from './arObjects';
 import { normalizeMindARCameraLayers } from './cameraLayers';
-import {
-  createCloudflareMarkerObject,
-  type CloudflarePlacedAsset,
-} from './cloudflareMarkerObject';
+import { createCloudflareMarkerObject } from './cloudflareMarkerObject';
 import { type MarkerSpec } from './markerCatalog';
 import {
   createRuntimeMarkerTargets,
@@ -51,7 +48,6 @@ export type MarkerARSession = {
 
 export type StartMarkerARHooks = {
   targets?: RuntimeMarkerTarget[];
-  cloudflareAsset?: CloudflarePlacedAsset;
   onCompileProgress?: (percent: number) => void;
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void;
   onReady?: () => void;
@@ -66,13 +62,11 @@ export function setupMarkerAnchors(
   mindarThree: Pick<MindARThreeInstance, 'addAnchor' | 'scene'>,
   targets: RuntimeMarkerTarget[] | MarkerSpec[] = createRuntimeMarkerTargets(),
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
-  fallbackCloudflareAsset?: CloudflarePlacedAsset,
 ): MarkerObject[] {
   return normalizeAnchorTargets(targets).map((target) => {
     const anchor = mindarThree.addAnchor(target.marker.targetIndex);
-    const cloudflareAsset = target.cloudflareAsset ?? fallbackCloudflareAsset;
-    const markerObject = cloudflareAsset
-      ? createCloudflareMarkerObject(cloudflareAsset)
+    const markerObject = target.cloudflareAsset
+      ? createCloudflareMarkerObject(target.cloudflareAsset)
       : createMarkerObject(target.marker.object);
 
     anchor.group.add(markerObject.group);
@@ -100,15 +94,12 @@ export async function startMarkerAR(
   hooks: StartMarkerARHooks = {},
 ): Promise<MarkerARSession> {
   const { Compiler, MindARThree } = await loadMindARModules();
-  const targets = hooks.targets ?? createRuntimeMarkerTargets({
-    selectedModel: hooks.cloudflareAsset?.model,
-    processedBaseImage: hooks.cloudflareAsset?.baseImage,
-  });
+  const targets = hooks.targets ?? createRuntimeMarkerTargets();
   const compiledTargets = await compileMarkerTargets(
     targets.map((target) => target.marker),
     {
-    Compiler,
-    onProgress: hooks.onCompileProgress,
+      Compiler,
+      onProgress: hooks.onCompileProgress,
     },
   );
 
@@ -122,7 +113,6 @@ export async function startMarkerAR(
     mindarThree,
     targets,
     hooks.onMarkerVisibility,
-    hooks.cloudflareAsset,
   );
 
   let active = true;
@@ -161,7 +151,6 @@ function setupScene(
   mindarThree: MindARThreeInstance,
   targets: RuntimeMarkerTarget[],
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
-  cloudflareAsset?: CloudflarePlacedAsset,
 ): MarkerObject[] {
   const ambient = new AmbientLight(0xffffff, 1.7);
   const directional = new DirectionalLight(0xffffff, 1.2);
@@ -169,7 +158,7 @@ function setupScene(
   mindarThree.scene.add(ambient);
   mindarThree.scene.add(directional);
 
-  return setupMarkerAnchors(mindarThree, targets, onMarkerVisibility, cloudflareAsset);
+  return setupMarkerAnchors(mindarThree, targets, onMarkerVisibility);
 }
 
 async function loadMindARModules(): Promise<MindARModules> {

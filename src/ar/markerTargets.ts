@@ -1,8 +1,4 @@
 import type { CloudImageTarget } from '../app/cloudImageTargets';
-import type {
-  CloudflareModelOption,
-  ProcessedBaseImage,
-} from '../app/cloudflareModels';
 import type { LocalImageTargetDraft } from '../app/targetEditorObjects';
 import { AR_MARKERS, type MarkerSpec } from './markerCatalog';
 import type { CloudflarePlacedAsset } from './cloudflareMarkerObject';
@@ -16,27 +12,15 @@ type CreateRuntimeMarkerTargetsInput = {
   builtInMarkers?: MarkerSpec[];
   cloudTargets?: CloudImageTarget[];
   draftTarget?: LocalImageTargetDraft;
-  selectedModel?: CloudflareModelOption;
-  processedBaseImage?: ProcessedBaseImage;
 };
 
 export function createRuntimeMarkerTargets({
   builtInMarkers = AR_MARKERS,
   cloudTargets = [],
   draftTarget,
-  selectedModel,
-  processedBaseImage,
 }: CreateRuntimeMarkerTargetsInput = {}): RuntimeMarkerTarget[] {
   const builtInTargets = builtInMarkers.map((marker, index) => ({
     marker: { ...marker, targetIndex: index },
-    ...(selectedModel
-      ? {
-          cloudflareAsset: {
-            model: selectedModel,
-            ...(processedBaseImage ? { baseImage: processedBaseImage } : {}),
-          },
-        }
-      : {}),
   }));
 
   const cloudRuntimeTargets = cloudTargets.map((target, index) => ({

@@ -12,24 +12,8 @@ export type CloudflareModelOption = {
   updatedAt?: string;
 };
 
-export type CapturedImagePayload = {
-  imageBase64: string;
-  imageMimeType: string;
-};
-
-export type ProcessedBaseImage = CapturedImagePayload & {
-  targetObject?: string | null;
-};
-
 type LoadCloudflareModelsInput = {
   apiUrl?: string;
-  authToken?: string | null;
-  fetchImpl?: typeof fetch;
-};
-
-type ExtractProcessedBaseImageInput = CapturedImagePayload & {
-  apiUrl?: string;
-  targetObject?: string;
   authToken?: string | null;
   fetchImpl?: typeof fetch;
 };
@@ -48,13 +32,6 @@ type WorkerGeneratedModelEntry = {
 
 type WorkerGeneratedModelsResponse = {
   models?: WorkerGeneratedModelEntry[];
-  error?: string;
-};
-
-type WorkerExtractImageResponse = {
-  image_base64?: string;
-  image_mime_type?: string;
-  target_object?: string | null;
   error?: string;
 };
 
@@ -90,46 +67,6 @@ export async function loadCloudflareModelOptions({
   return dedupeModelsByUrl([...STATIC_CLOUDFLARE_MODELS, ...workerModels]);
 }
 
-export async function extractProcessedBaseImage({
-  apiUrl = DEFAULT_GENERATE_MODEL_API_URL,
-  imageBase64,
-  imageMimeType,
-  targetObject,
-  authToken,
-  fetchImpl = fetch,
-}: ExtractProcessedBaseImageInput): Promise<ProcessedBaseImage> {
-  if (!authToken) {
-    throw new Error('Sign in before processing a base image.');
-  }
-
-  const response = await fetchImpl(extractImageUrlFromGenerateUrl(apiUrl), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${authToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(createImageRequestBody(imageBase64, imageMimeType, targetObject)),
-  });
-  const body = (await response.json()) as WorkerExtractImageResponse;
-
-  if (!response.ok) {
-    throw new Error(body.error ?? `Image extraction failed with HTTP ${response.status}.`);
-  }
-  if (!body.image_base64 || !body.image_mime_type) {
-    throw new Error('Worker response did not include an extracted image.');
-  }
-
-  return {
-    imageBase64: body.image_base64,
-    imageMimeType: body.image_mime_type,
-    targetObject: body.target_object ?? null,
-  };
-}
-
-export function processedImageDataUrl(image: CapturedImagePayload): string {
-  return `data:${image.imageMimeType};base64,${image.imageBase64}`;
-}
-
 async function listGeneratedModels({
   apiUrl,
   authToken,
@@ -160,26 +97,6 @@ async function listGeneratedModels({
       ...(model.completed_at ? { createdAt: model.completed_at } : {}),
       ...(model.updated_at ? { updatedAt: model.updated_at } : {}),
     }));
-}
-
-function createImageRequestBody(
-  imageBase64: string,
-  imageMimeType: string,
-  targetObject?: string,
-): Record<string, string> {
-  const body: Record<string, string> = {
-    image_base64: imageBase64,
-    image_mime_type: imageMimeType,
-  };
-  const trimmedTarget = targetObject?.trim();
-  if (trimmedTarget) {
-    body.target_object = trimmedTarget;
-  }
-  return body;
-}
-
-function extractImageUrlFromGenerateUrl(apiUrl: string): string {
-  return apiUrl.replace(/\/generate-3d\/?$/, '/extract-image');
 }
 
 function dedupeModelsByUrl(models: CloudflareModelOption[]): CloudflareModelOption[] {

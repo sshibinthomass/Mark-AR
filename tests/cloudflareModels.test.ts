@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  extractProcessedBaseImage,
   loadCloudflareModelOptions,
 } from '../src/app/cloudflareModels';
 
@@ -46,43 +45,4 @@ describe('Cloudflare model client', () => {
     });
   });
 
-  it('sends captured images to the Worker extraction route with the auth token', async () => {
-    const fetchImpl = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          image_base64: 'processed-image',
-          image_mime_type: 'image/png',
-          target_object: 'Chair',
-        }),
-        { status: 200 },
-      );
-    });
-
-    const result = await extractProcessedBaseImage({
-      apiUrl: 'https://worker.example/generate-3d',
-      imageBase64: 'raw-image',
-      imageMimeType: 'image/jpeg',
-      targetObject: ' Chair ',
-      authToken: 'token-123',
-      fetchImpl,
-    });
-
-    expect(fetchImpl).toHaveBeenCalledWith('https://worker.example/extract-image', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer token-123',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        image_base64: 'raw-image',
-        image_mime_type: 'image/jpeg',
-        target_object: 'Chair',
-      }),
-    });
-    expect(result).toEqual({
-      imageBase64: 'processed-image',
-      imageMimeType: 'image/png',
-      targetObject: 'Chair',
-    });
-  });
 });

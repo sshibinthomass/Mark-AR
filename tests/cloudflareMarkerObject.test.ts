@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { Group, Mesh } from 'three';
+import { Group } from 'three';
 import { createCloudflareMarkerObject } from '../src/ar/cloudflareMarkerObject';
 
 describe('createCloudflareMarkerObject', () => {
-  it('places the processed base plane and loads the selected Cloudflare model above it', async () => {
+  it('loads the selected Cloudflare model into a marker object', async () => {
     const loadedModel = new Group();
     loadedModel.name = 'loaded-chair';
 
@@ -13,25 +13,20 @@ describe('createCloudflareMarkerObject', () => {
         label: 'Chair',
         url: 'https://worker.example/models/chair.glb',
       },
-      baseImage: {
-        imageBase64: 'processed-image',
-        imageMimeType: 'image/png',
-      },
       loadModelGroup: async () => loadedModel,
     });
 
     await Promise.resolve();
 
-    const basePlane = markerObject.group.getObjectByName('processed-base-plane');
     const modelRoot = markerObject.group.getObjectByName('cloudflare-model-root') as Group;
 
     expect(markerObject.group.name).toBe('cloudflare-model-object');
-    expect(basePlane).toBeInstanceOf(Mesh);
+    expect(markerObject.group.getObjectByName('processed-base-plane')).toBeUndefined();
     expect(modelRoot.children).toContain(loadedModel);
     expect(modelRoot.position.z).toBeGreaterThan(0);
   });
 
-  it('loads multiple placed Cloudflare models above one base plane', async () => {
+  it('loads multiple placed Cloudflare models', async () => {
     const chairModel = new Group();
     chairModel.name = 'loaded-chair';
     const plantModel = new Group();
@@ -59,10 +54,6 @@ describe('createCloudflareMarkerObject', () => {
           placement: { scale: 0.8, offsetX: -0.2, offsetY: 0.1, height: 0.08, rotationX: -15, rotationY: 0, rotationZ: 45 },
         },
       ],
-      baseImage: {
-        imageBase64: 'processed-image',
-        imageMimeType: 'image/png',
-      },
       loadModelGroup: async () => loadedModels.shift() ?? new Group(),
     });
 
@@ -72,7 +63,7 @@ describe('createCloudflareMarkerObject', () => {
     const chairRoot = markerObject.group.getObjectByName('cloudflare-model-root-chair-object') as Group;
     const plantRoot = markerObject.group.getObjectByName('cloudflare-model-root-plant-object') as Group;
 
-    expect(markerObject.group.getObjectByName('processed-base-plane')).toBeInstanceOf(Mesh);
+    expect(markerObject.group.getObjectByName('processed-base-plane')).toBeUndefined();
     expect(chairRoot.children).toContain(chairModel);
     expect(chairRoot.position.x).toBeCloseTo(0.15);
     expect(chairRoot.position.y).toBeCloseTo(-0.2);
