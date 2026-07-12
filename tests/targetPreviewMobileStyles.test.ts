@@ -37,7 +37,6 @@ describe('target preview mobile styles', () => {
     const mobile = mediaBlock('(max-width: 620px)');
     const previewControls = cssRule(mobile, '.target-preview-controls');
     const transformToolbar = cssRule(mobile, '.target-transform-toolbar');
-    const cameraGizmo = cssRule(mobile, '.target-camera-gizmo');
 
     expect(previewControls).toContain('position: static');
     expect(previewControls).toContain('width: 100%');
@@ -45,11 +44,6 @@ describe('target preview mobile styles', () => {
     expect(previewControls).toContain('margin-bottom: 8px');
     expect(transformToolbar).toContain('flex-direction: row');
     expect(transformToolbar).toContain('width: 100%');
-    expect(cameraGizmo).toContain('position: absolute');
-    expect(cameraGizmo).toContain('top: auto');
-    expect(cameraGizmo).toContain('bottom: calc(8px + 92px)');
-    expect(cameraGizmo).toContain('right: 10px');
-    expect(cameraGizmo).toContain('width: max-content');
-    expect(cameraGizmo).toContain('height: max-content');
+    expect(mobile).not.toContain('.target-camera-gizmo');
   });
 });

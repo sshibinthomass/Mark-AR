@@ -36,4 +36,17 @@ describe('target inspector styles', () => {
     expect(transformToolbar).toContain('align-items: stretch');
     expect(transformToolbarButton).toContain('flex: 1 1 0');
   });
+
+  it('keeps target delete buttons compact and icon-only', () => {
+    const deleteButton = cssRule('.target-page .icon-delete-button');
+    const icon = cssRule('.trash-icon');
+
+    expect(deleteButton).toContain('display: inline-grid');
+    expect(deleteButton).toContain('place-items: center');
+    expect(deleteButton).toContain('width: 42px');
+    expect(deleteButton).toContain('min-width: 42px');
+    expect(deleteButton).toContain('padding: 0');
+    expect(icon).toContain('width: 16px');
+    expect(icon).toContain('height: 18px');
+  });
 });

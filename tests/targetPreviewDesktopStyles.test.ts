@@ -9,11 +9,13 @@ function cssRule(source: string, selector: string): string {
 }
 
 describe('target preview desktop styles', () => {
-  it('keeps the desktop camera controls clear of the orbit arrows', () => {
+  it('uses the available desktop preview header after removing orbit arrows', () => {
     const previewControls = cssRule(css, '.target-preview-controls');
 
     expect(previewControls).toContain('right: auto');
-    expect(previewControls).toContain('width: min(520px, calc(100% - 170px))');
+    expect(previewControls).toContain('width: calc(100% - 28px)');
+    expect(previewControls).not.toContain('520px');
+    expect(previewControls).not.toContain('170px');
     expect(previewControls).toContain('grid-template-columns: max-content minmax(0, 1fr)');
   });
 });
