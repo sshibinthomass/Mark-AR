@@ -77,10 +77,10 @@ import {
   isAuthenticated,
   type AuthUiState,
 } from './ui/authUi';
+import { AuthNavigation } from './ui/authNavigation';
 import { renderAppShell } from './ui/appShell';
 import { renderTargetModelRail } from './ui/modelRail';
 import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
-import { activateAccessibleRoute } from './ui/pageRouter';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectListItem } from './ui/targetObjectList';
 import { decorateDeleteIconButton } from './ui/deleteIconButton';
@@ -151,7 +151,7 @@ let authToken = loadWorkerAuthToken();
 let authUiState: AuthUiState = authToken
   ? { status: 'checking', message: 'Checking your saved session…' }
   : { status: 'signed-out', message: 'Sign in to use Image Targets.' };
-let pendingProtectedRoute: AppRoute | undefined;
+const authNavigation = new AuthNavigation();
 let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
@@ -176,7 +176,7 @@ shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link
     if (isAuthenticated(authUiState)) {
       return;
     }
-    pendingProtectedRoute = 'targets';
+    authNavigation.remember('targets');
     setAuthUiState({
       ...authUiState,
       message: authUiState.status === 'checking'
@@ -254,7 +254,7 @@ workerLoginForm.addEventListener('submit', async (event) => {
 workerLogoutButton.addEventListener('click', async () => {
   authToken = null;
   clearWorkerAuthToken();
-  pendingProtectedRoute = undefined;
+  authNavigation.clear();
   setAuthUiState({ status: 'signed-out', message: 'Signed out. Sign in to use Image Targets.' });
   if (shell.dataset.activePage === 'targets') {
     window.location.hash = hrefForRoute('account');
@@ -472,12 +472,11 @@ function setAuthUiState(state: AuthUiState): void {
 }
 
 function activateRequestedRoute(requestedRoute: AppRoute): void {
-  const result = activateAccessibleRoute(shell, requestedRoute, authUiState);
+  const result = authNavigation.activate(shell, requestedRoute, authUiState);
   if (!result.blocked) {
     return;
   }
 
-  pendingProtectedRoute = requestedRoute;
   setAuthUiState({
     ...authUiState,
     message: authUiState.status === 'checking'
@@ -490,12 +489,10 @@ function activateRequestedRoute(requestedRoute: AppRoute): void {
 }
 
 function restorePendingProtectedRoute(): void {
-  if (!pendingProtectedRoute || !isAuthenticated(authUiState)) {
+  const route = authNavigation.takePending(authUiState);
+  if (!route) {
     return;
   }
-
-  const route = pendingProtectedRoute;
-  pendingProtectedRoute = undefined;
   if (window.location.hash === hrefForRoute(route)) {
     activateRequestedRoute(route);
     return;
