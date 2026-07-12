@@ -1,3 +1,5 @@
+import { loginIntroMessage, signupIntroMessage } from '../app/authMessages';
+
 export type AuthFormMode = 'login' | 'signup';
 
 export function applyAuthFormMode(root: HTMLElement, mode: AuthFormMode): void {
@@ -31,6 +33,9 @@ export function applyAuthFormMode(root: HTMLElement, mode: AuthFormMode): void {
   }
 
   setText(root, '[data-auth-form-heading]', isSignup ? 'Create your Marker AR account' : 'Continue to Marker AR studio');
+  if (!root.dataset.authState || root.dataset.authState === 'signed-out') {
+    setText(root, '[data-auth-mode-help]', isSignup ? signupIntroMessage : loginIntroMessage);
+  }
   setText(root, '[data-auth-submit-label]', isSignup ? 'Create account' : 'Sign in');
 }
 

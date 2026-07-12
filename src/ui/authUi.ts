@@ -1,4 +1,5 @@
 import type { AuthSession } from '../app/webArAuth';
+import { pendingApprovalMessage, protectedTargetsMessage, signupPendingMessage } from '../app/authMessages';
 import type { AppRoute } from './pageRoutes';
 
 export type AuthUiState =
@@ -17,7 +18,7 @@ export type LoginResult = {
 
 export function resolveLoginResult(session: AuthSession): LoginResult {
   if (session.user.status !== 'active') {
-    throw new Error('Account pending admin approval.');
+    throw new Error(pendingApprovalMessage);
   }
   if (!session.token) {
     throw new Error('Worker did not return a session token.');
@@ -37,7 +38,7 @@ export function resolveSignupResult(session: AuthSession): SignupResult {
     return {
       kind: 'pending',
       email: session.user.email,
-      message: 'Account created. An administrator must approve it before you can sign in.',
+      message: signupPendingMessage,
     };
   }
 
@@ -91,7 +92,7 @@ export function applyAuthUi(root: HTMLElement, state: AuthUiState): void {
     link.href = '#/account';
     link.setAttribute('aria-disabled', 'true');
     link.dataset.authLocked = 'true';
-    link.title = state.status === 'checking' ? 'Checking your session' : 'Sign in to use Image Targets';
+    link.title = state.status === 'checking' ? 'Checking your session' : protectedTargetsMessage;
   });
 }
 

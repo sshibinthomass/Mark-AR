@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { loginIntroMessage, signupIntroMessage } from '../src/app/authMessages';
 import { applyAuthFormMode } from '../src/ui/authFormMode';
 
 describe('applyAuthFormMode', () => {
@@ -17,6 +18,7 @@ describe('applyAuthFormMode', () => {
     expect(password?.autocomplete).toBe('current-password');
     expect(root.querySelector('[data-auth-submit-label]')?.textContent).toBe('Sign in');
     expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Continue to Marker AR studio');
+    expect(root.querySelector('[data-auth-mode-help]')?.textContent).toBe(loginIntroMessage);
     const loginMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="login"]');
     const signupMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="signup"]');
     expect(loginMode?.getAttribute('aria-pressed')).toBe('true');
@@ -41,6 +43,7 @@ describe('applyAuthFormMode', () => {
     expect(password?.minLength).toBe(8);
     expect(root.querySelector('[data-auth-submit-label]')?.textContent).toBe('Create account');
     expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Create your Marker AR account');
+    expect(root.querySelector('[data-auth-mode-help]')?.textContent).toBe(signupIntroMessage);
     const loginMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="login"]');
     const signupMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="signup"]');
     expect(loginMode?.getAttribute('aria-pressed')).toBe('false');
@@ -65,6 +68,20 @@ describe('applyAuthFormMode', () => {
     expect(email.value).toBe('maker@example.com');
     expect(password.value).toBe('maker-password-123');
   });
+
+  it('does not overwrite a non-signed-out live auth status', () => {
+    const root = renderFormFixture();
+    root.dataset.authState = 'checking';
+    const status = root.querySelector<HTMLElement>('#worker-status');
+    if (!status) {
+      throw new Error('Fixture status missing');
+    }
+    status.textContent = 'Checking your saved session...';
+
+    applyAuthFormMode(root, 'login');
+
+    expect(status.textContent).toBe('Checking your saved session...');
+  });
 });
 
 function renderFormFixture(): HTMLElement {
@@ -73,6 +90,7 @@ function renderFormFixture(): HTMLElement {
     <button data-auth-mode="login" aria-pressed="true">Sign in</button>
     <button data-auth-mode="signup" aria-pressed="false">Create account</button>
     <h3 data-auth-form-heading>Continue to Marker AR studio</h3>
+    <p id="worker-status" data-auth-mode-help></p>
     <label data-auth-name-field hidden><input id="worker-name" disabled /></label>
     <input id="worker-email" />
     <input id="worker-password" type="password" minlength="8" autocomplete="current-password" />

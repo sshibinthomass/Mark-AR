@@ -1,6 +1,5 @@
+import { duplicateAccountMessage } from './authMessages';
 import { isAuthRequestError } from './webArAuth';
-
-export const existingAccountMessage = 'Account already exists. Sign in with that email, or use a different email to create a new account.';
 
 export function shouldRecoverExistingAccount(error: unknown): boolean {
   return isAuthRequestError(error, 409);
@@ -20,6 +19,6 @@ export async function recoverExistingAccount(
   }
 
   setFormMode('login');
-  setSignedOutMessage?.(existingAccountMessage);
+  setSignedOutMessage?.(duplicateAccountMessage);
   return true;
 }

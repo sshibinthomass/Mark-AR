@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { duplicateAccountMessage } from '../src/app/authMessages';
 import { AuthRequestError } from '../src/app/webArAuth';
 import { recoverExistingAccount, shouldRecoverExistingAccount } from '../src/app/authRecovery';
 
@@ -21,7 +22,7 @@ describe('shouldRecoverExistingAccount', () => {
 
     expect(recovered).toBe(true);
     expect(setFormMode).toHaveBeenCalledWith('login');
-    expect(setSignedOutMessage).toHaveBeenCalledWith('Account already exists. Sign in with that email, or use a different email to create a new account.');
+    expect(setSignedOutMessage).toHaveBeenCalledWith(duplicateAccountMessage);
   });
 
   it('does not change modes or retry login for other signup errors', async () => {

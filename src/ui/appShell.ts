@@ -391,7 +391,7 @@ export function renderAppShell(): string {
             <div class="tool-card-head auth-card-head">
               <p class="eyebrow">Web-AR account</p>
               <h3 data-auth-form-heading>Continue to Marker AR studio</h3>
-              <p id="worker-status" aria-live="polite">Sign in to use Image Targets.</p>
+              <p id="worker-status" data-auth-mode-help aria-live="polite">Sign in with an approved account to use Image Targets.</p>
             </div>
 
             <div data-auth-panel="signed-out">
@@ -449,7 +449,7 @@ export function renderAppShell(): string {
 
 function renderRouteLink(route: AppRoute, label: string): string {
   if (route === 'targets') {
-    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in to use Image Targets">${label}</a>`;
+    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in with an approved account to use Image Targets">${label}</a>`;
   }
   return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${label}</a>`;
 }
@@ -469,7 +469,7 @@ function renderPageHeader(title: string, text: string): string {
 
 function renderModeCard(card: ModeCard): string {
   const protectedAttributes = card.route === 'targets'
-    ? `href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in to use Image Targets"`
+    ? `href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in with an approved account to use Image Targets"`
     : `href="${hrefForRoute(card.route)}"`;
   const actionAttribute = card.route === 'targets'
     ? ' data-auth-protected-label'

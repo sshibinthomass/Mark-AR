@@ -7,10 +7,12 @@ import {
   resolveAccessibleRoute,
   type AuthUiState,
 } from '../src/ui/authUi';
+import { pendingApprovalMessage } from '../src/app/authMessages';
+import { loginIntroMessage, protectedTargetsMessage, signupPendingMessage } from '../src/app/authMessages';
 
 const signedOut: AuthUiState = {
   status: 'signed-out',
-  message: 'Sign in to use Image Targets.',
+  message: loginIntroMessage,
 };
 
 const checking: AuthUiState = {
@@ -33,7 +35,7 @@ describe('auth UI state', () => {
         status: 'pending',
       },
       token: 'unexpected-token',
-    })).toThrow('Account pending admin approval.');
+    })).toThrow(pendingApprovalMessage);
   });
 
   it('accepts only an active token-bearing login', () => {
@@ -66,7 +68,7 @@ describe('auth UI state', () => {
     })).toEqual({
       kind: 'pending',
       email: 'maker@example.com',
-      message: 'Account created. An administrator must approve it before you can sign in.',
+      message: signupPendingMessage,
     });
   });
 
@@ -81,7 +83,7 @@ describe('auth UI state', () => {
     })).toEqual({
       kind: 'pending',
       email: 'maker@example.com',
-      message: 'Account created. An administrator must approve it before you can sign in.',
+      message: signupPendingMessage,
     });
   });
 
@@ -138,6 +140,7 @@ describe('auth UI state', () => {
     expect(targetLink?.getAttribute('href')).toBe('#/account');
     expect(targetLink?.getAttribute('aria-disabled')).toBe('true');
     expect(targetLink?.dataset.authLocked).toBe('true');
+    expect(targetLink?.title).toBe(protectedTargetsMessage);
     expect(root.querySelector('[data-auth-account-label]')?.textContent).toBe('Sign in');
     expect(root.querySelector('[data-auth-access-label]')?.textContent).toBe('Locked');
     expect(root.querySelector('[data-auth-protected-label]')?.textContent).toBe('Sign in to unlock');

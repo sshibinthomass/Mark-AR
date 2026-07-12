@@ -38,6 +38,12 @@ import {
   saveWorkerAuthToken,
   signupToWebArWorker,
 } from './app/webArAuth';
+import {
+  loginIntroMessage,
+  protectedTargetsMessage,
+  signupIntroMessage,
+  userFacingAuthErrorMessage,
+} from './app/authMessages';
 import { recoverExistingAccount } from './app/authRecovery';
 import {
   DEFAULT_TARGET_TEXT,
@@ -157,7 +163,7 @@ let session: MarkerARSession | undefined;
 let authToken = loadWorkerAuthToken();
 let authUiState: AuthUiState = authToken
   ? { status: 'checking', message: 'Checking your saved session…' }
-  : { status: 'signed-out', message: 'Sign in to use Image Targets.' };
+  : { status: 'signed-out', message: loginIntroMessage };
 const authNavigation = new AuthNavigation();
 let authFormMode: AuthFormMode = 'login';
 let cloudflareModels: CloudflareModelOption[] = [];
@@ -190,7 +196,7 @@ shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link
       ...authUiState,
       message: authUiState.status === 'checking'
         ? 'Checking your session before opening Image Targets…'
-        : 'Sign in to open Image Targets.',
+        : protectedTargetsMessage,
     });
   });
 });
@@ -205,8 +211,8 @@ authModeButtons.forEach((button) => {
     setAuthUiState({
       status: 'signed-out',
       message: mode === 'signup'
-        ? 'Create an account for administrator approval.'
-        : 'Sign in with an approved account.',
+        ? signupIntroMessage
+        : loginIntroMessage,
     });
     if (mode === 'signup') {
       workerNameInput.focus();
@@ -276,7 +282,7 @@ async function signInToWorker(message = 'Signing in…'): Promise<void> {
   } catch (error) {
     setAuthUiState({
       status: 'signed-out',
-      message: errorMessage(error, 'Unable to sign in'),
+      message: userFacingAuthErrorMessage(error, 'login'),
     });
   }
 }
@@ -286,7 +292,7 @@ workerLogoutButton.addEventListener('click', async () => {
   clearWorkerAuthToken();
   authNavigation.clear();
   setAuthFormMode('login');
-  setAuthUiState({ status: 'signed-out', message: 'Signed out. Sign in to use Image Targets.' });
+  setAuthUiState({ status: 'signed-out', message: `Signed out. ${loginIntroMessage}` });
   if (shell.dataset.activePage === 'targets') {
     window.location.hash = hrefForRoute('account');
   }
@@ -332,7 +338,7 @@ async function createWorkerAccount(): Promise<void> {
     }
     setAuthUiState({
       status: 'signed-out',
-      message: errorMessage(error, 'Unable to create account'),
+      message: userFacingAuthErrorMessage(error, 'signup'),
     });
   }
 }
@@ -503,7 +509,7 @@ async function initializeCloudflareControls(): Promise<void> {
         clearWorkerAuthToken();
         setAuthUiState({
           status: 'signed-out',
-          message: 'Your saved session expired. Sign in again to use Image Targets.',
+          message: `Your saved session expired. ${loginIntroMessage}`,
         });
       }
     } catch (error) {
@@ -560,7 +566,7 @@ function activateRequestedRoute(requestedRoute: AppRoute): void {
     ...authUiState,
     message: authUiState.status === 'checking'
       ? 'Checking your session before opening Image Targets…'
-      : 'Sign in to open Image Targets.',
+      : protectedTargetsMessage,
   });
   if (window.location.hash !== hrefForRoute(result.activeRoute)) {
     window.history.replaceState(null, '', hrefForRoute(result.activeRoute));
