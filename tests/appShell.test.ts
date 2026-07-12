@@ -1,32 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { AR_MARKERS } from '../src/ar/markerCatalog';
 import { renderAppShell } from '../src/ui/appShell';
 
 describe('renderAppShell', () => {
-  it('renders route navigation, separate workflow pages, and both marker images', () => {
+  it('renders the target-focused workflow', () => {
     const container = document.createElement('div');
-    container.innerHTML = renderAppShell(AR_MARKERS);
+    container.innerHTML = renderAppShell();
     const html = container.innerHTML;
 
-    expect(html).toContain('href="#/scan"');
-    expect(html).toContain('href="#/base"');
-    expect(html).toContain('href="#/models"');
-    expect(html).toContain('href="#/targets"');
-    expect(html).toContain('href="#/markers"');
-    expect(html).toContain('href="#/account"');
-    expect(html).toContain('data-page="home"');
-    expect(html).toContain('data-page="scan"');
-    expect(html).toContain('data-page="base"');
-    expect(html).toContain('data-page="models"');
+    expect(
+      [...container.querySelectorAll<HTMLAnchorElement>('.route-tabs a')].map((link) => ({
+        href: link.getAttribute('href'),
+        text: link.textContent?.trim(),
+      })),
+    ).toEqual([
+      { href: '#/scan', text: 'Scan' },
+      { href: '#/targets', text: 'Targets' },
+      { href: '#/account', text: 'Account' },
+    ]);
+    expect(
+      [...container.querySelectorAll<HTMLElement>('.mode-card strong')].map((title) => title.textContent?.trim()),
+    ).toEqual(['Scan target', 'Image targets', 'Account']);
+    expect(
+      [...container.querySelectorAll<HTMLElement>('[data-page]')].map((page) => page.dataset.page),
+    ).toEqual(['home', 'scan', 'targets', 'account']);
     expect(container.querySelector('[data-page="targets"]')).toBeTruthy();
-    expect(html).toContain('data-page="markers"');
-    expect(html).toContain('data-page="account"');
     expect(html).toContain('id="ar-stage"');
     expect(html).toContain('id="start-ar"');
     expect(html).toContain('id="worker-email"');
-    expect(html).toContain('id="base-capture-video"');
-    expect(html).toContain('id="process-base-image"');
-    expect(html).toContain('id="cloudflare-model-select"');
     expect(container.querySelector('#target-image-file')).toBeTruthy();
     expect(container.querySelector('#target-model-select')).toBeTruthy();
     expect(container.querySelector('#target-model-select')?.closest('label')?.hasAttribute('hidden')).toBe(true);
@@ -36,19 +36,24 @@ describe('renderAppShell', () => {
       [...container.querySelectorAll<HTMLElement>('[data-target-inspector-tab]')].map((tab) => (
         tab.dataset.targetInspectorTab
       )),
-    ).toEqual(['target', 'objects', 'text', 'transform', 'animation']);
+    ).toEqual(['target', 'objects', 'text', 'object-controls']);
     expect(container.querySelector('[data-target-inspector-tab="target"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[data-target-inspector-tab="object-controls"]')?.getAttribute('aria-disabled')).toBe('true');
+    expect(container.querySelector('[data-target-inspector-tab="object-controls"]')?.hasAttribute('disabled')).toBe(true);
     expect(container.querySelector('[data-target-inspector-panel="target"]')?.hasAttribute('hidden')).toBe(false);
     expect(container.querySelector('[data-target-inspector-panel="objects"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('[data-target-inspector-panel="text"]')?.hasAttribute('hidden')).toBe(true);
-    expect(container.querySelector('[data-target-inspector-panel="transform"]')?.hasAttribute('hidden')).toBe(true);
-    expect(container.querySelector('[data-target-inspector-panel="animation"]')?.hasAttribute('hidden')).toBe(true);
-    expect(container.querySelector('#add-target-object')).toBeTruthy();
-    expect(container.querySelector('#remove-target-object')).toBeTruthy();
+    expect(container.querySelector('[data-target-inspector-panel="object-controls"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-target-inspector-panel="animation"]')).toBeNull();
+    expect(container.querySelector('#add-target-object')).toBeNull();
+    expect(container.querySelector('#remove-target-object')).toBeNull();
     expect(container.querySelector('#target-object-list')).toBeTruthy();
     expect(container.querySelector('#target-object-list')?.closest('[data-target-inspector-panel="objects"]')).toBeTruthy();
     expect(container.querySelector('#target-text-value')).toBeTruthy();
     expect(container.querySelector('#target-text-value')?.closest('[data-target-inspector-panel="text"]')).toBeTruthy();
+    expect(container.querySelector('.target-text-advanced')?.closest('[data-target-inspector-panel="text"]')).toBeNull();
+    expect(container.querySelector('.target-text-advanced')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
+    expect(container.querySelector('.target-text-advanced')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('.target-text-advanced')?.hasAttribute('open')).toBe(false);
     expect(container.querySelector('#target-text-language')).toBeTruthy();
     expect(container.querySelector('#target-text-language option[value="english"]')).toBeTruthy();
@@ -71,6 +76,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-text-preset option[value="gold-bevel"]')).toBeTruthy();
     expect(container.querySelector('#target-text-fill-mode')).toBeTruthy();
     expect(container.querySelector('#target-text-fill-mode')?.closest('.target-text-advanced')).toBeTruthy();
+    expect(container.querySelector('#target-text-fill-mode')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-text-fill-mode option[value="solid"]')).toBeTruthy();
     expect(container.querySelector('#target-text-fill-mode option[value="gradient"]')).toBeTruthy();
     expect(container.querySelector('#target-text-color')).toBeTruthy();
@@ -85,7 +91,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-text-gloss')).toBeTruthy();
     expect(container.querySelector('#add-target-text')).toBeTruthy();
     expect(container.querySelector('#target-scale')).toBeTruthy();
-    expect(container.querySelector('#target-scale')?.closest('[data-target-inspector-panel="transform"]')).toBeTruthy();
+    expect(container.querySelector('#target-scale')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-scale-x')).toBeNull();
     expect(container.querySelector('#target-scale-y')).toBeNull();
     expect(container.querySelector('#target-scale-z')).toBeNull();
@@ -104,6 +110,19 @@ describe('renderAppShell', () => {
     expect(container.querySelector('[data-reset-transform="scale"][data-reset-axis="x"]')).toBeNull();
     expect(container.querySelector('[data-reset-transform="scale"][data-reset-axis="y"]')).toBeNull();
     expect(container.querySelector('[data-reset-transform="scale"][data-reset-axis="z"]')).toBeNull();
+    expect(container.querySelector('.transform-control-group[data-control-group="move"]')?.tagName).toBe('DETAILS');
+    expect(container.querySelector('.transform-control-group[data-control-group="rotate"]')?.tagName).toBe('DETAILS');
+    expect(container.querySelector('.transform-control-group[data-control-group="scale"]')?.tagName).toBe('DETAILS');
+    expect(container.querySelector('.transform-control-group[data-control-group="animation"]')?.tagName).toBe('DETAILS');
+    expect(
+      [...container.querySelectorAll<HTMLDetailsElement>('.transform-control-group')]
+        .map((group) => [group.dataset.controlGroup, group.hasAttribute('open')]),
+    ).toEqual([
+      ['move', false],
+      ['rotate', false],
+      ['scale', false],
+      ['animation', false],
+    ]);
     expect(container.querySelector('[data-transform-mode="translate"]')).toBeTruthy();
     expect(container.querySelector('[data-transform-mode="rotate"]')).toBeTruthy();
     expect(container.querySelector('[data-transform-mode="scale"]')).toBeTruthy();
@@ -111,55 +130,64 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-camera-height')).toBeTruthy();
     expect(container.querySelector('#target-camera-yaw')).toBeTruthy();
     const cameraViewControls = container.querySelector('.target-camera-view-controls');
+    const cameraViewHead = container.querySelector('.target-camera-view-head');
     const previewControls = container.querySelector('.target-preview-controls');
     const targetPreviewShell = container.querySelector('.target-preview-shell');
     const transformToolbar = container.querySelector('.target-transform-toolbar');
-    const cameraGizmo = container.querySelector('#target-camera-gizmo');
     expect(cameraViewControls?.closest('.target-preview-shell')).toBe(targetPreviewShell);
-    expect(cameraViewControls?.closest('[data-target-inspector-panel="transform"]')).toBeNull();
+    expect(cameraViewControls?.closest('[data-target-inspector-panel="object-controls"]')).toBeNull();
     expect(cameraViewControls?.closest('.target-preview-controls')).toBe(previewControls);
     expect(transformToolbar?.closest('.target-preview-controls')).toBe(previewControls);
-    expect(cameraGizmo?.closest('.target-preview-shell')).toBe(targetPreviewShell);
-    expect(cameraGizmo?.closest('.target-preview-controls')).toBeNull();
-    expect(previewControls && transformToolbar && cameraViewControls && cameraGizmo
+    expect(previewControls && transformToolbar && cameraViewControls
       ? [...previewControls.children].indexOf(transformToolbar) <
           [...previewControls.children].indexOf(cameraViewControls)
       : false).toBe(true);
-    expect(container.querySelector('#target-camera-gizmo')).toBeTruthy();
+    expect(container.querySelector('#target-camera-gizmo')).toBeNull();
     const cameraArrows = [...container.querySelectorAll<HTMLButtonElement>('[data-camera-orbit]')];
-    expect(cameraArrows.map((button) => button.dataset.cameraOrbit)).toEqual(['up', 'left', 'right', 'down']);
-    expect(cameraArrows.every((button) => button.textContent?.trim() === '')).toBe(true);
-    expect(cameraArrows.map((button) => button.getAttribute('aria-label'))).toEqual([
-      'Orbit view up 90 degrees',
-      'Orbit view left 90 degrees',
-      'Orbit view right 90 degrees',
-      'Orbit view down 90 degrees',
+    expect(cameraArrows).toEqual([]);
+    const cameraPresetButtons = [...container.querySelectorAll<HTMLButtonElement>('[data-camera-preset]')];
+    expect(cameraViewControls?.firstElementChild).toBe(cameraViewHead);
+    expect(cameraViewHead?.querySelector('.eyebrow')?.textContent?.trim()).toBe('Camera view');
+    expect(cameraViewHead?.querySelector('.target-camera-preset-row')).toBeTruthy();
+    expect(cameraPresetButtons.every((button) => button.closest('.target-camera-view-head'))).toBe(true);
+    expect(
+      cameraViewControls && cameraViewHead
+        ? [...cameraViewControls.children].indexOf(cameraViewHead) <
+            [...cameraViewControls.children].indexOf(container.querySelector('.target-camera-view-grid') as Element)
+        : false,
+    ).toBe(true);
+    expect(cameraPresetButtons.map((button) => button.dataset.cameraPreset)).toEqual([
+      'reset',
+      'front',
+      'left',
+      'right',
+      'top',
     ]);
-    expect(container.querySelector('[data-camera-preset]')).toBeNull();
+    expect(cameraPresetButtons.map((button) => button.textContent?.trim())).toEqual([
+      'Reset',
+      'Front',
+      'Left',
+      'Right',
+      'Top',
+    ]);
+    expect(cameraPresetButtons.every((button) => button.closest('.target-camera-view-controls'))).toBe(true);
     expect(container.querySelector('#target-spin-axis')).toBeTruthy();
-    expect(container.querySelector('#target-spin-axis')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
+    expect(container.querySelector('#target-spin-axis')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-spin-speed')).toBeTruthy();
-    expect(container.querySelector('#target-spin-speed')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
+    expect(container.querySelector('#target-spin-speed')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-spin-axis option[value="y"]')?.hasAttribute('selected')).toBe(true);
     expect((container.querySelector('#target-spin-speed') as HTMLInputElement).value).toBe('0');
     expect(container.querySelector('#target-bob-height')).toBeTruthy();
-    expect(container.querySelector('#target-bob-height')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
+    expect(container.querySelector('#target-bob-height')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-bob-speed')).toBeTruthy();
-    expect(container.querySelector('#target-bob-speed')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
+    expect(container.querySelector('#target-bob-speed')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#reset-target-animation')).toBeTruthy();
-    expect(container.querySelector('#reset-target-animation')?.closest('[data-target-inspector-panel="animation"]')).toBeTruthy();
+    expect(container.querySelector('#reset-target-animation')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
     expect(container.querySelector('#save-image-target')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')?.closest('[data-target-inspector-panel="target"]')).toBeTruthy();
-    expect(html).toContain('id="reload-cloudflare-models"');
     expect(html).toContain('Marker AR studio');
     expect(html).toContain('Web-AR Worker');
-
-    for (const marker of AR_MARKERS) {
-      expect(html).toContain(marker.label);
-      expect(html).toContain(marker.imagePath);
-      expect(html).toContain(`download="${marker.id}.svg"`);
-    }
   });
 });
