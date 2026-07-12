@@ -697,7 +697,7 @@ h1 {
   font-size: 13px;
 }
 
-.auth-mode-switch button[aria-selected="true"] {
+.auth-mode-switch button[aria-pressed="true"] {
   border-color: var(--line);
   color: var(--ink);
   background: rgba(255, 255, 255, 0.96);

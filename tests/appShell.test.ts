@@ -37,8 +37,11 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#worker-login-form')?.closest('[data-auth-panel="signed-out"]')).toBeTruthy();
     expect(container.querySelector('[data-auth-form-mode]')?.getAttribute('data-auth-form-mode')).toBe('login');
     expect(container.querySelectorAll('[data-auth-mode]')).toHaveLength(2);
-    expect(container.querySelector('[data-auth-mode="login"]')?.getAttribute('aria-selected')).toBe('true');
-    expect(container.querySelector('[data-auth-mode="signup"]')?.getAttribute('aria-selected')).toBe('false');
+    expect(container.querySelector('.auth-mode-switch')?.getAttribute('role')).toBe('group');
+    expect(container.querySelector('[data-auth-mode="login"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-auth-mode="signup"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect((container.querySelector('[data-auth-mode="login"]') as HTMLButtonElement).tabIndex).toBe(0);
+    expect((container.querySelector('[data-auth-mode="signup"]') as HTMLButtonElement).tabIndex).toBe(0);
     expect(container.querySelector('[data-auth-name-field]')?.hasAttribute('hidden')).toBe(true);
     expect((container.querySelector('#worker-name') as HTMLInputElement).disabled).toBe(true);
     expect((container.querySelector('#worker-password') as HTMLInputElement).minLength).toBe(8);

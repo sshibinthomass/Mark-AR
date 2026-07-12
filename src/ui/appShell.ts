@@ -396,9 +396,9 @@ export function renderAppShell(): string {
 
             <div data-auth-panel="signed-out">
               <div class="auth-form-shell" data-auth-form-mode="login">
-                <div class="auth-mode-switch" role="tablist" aria-label="Account action">
-                  <button type="button" role="tab" data-auth-mode="login" aria-selected="true">Sign in</button>
-                  <button type="button" role="tab" data-auth-mode="signup" aria-selected="false" tabindex="-1">Create account</button>
+                <div class="auth-mode-switch" role="group" aria-label="Account action">
+                  <button type="button" data-auth-mode="login" aria-pressed="true">Sign in</button>
+                  <button type="button" data-auth-mode="signup" aria-pressed="false">Create account</button>
                 </div>
                 <form id="worker-login-form" class="login-form">
                   <label data-auth-name-field hidden>

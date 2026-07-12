@@ -8,8 +8,9 @@ export function applyAuthFormMode(root: HTMLElement, mode: AuthFormMode): void {
 
   root.querySelectorAll<HTMLButtonElement>('[data-auth-mode]').forEach((button) => {
     const selected = button.dataset.authMode === mode;
-    button.setAttribute('aria-selected', String(selected));
-    button.tabIndex = selected ? 0 : -1;
+    button.setAttribute('aria-pressed', String(selected));
+    button.removeAttribute('aria-selected');
+    button.tabIndex = 0;
   });
 
   const isSignup = mode === 'signup';

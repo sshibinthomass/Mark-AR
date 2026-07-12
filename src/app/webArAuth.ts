@@ -21,7 +21,7 @@ type LoginInput = {
 };
 
 type SignupInput = LoginInput & {
-  name?: string;
+  name: string;
 };
 
 type SessionInput = {
@@ -45,14 +45,17 @@ export async function signupToWebArWorker({
   name,
   fetchImpl = fetch,
 }: SignupInput): Promise<AuthSession> {
-  const normalizedName = name?.trim();
+  const normalizedName = name.trim();
+  if (!normalizedName) {
+    throw new Error('Name is required.');
+  }
   const response = await fetchImpl(`${authBaseUrl(apiUrl)}/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: email.trim().toLowerCase(),
       password,
-      ...(normalizedName ? { name: normalizedName } : {}),
+      name: normalizedName,
     }),
   });
   return parseAuthSessionResponse(response);

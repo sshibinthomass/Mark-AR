@@ -45,6 +45,20 @@ describe('Web-AR Worker auth client', () => {
     });
   });
 
+  it('rejects a whitespace-only signup name without calling the Worker', async () => {
+    const fetchImpl = vi.fn();
+
+    await expect(signupToWebArWorker({
+      apiUrl: 'https://worker.example/generate-3d',
+      email: 'maker@example.com',
+      password: 'maker-password-123',
+      name: '   ',
+      fetchImpl,
+    })).rejects.toThrow('Name is required.');
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('logs in against the Worker auth route and normalizes the email', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(

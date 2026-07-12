@@ -40,6 +40,21 @@ describe('auth UI state', () => {
     });
   });
 
+  it('ignores an unexpected token when the signup user is still pending', () => {
+    expect(resolveSignupResult({
+      user: {
+        email: 'maker@example.com',
+        role: 'user',
+        status: 'pending',
+      },
+      token: 'unexpected-token',
+    })).toEqual({
+      kind: 'pending',
+      email: 'maker@example.com',
+      message: 'Account created. An administrator must approve it before you can sign in.',
+    });
+  });
+
   it('turns a token-bearing signup into the existing signed-in state', () => {
     expect(resolveSignupResult({
       user: {

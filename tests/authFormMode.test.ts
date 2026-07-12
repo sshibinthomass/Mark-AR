@@ -17,8 +17,12 @@ describe('applyAuthFormMode', () => {
     expect(password?.autocomplete).toBe('current-password');
     expect(root.querySelector('[data-auth-submit-label]')?.textContent).toBe('Sign in');
     expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Continue to Marker AR studio');
-    expect(root.querySelector('[data-auth-mode="login"]')?.getAttribute('aria-selected')).toBe('true');
-    expect(root.querySelector('[data-auth-mode="signup"]')?.getAttribute('aria-selected')).toBe('false');
+    const loginMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="login"]');
+    const signupMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="signup"]');
+    expect(loginMode?.getAttribute('aria-pressed')).toBe('true');
+    expect(signupMode?.getAttribute('aria-pressed')).toBe('false');
+    expect(loginMode?.tabIndex).toBe(0);
+    expect(signupMode?.tabIndex).toBe(0);
   });
 
   it('shows the required name and one Create account action in signup mode', () => {
@@ -37,8 +41,12 @@ describe('applyAuthFormMode', () => {
     expect(password?.minLength).toBe(8);
     expect(root.querySelector('[data-auth-submit-label]')?.textContent).toBe('Create account');
     expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Create your Marker AR account');
-    expect(root.querySelector('[data-auth-mode="login"]')?.getAttribute('aria-selected')).toBe('false');
-    expect(root.querySelector('[data-auth-mode="signup"]')?.getAttribute('aria-selected')).toBe('true');
+    const loginMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="login"]');
+    const signupMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="signup"]');
+    expect(loginMode?.getAttribute('aria-pressed')).toBe('false');
+    expect(signupMode?.getAttribute('aria-pressed')).toBe('true');
+    expect(loginMode?.tabIndex).toBe(0);
+    expect(signupMode?.tabIndex).toBe(0);
   });
 
   it('preserves shared field values when switching modes', () => {
@@ -62,8 +70,8 @@ describe('applyAuthFormMode', () => {
 function renderFormFixture(): HTMLElement {
   const root = document.createElement('section');
   root.innerHTML = `
-    <button data-auth-mode="login" aria-selected="true">Sign in</button>
-    <button data-auth-mode="signup" aria-selected="false">Create account</button>
+    <button data-auth-mode="login" aria-pressed="true">Sign in</button>
+    <button data-auth-mode="signup" aria-pressed="false">Create account</button>
     <h3 data-auth-form-heading>Continue to Marker AR studio</h3>
     <label data-auth-name-field hidden><input id="worker-name" disabled /></label>
     <input id="worker-email" />

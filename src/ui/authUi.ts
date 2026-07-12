@@ -11,7 +11,7 @@ export type SignupResult =
   | { kind: 'signed-in'; token: string; state: Extract<AuthUiState, { status: 'signed-in' }> };
 
 export function resolveSignupResult(session: AuthSession): SignupResult {
-  if (!session.token) {
+  if (!session.token || session.user.status !== 'active') {
     return {
       kind: 'pending',
       email: session.user.email,
