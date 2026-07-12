@@ -13,6 +13,20 @@ export type AuthSession = {
   token: string | null;
 };
 
+export class AuthRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'AuthRequestError';
+    this.status = status;
+  }
+}
+
+export function isAuthRequestError(error: unknown, status?: number): error is AuthRequestError {
+  return error instanceof AuthRequestError && (status === undefined || error.status === status);
+}
+
 type LoginInput = {
   apiUrl: string;
   email: string;
@@ -118,7 +132,7 @@ export function clearWorkerAuthToken(): void {
 async function parseAuthSessionResponse(response: Response): Promise<AuthSession> {
   const body = (await response.json()) as AuthResponse;
   if (!response.ok) {
-    throw new Error(body.error ?? `Auth request failed with HTTP ${response.status}.`);
+    throw new AuthRequestError(body.error ?? `Auth request failed with HTTP ${response.status}.`, response.status);
   }
   if (!body.user) {
     throw new Error('Worker response did not include a user.');

@@ -38,6 +38,7 @@ import {
   saveWorkerAuthToken,
   signupToWebArWorker,
 } from './app/webArAuth';
+import { recoverExistingAccount } from './app/authRecovery';
 import {
   DEFAULT_TARGET_TEXT,
   createLocalTextObject,
@@ -250,7 +251,11 @@ workerLoginForm.addEventListener('submit', async (event) => {
     await createWorkerAccount();
     return;
   }
-  setAuthUiState({ status: 'checking', message: 'Signing in…' });
+  await signInToWorker();
+});
+
+async function signInToWorker(message = 'Signing in…'): Promise<void> {
+  setAuthUiState({ status: 'checking', message });
 
   try {
     const sessionResult = await loginToWebArWorker({
@@ -279,7 +284,7 @@ workerLoginForm.addEventListener('submit', async (event) => {
       message: errorMessage(error, 'Unable to sign in'),
     });
   }
-});
+}
 
 workerLogoutButton.addEventListener('click', async () => {
   authToken = null;
@@ -324,6 +329,12 @@ async function createWorkerAccount(): Promise<void> {
     await refreshImageTargets();
     restorePendingProtectedRoute();
   } catch (error) {
+    if (await recoverExistingAccount(error, {
+      setFormMode: setAuthFormMode,
+      signIn: signInToWorker,
+    })) {
+      return;
+    }
     setAuthUiState({
       status: 'signed-out',
       message: errorMessage(error, 'Unable to create account'),

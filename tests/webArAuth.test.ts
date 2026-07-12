@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loginToWebArWorker, signupToWebArWorker } from '../src/app/webArAuth';
+import {
+  AuthRequestError,
+  isAuthRequestError,
+  loginToWebArWorker,
+  signupToWebArWorker,
+} from '../src/app/webArAuth';
 
 describe('Web-AR Worker auth client', () => {
   it('creates a pending account through the Worker signup route', async () => {
@@ -57,6 +62,26 @@ describe('Web-AR Worker auth client', () => {
     })).rejects.toThrow('Name is required.');
 
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('preserves the HTTP status for an existing-account signup conflict', async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      JSON.stringify({ error: 'Account already exists.' }),
+      { status: 409 },
+    ));
+
+    const error = await signupToWebArWorker({
+      apiUrl: 'https://worker.example/generate-3d',
+      email: 'maker@example.com',
+      password: 'maker-password-123',
+      name: 'Maker',
+      fetchImpl,
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(AuthRequestError);
+    expect(error).toMatchObject({ message: 'Account already exists.', status: 409 });
+    expect(isAuthRequestError(error, 409)).toBe(true);
+    expect(isAuthRequestError(error, 400)).toBe(false);
   });
 
   it('logs in against the Worker auth route and normalizes the email', async () => {
