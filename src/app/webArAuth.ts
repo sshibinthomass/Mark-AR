@@ -20,6 +20,10 @@ type LoginInput = {
   fetchImpl?: typeof fetch;
 };
 
+type SignupInput = LoginInput & {
+  name?: string;
+};
+
 type SessionInput = {
   apiUrl: string;
   token: string | null;
@@ -33,6 +37,26 @@ type AuthResponse = {
 };
 
 const authTokenStorageKey = 'mark-ar-web-ar-auth-token';
+
+export async function signupToWebArWorker({
+  apiUrl,
+  email,
+  password,
+  name,
+  fetchImpl = fetch,
+}: SignupInput): Promise<AuthSession> {
+  const normalizedName = name?.trim();
+  const response = await fetchImpl(`${authBaseUrl(apiUrl)}/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      password,
+      ...(normalizedName ? { name: normalizedName } : {}),
+    }),
+  });
+  return parseAuthSessionResponse(response);
+}
 
 export async function loginToWebArWorker({
   apiUrl,

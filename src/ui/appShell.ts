@@ -390,22 +390,32 @@ export function renderAppShell(): string {
           <section class="tool-card worker-card auth-control-card">
             <div class="tool-card-head auth-card-head">
               <p class="eyebrow">Web-AR account</p>
-              <h3>Continue to Marker AR studio</h3>
+              <h3 data-auth-form-heading>Continue to Marker AR studio</h3>
               <p id="worker-status" aria-live="polite">Sign in to use Image Targets.</p>
             </div>
 
             <div data-auth-panel="signed-out">
-              <form id="worker-login-form" class="login-form">
-                <label>
-                  <span>Email</span>
-                  <input id="worker-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
-                </label>
-                <label>
-                  <span>Password</span>
-                  <input id="worker-password" name="password" type="password" autocomplete="current-password" required />
-                </label>
-                <button id="worker-login" class="primary auth-primary-action" type="submit">Sign in</button>
-              </form>
+              <div class="auth-form-shell" data-auth-form-mode="login">
+                <div class="auth-mode-switch" role="tablist" aria-label="Account action">
+                  <button type="button" role="tab" data-auth-mode="login" aria-selected="true">Sign in</button>
+                  <button type="button" role="tab" data-auth-mode="signup" aria-selected="false" tabindex="-1">Create account</button>
+                </div>
+                <form id="worker-login-form" class="login-form">
+                  <label data-auth-name-field hidden>
+                    <span>Name</span>
+                    <input id="worker-name" name="name" type="text" autocomplete="name" placeholder="Your name" disabled />
+                  </label>
+                  <label>
+                    <span>Email</span>
+                    <input id="worker-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+                  </label>
+                  <label>
+                    <span>Password</span>
+                    <input id="worker-password" name="password" type="password" minlength="8" autocomplete="current-password" required />
+                  </label>
+                  <button id="worker-login" class="primary auth-primary-action" type="submit"><span data-auth-submit-label>Sign in</span></button>
+                </form>
+              </div>
             </div>
 
             <div class="auth-checking" data-auth-panel="checking" hidden aria-live="polite">

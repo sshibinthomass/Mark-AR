@@ -36,6 +36,7 @@ import {
   loadWorkerAuthToken,
   loginToWebArWorker,
   saveWorkerAuthToken,
+  signupToWebArWorker,
 } from './app/webArAuth';
 import {
   DEFAULT_TARGET_TEXT,
@@ -75,9 +76,11 @@ import type { PreviewTransformMode } from './scene/ImageTargetPreview';
 import {
   applyAuthUi,
   isAuthenticated,
+  resolveSignupResult,
   type AuthUiState,
 } from './ui/authUi';
 import { AuthNavigation } from './ui/authNavigation';
+import { applyAuthFormMode, type AuthFormMode } from './ui/authFormMode';
 import { renderAppShell } from './ui/appShell';
 import { renderTargetModelRail } from './ui/modelRail';
 import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
@@ -99,9 +102,11 @@ const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');
 const status = queryRequired<HTMLParagraphElement>('#ar-status');
 const workerLoginForm = queryRequired<HTMLFormElement>('#worker-login-form');
+const workerNameInput = queryRequired<HTMLInputElement>('#worker-name');
 const workerEmailInput = queryRequired<HTMLInputElement>('#worker-email');
 const workerPasswordInput = queryRequired<HTMLInputElement>('#worker-password');
 const workerLogoutButton = queryRequired<HTMLButtonElement>('#worker-logout');
+const authModeButtons = shell.querySelectorAll<HTMLButtonElement>('[data-auth-mode]');
 const targetImageFile = document.querySelector<HTMLInputElement>('#target-image-file');
 const targetLabelInput = document.querySelector<HTMLInputElement>('#target-label');
 const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-model-select');
@@ -152,6 +157,7 @@ let authUiState: AuthUiState = authToken
   ? { status: 'checking', message: 'Checking your saved session…' }
   : { status: 'signed-out', message: 'Sign in to use Image Targets.' };
 const authNavigation = new AuthNavigation();
+let authFormMode: AuthFormMode = 'login';
 let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
@@ -164,6 +170,7 @@ let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
 
 applyAuthUi(shell, authUiState);
+applyAuthFormMode(shell, authFormMode);
 activateRequestedRoute(routeFromHash(window.location.hash));
 void initializeCloudflareControls();
 
@@ -183,6 +190,25 @@ shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link
         ? 'Checking your session before opening Image Targets…'
         : 'Sign in to open Image Targets.',
     });
+  });
+});
+
+authModeButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.authMode;
+    if (mode !== 'login' && mode !== 'signup') {
+      return;
+    }
+    setAuthFormMode(mode);
+    setAuthUiState({
+      status: 'signed-out',
+      message: mode === 'signup'
+        ? 'Create an account for administrator approval.'
+        : 'Sign in with an approved account.',
+    });
+    if (mode === 'signup') {
+      workerNameInput.focus();
+    }
   });
 });
 
@@ -220,6 +246,10 @@ startButton.addEventListener('click', async () => {
 
 workerLoginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (authFormMode === 'signup') {
+    await createWorkerAccount();
+    return;
+  }
   setAuthUiState({ status: 'checking', message: 'Signing in…' });
 
   try {
@@ -255,6 +285,7 @@ workerLogoutButton.addEventListener('click', async () => {
   authToken = null;
   clearWorkerAuthToken();
   authNavigation.clear();
+  setAuthFormMode('login');
   setAuthUiState({ status: 'signed-out', message: 'Signed out. Sign in to use Image Targets.' });
   if (shell.dataset.activePage === 'targets') {
     window.location.hash = hrefForRoute('account');
@@ -262,6 +293,43 @@ workerLogoutButton.addEventListener('click', async () => {
   await refreshCloudflareModels();
   await refreshImageTargets();
 });
+
+async function createWorkerAccount(): Promise<void> {
+  setAuthUiState({ status: 'checking', message: 'Creating account…' });
+
+  try {
+    const sessionResult = await signupToWebArWorker({
+      apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
+      email: workerEmailInput.value,
+      password: workerPasswordInput.value,
+      name: workerNameInput.value,
+    });
+    const result = resolveSignupResult(sessionResult);
+    workerPasswordInput.value = '';
+
+    if (result.kind === 'pending') {
+      workerEmailInput.value = result.email;
+      workerNameInput.value = '';
+      setAuthFormMode('login');
+      setAuthUiState({ status: 'signed-out', message: result.message });
+      return;
+    }
+
+    authToken = result.token;
+    saveWorkerAuthToken(result.token);
+    workerNameInput.value = '';
+    setAuthFormMode('login');
+    setAuthUiState(result.state);
+    await refreshCloudflareModels();
+    await refreshImageTargets();
+    restorePendingProtectedRoute();
+  } catch (error) {
+    setAuthUiState({
+      status: 'signed-out',
+      message: errorMessage(error, 'Unable to create account'),
+    });
+  }
+}
 
 targetImageFile?.addEventListener('change', async () => {
   const file = targetImageFile.files?.[0];
@@ -469,6 +537,11 @@ async function refreshCloudflareModels(): Promise<void> {
 function setAuthUiState(state: AuthUiState): void {
   authUiState = state;
   applyAuthUi(shell, state);
+}
+
+function setAuthFormMode(mode: AuthFormMode): void {
+  authFormMode = mode;
+  applyAuthFormMode(shell, mode);
 }
 
 function activateRequestedRoute(requestedRoute: AppRoute): void {

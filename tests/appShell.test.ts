@@ -35,6 +35,14 @@ describe('renderAppShell', () => {
     expect(container.querySelector('[data-auth-panel="checking"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('[data-auth-panel="signed-in"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('#worker-login-form')?.closest('[data-auth-panel="signed-out"]')).toBeTruthy();
+    expect(container.querySelector('[data-auth-form-mode]')?.getAttribute('data-auth-form-mode')).toBe('login');
+    expect(container.querySelectorAll('[data-auth-mode]')).toHaveLength(2);
+    expect(container.querySelector('[data-auth-mode="login"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector('[data-auth-mode="signup"]')?.getAttribute('aria-selected')).toBe('false');
+    expect(container.querySelector('[data-auth-name-field]')?.hasAttribute('hidden')).toBe(true);
+    expect((container.querySelector('#worker-name') as HTMLInputElement).disabled).toBe(true);
+    expect((container.querySelector('#worker-password') as HTMLInputElement).minLength).toBe(8);
+    expect(container.querySelector('[data-auth-submit-label]')?.textContent).toBe('Sign in');
     expect(container.querySelector('#worker-logout')?.closest('[data-auth-panel="signed-in"]')).toBeTruthy();
     expect(container.querySelector('#worker-logout')?.closest('#worker-login-form')).toBeNull();
     expect(container.querySelector('[data-auth-email]')).toBeTruthy();

@@ -1,7 +1,50 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loginToWebArWorker } from '../src/app/webArAuth';
+import { loginToWebArWorker, signupToWebArWorker } from '../src/app/webArAuth';
 
 describe('Web-AR Worker auth client', () => {
+  it('creates a pending account through the Worker signup route', async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          user: {
+            email: 'maker@example.com',
+            name: 'Maker',
+            role: 'user',
+            status: 'pending',
+          },
+        }),
+        { status: 201 },
+      );
+    });
+
+    const session = await signupToWebArWorker({
+      apiUrl: 'https://worker.example/generate-3d',
+      email: ' Maker@Example.COM ',
+      password: 'maker-password-123',
+      name: ' Maker ',
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith('https://worker.example/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'maker@example.com',
+        password: 'maker-password-123',
+        name: 'Maker',
+      }),
+    });
+    expect(session).toEqual({
+      user: {
+        email: 'maker@example.com',
+        name: 'Maker',
+        role: 'user',
+        status: 'pending',
+      },
+      token: null,
+    });
+  });
+
   it('logs in against the Worker auth route and normalizes the email', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(

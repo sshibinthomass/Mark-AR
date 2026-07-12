@@ -1,9 +1,34 @@
+import type { AuthSession } from '../app/webArAuth';
 import type { AppRoute } from './pageRoutes';
 
 export type AuthUiState =
   | { status: 'checking'; message: string }
   | { status: 'signed-out'; message: string }
   | { status: 'signed-in'; message: string; email: string };
+
+export type SignupResult =
+  | { kind: 'pending'; email: string; message: string }
+  | { kind: 'signed-in'; token: string; state: Extract<AuthUiState, { status: 'signed-in' }> };
+
+export function resolveSignupResult(session: AuthSession): SignupResult {
+  if (!session.token) {
+    return {
+      kind: 'pending',
+      email: session.user.email,
+      message: 'Account created. An administrator must approve it before you can sign in.',
+    };
+  }
+
+  return {
+    kind: 'signed-in',
+    token: session.token,
+    state: {
+      status: 'signed-in',
+      email: session.user.email,
+      message: 'Image Targets unlocked.',
+    },
+  };
+}
 
 export function isAuthenticated(state: AuthUiState): state is Extract<AuthUiState, { status: 'signed-in' }> {
   return state.status === 'signed-in';

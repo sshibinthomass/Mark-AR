@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAuthUi,
   isAuthenticated,
+  resolveSignupResult,
   resolveAccessibleRoute,
   type AuthUiState,
 } from '../src/ui/authUi';
@@ -23,6 +24,41 @@ const signedIn: AuthUiState = {
 };
 
 describe('auth UI state', () => {
+  it('keeps a pending signup signed out until admin approval', () => {
+    expect(resolveSignupResult({
+      user: {
+        email: 'maker@example.com',
+        name: 'Maker',
+        role: 'user',
+        status: 'pending',
+      },
+      token: null,
+    })).toEqual({
+      kind: 'pending',
+      email: 'maker@example.com',
+      message: 'Account created. An administrator must approve it before you can sign in.',
+    });
+  });
+
+  it('turns a token-bearing signup into the existing signed-in state', () => {
+    expect(resolveSignupResult({
+      user: {
+        email: 'admin@example.com',
+        role: 'admin',
+        status: 'active',
+      },
+      token: 'signup-token',
+    })).toEqual({
+      kind: 'signed-in',
+      token: 'signup-token',
+      state: {
+        status: 'signed-in',
+        email: 'admin@example.com',
+        message: 'Image Targets unlocked.',
+      },
+    });
+  });
+
   it('allows Image Targets only for a verified signed-in user', () => {
     expect(resolveAccessibleRoute('targets', signedOut)).toBe('account');
     expect(resolveAccessibleRoute('targets', checking)).toBe('account');
