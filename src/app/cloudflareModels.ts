@@ -63,6 +63,10 @@ export async function loadCloudflareModelOptions({
   authToken,
   fetchImpl = fetch,
 }: LoadCloudflareModelsInput = {}): Promise<CloudflareModelOption[]> {
+  if (!authToken) {
+    return STATIC_CLOUDFLARE_MODELS;
+  }
+
   const workerModels = await listGeneratedModels({ apiUrl, authToken, fetchImpl });
   return dedupeModelsByUrl([...STATIC_CLOUDFLARE_MODELS, ...workerModels]);
 }

@@ -7,6 +7,19 @@ import {
 } from '../src/app/cloudImageTargets';
 
 describe('cloud image target client', () => {
+  it('does not call the protected image target list while signed out', async () => {
+    const fetchImpl = vi.fn();
+
+    const targets = await listImageTargets({
+      apiUrl: 'https://worker.example/generate-3d',
+      authToken: null,
+      fetchImpl,
+    });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(targets).toEqual([]);
+  });
+
   it('lists cloud image targets with an auth token', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       targets: [
@@ -86,6 +99,7 @@ describe('cloud image target client', () => {
 
     const targets = await listImageTargets({
       apiUrl: 'https://worker.example/generate-3d',
+      authToken: 'token-123',
       fetchImpl,
     });
 

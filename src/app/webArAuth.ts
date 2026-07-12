@@ -107,7 +107,7 @@ export async function getCurrentWebArUser({
   if (response.status === 401) {
     return null;
   }
-  const body = (await response.json()) as AuthResponse;
+  const body = await readAuthResponseBody(response);
   if (!response.ok) {
     throw new Error(body.error ?? `Session failed with HTTP ${response.status}.`);
   }
@@ -130,7 +130,7 @@ export function clearWorkerAuthToken(): void {
 }
 
 async function parseAuthSessionResponse(response: Response): Promise<AuthSession> {
-  const body = (await response.json()) as AuthResponse;
+  const body = await readAuthResponseBody(response);
   if (!response.ok) {
     throw new AuthRequestError(body.error ?? `Auth request failed with HTTP ${response.status}.`, response.status);
   }
@@ -141,6 +141,19 @@ async function parseAuthSessionResponse(response: Response): Promise<AuthSession
     user: body.user,
     token: body.token ?? null,
   };
+}
+
+async function readAuthResponseBody(response: Response): Promise<AuthResponse> {
+  const text = await response.text();
+  if (!text.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text) as AuthResponse;
+  } catch {
+    return { error: text.trim() };
+  }
 }
 
 function authBaseUrl(apiUrl: string): string {

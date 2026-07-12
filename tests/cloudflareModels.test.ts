@@ -4,6 +4,23 @@ import {
 } from '../src/app/cloudflareModels';
 
 describe('Cloudflare model client', () => {
+  it('uses only static public models while signed out', async () => {
+    const fetchImpl = vi.fn();
+
+    const models = await loadCloudflareModelOptions({
+      apiUrl: 'https://worker.example/generate-3d',
+      authToken: null,
+      fetchImpl,
+    });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(models.map((model) => model.label)).toEqual([
+      'Fast output',
+      'Image 4 output',
+      'Image fast output',
+    ]);
+  });
+
   it('loads static Cloudflare assets plus generated Worker models', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(

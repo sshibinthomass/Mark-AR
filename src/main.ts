@@ -326,7 +326,7 @@ async function createWorkerAccount(): Promise<void> {
   } catch (error) {
     if (await recoverExistingAccount(error, {
       setFormMode: setAuthFormMode,
-      signIn: signInToWorker,
+      setSignedOutMessage: (message) => setAuthUiState({ status: 'signed-out', message }),
     })) {
       return;
     }

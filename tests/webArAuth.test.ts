@@ -84,6 +84,28 @@ describe('Web-AR Worker auth client', () => {
     expect(isAuthRequestError(error, 400)).toBe(false);
   });
 
+  it('preserves the HTTP status when the Worker auth error body is not JSON', async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      'Account already exists.',
+      {
+        status: 409,
+        headers: { 'Content-Type': 'text/plain' },
+      },
+    ));
+
+    const error = await signupToWebArWorker({
+      apiUrl: 'https://worker.example/generate-3d',
+      email: 'maker@example.com',
+      password: 'maker-password-123',
+      name: 'Maker',
+      fetchImpl,
+    }).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(AuthRequestError);
+    expect(error).toMatchObject({ message: 'Account already exists.', status: 409 });
+    expect(isAuthRequestError(error, 409)).toBe(true);
+  });
+
   it('logs in against the Worker auth route and normalizes the email', async () => {
     const fetchImpl = vi.fn(async () => {
       return new Response(

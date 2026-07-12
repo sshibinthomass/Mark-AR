@@ -114,13 +114,11 @@ export async function listImageTargets({
   authToken,
   fetchImpl = fetch,
 }: ClientInput): Promise<CloudImageTarget[]> {
-  if (!apiUrl) {
+  if (!apiUrl || !authToken) {
     return [];
   }
 
-  const response = authToken
-    ? await fetchImpl(imageTargetsUrl(apiUrl), { headers: authHeaders(authToken) })
-    : await fetchImpl(imageTargetsUrl(apiUrl));
+  const response = await fetchImpl(imageTargetsUrl(apiUrl), { headers: authHeaders(authToken) });
   const body = (await response.json()) as WorkerImageTargetsResponse;
 
   if (!response.ok) {

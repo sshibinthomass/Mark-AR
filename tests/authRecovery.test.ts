@@ -10,31 +10,29 @@ describe('shouldRecoverExistingAccount', () => {
     expect(shouldRecoverExistingAccount('Account already exists.')).toBe(false);
   });
 
-  it('switches to login and retries the submitted credentials for a conflict', async () => {
+  it('switches to login and explains an existing-account signup conflict', async () => {
     const setFormMode = vi.fn();
-    const signIn = vi.fn(async () => undefined);
+    const setSignedOutMessage = vi.fn();
 
     const recovered = await recoverExistingAccount(
       new AuthRequestError('Account already exists.', 409),
-      { setFormMode, signIn },
+      { setFormMode, setSignedOutMessage },
     );
 
     expect(recovered).toBe(true);
     expect(setFormMode).toHaveBeenCalledWith('login');
-    expect(signIn).toHaveBeenCalledWith('Account already exists. Signing in…');
+    expect(setSignedOutMessage).toHaveBeenCalledWith('Account already exists. Sign in with that email, or use a different email to create a new account.');
   });
 
   it('does not change modes or retry login for other signup errors', async () => {
     const setFormMode = vi.fn();
-    const signIn = vi.fn(async () => undefined);
 
     const recovered = await recoverExistingAccount(
       new AuthRequestError('Invalid signup.', 400),
-      { setFormMode, signIn },
+      { setFormMode },
     );
 
     expect(recovered).toBe(false);
     expect(setFormMode).not.toHaveBeenCalled();
-    expect(signIn).not.toHaveBeenCalled();
   });
 });
