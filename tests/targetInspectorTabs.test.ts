@@ -25,4 +25,30 @@ describe('setupTargetInspectorTabs', () => {
     expect((root.querySelector('#target-label') as HTMLInputElement).value).toBe('poster');
     expect((root.querySelector('#target-text-value') as HTMLTextAreaElement).value).toBe('Hello AR');
   });
+
+  it('does not activate disabled object controls until they are enabled programmatically', () => {
+    const root = document.createElement('div');
+    root.innerHTML = `
+      <button data-target-inspector-tab="target" aria-selected="true" aria-controls="target-panel">Target</button>
+      <button data-target-inspector-tab="object-controls" aria-selected="false" aria-controls="object-controls-panel" disabled aria-disabled="true">Object</button>
+      <section id="target-panel" data-target-inspector-panel="target">Target settings</section>
+      <section id="object-controls-panel" data-target-inspector-panel="object-controls" hidden>Object controls</section>
+    `;
+
+    const inspector = setupTargetInspectorTabs(root);
+    root.querySelector<HTMLButtonElement>('[data-target-inspector-tab="object-controls"]')?.click();
+
+    expect(root.querySelector('[data-target-inspector-tab="target"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(root.querySelector('[data-target-inspector-panel="object-controls"]')?.hasAttribute('hidden')).toBe(true);
+
+    inspector.setTabEnabled('object-controls', true);
+    inspector.activate('object-controls');
+
+    expect(root.querySelector('[data-target-inspector-tab="target"]')?.getAttribute('aria-selected')).toBe('false');
+    expect(root.querySelector('[data-target-inspector-tab="object-controls"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(root.querySelector('[data-target-inspector-tab="object-controls"]')?.hasAttribute('disabled')).toBe(false);
+    expect(root.querySelector('[data-target-inspector-tab="object-controls"]')?.getAttribute('aria-disabled')).toBe('false');
+    expect(root.querySelector('[data-target-inspector-panel="target"]')?.hasAttribute('hidden')).toBe(true);
+    expect(root.querySelector('[data-target-inspector-panel="object-controls"]')?.hasAttribute('hidden')).toBe(false);
+  });
 });

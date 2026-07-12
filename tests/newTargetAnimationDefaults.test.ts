@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_IMAGE_TARGET_ANIMATION } from '../src/app/imageTargetAnimation';
 import type { CloudflareModelOption } from '../src/app/cloudflareModels';
+import type { TargetEditorObject } from '../src/app/targetEditorObjects';
 
 const models: CloudflareModelOption[] = [
   {
@@ -15,6 +17,8 @@ const models: CloudflareModelOption[] = [
     previewUrl: 'https://worker.example/previews/sofa.png',
   },
 ];
+
+const previewUpdates: Array<{ objects: TargetEditorObject[] }> = [];
 
 vi.mock('../src/app/cloudflareModels', () => ({
   DEFAULT_GENERATE_MODEL_API_URL: 'https://worker.example/generate-3d',
@@ -45,37 +49,61 @@ vi.mock('../src/ar/mindarRuntime', () => ({
 
 vi.mock('../src/scene/ImageTargetPreview', () => ({
   ImageTargetPreview: class {
-    update = vi.fn(async () => undefined);
+    update = vi.fn(async (state: { objects: TargetEditorObject[] }) => {
+      previewUpdates.push({
+        objects: state.objects.map((object) => structuredClone(object)),
+      });
+    });
     dispose = vi.fn();
   },
 }));
 
-describe('target model rail interaction', () => {
+describe('new target object animation defaults', () => {
   beforeEach(() => {
     vi.resetModules();
+    previewUpdates.length = 0;
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
   });
 
-  it('adds a model object to the preview every time a rail card is clicked', async () => {
+  it('does not copy the selected object animation to newly added text or model objects', async () => {
     await import('../src/main');
     await waitFor(() => document.querySelectorAll<HTMLButtonElement>('.target-model-card').length === 2);
 
     const cards = document.querySelectorAll<HTMLButtonElement>('.target-model-card');
     cards[0].click();
-    await waitFor(() => document.querySelectorAll('[data-select-target-object]').length === 1);
+    await waitFor(() => latestObjects().length === 1);
+
+    setInputValue('#target-spin-speed', '2');
+    setInputValue('#target-bob-height', '0.25');
+    setInputValue('#target-bob-speed', '3');
+    await waitFor(() => latestObjects()[0]?.animation?.spinSpeed === 2);
+
+    document.querySelector<HTMLButtonElement>('#add-target-text')?.click();
+    await waitFor(() => latestObjects().length === 2);
+    expect(latestObjects()[1]?.animation).toEqual(DEFAULT_IMAGE_TARGET_ANIMATION);
+
+    document.querySelector<HTMLButtonElement>('[data-select-target-object]')?.click();
+    await waitFor(() => latestObjects()[0]?.animation?.spinSpeed === 2);
 
     cards[1].click();
-    await waitFor(() => document.querySelectorAll('[data-select-target-object]').length === 2);
-
-    const objectRows = [...document.querySelectorAll('[data-select-target-object]')];
-    expect(objectRows.map((row) => row.textContent)).toEqual([
-      expect.stringContaining('Chair'),
-      expect.stringContaining('Sofa'),
-    ]);
-    expect(document.querySelector('#image-target-status')?.textContent).toBe('Sofa added to the target.');
+    await waitFor(() => latestObjects().length === 3);
+    expect(latestObjects()[2]?.animation).toEqual(DEFAULT_IMAGE_TARGET_ANIMATION);
   }, 10000);
 });
+
+function setInputValue(selector: string, value: string): void {
+  const input = document.querySelector<HTMLInputElement>(selector);
+  if (!input) {
+    throw new Error(`Input not found: ${selector}`);
+  }
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function latestObjects(): TargetEditorObject[] {
+  return previewUpdates.at(-1)?.objects ?? [];
+}
 
 async function waitFor(assertion: () => boolean): Promise<void> {
   const timeoutAt = Date.now() + 1000;
@@ -85,5 +113,5 @@ async function waitFor(assertion: () => boolean): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  throw new Error('Timed out waiting for target model rail interaction');
+  throw new Error('Timed out waiting for target animation defaults');
 }

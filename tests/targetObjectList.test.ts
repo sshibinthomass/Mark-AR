@@ -40,6 +40,12 @@ describe('renderTargetObjectListItem', () => {
     expect(selectButton?.textContent).toContain('Hello AR');
     expect(selectButton?.textContent).toContain('Gradient');
     expect(deleteButton?.getAttribute('aria-label')).toBe('Delete text Hello AR');
+    expect(deleteButton?.getAttribute('title')).toBe('Delete text Hello AR');
+    expect(deleteButton?.textContent?.trim()).toBe('');
+    const icon = deleteButton?.querySelector('svg.trash-icon');
+    expect(icon?.getAttribute('aria-hidden')).toBe('true');
+    expect(icon?.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect(icon?.querySelectorAll('path')).toHaveLength(3);
     expect(swatch?.getAttribute('style')).toContain('linear-gradient');
     expect(swatch?.getAttribute('style')).toContain('#ef4444');
     expect(swatch?.getAttribute('style')).toContain('#facc15');
@@ -68,6 +74,12 @@ describe('renderTargetObjectListItem', () => {
     expect(row.querySelector('[data-delete-text-object]')).toBeNull();
     const deleteButton = row.querySelector<HTMLButtonElement>('[data-delete-target-object="model-1"]');
     expect(deleteButton?.getAttribute('aria-label')).toBe('Delete object Chair');
+    expect(deleteButton?.getAttribute('title')).toBe('Delete object Chair');
+    expect(deleteButton?.textContent?.trim()).toBe('');
+    const icon = deleteButton?.querySelector('svg.trash-icon');
+    expect(icon?.getAttribute('aria-hidden')).toBe('true');
+    expect(icon?.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect(icon?.querySelectorAll('path')).toHaveLength(3);
 
     row.querySelector<HTMLButtonElement>('[data-select-target-object="model-1"]')?.click();
     expect(onSelect).toHaveBeenCalledWith('model-1');

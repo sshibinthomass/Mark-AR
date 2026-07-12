@@ -25,7 +25,7 @@ const CAMERA_TARGET_MAX = 2;
 const CAMERA_DRAG_YAW_DEGREES_PER_PIXEL = 0.45;
 const CAMERA_DRAG_HEIGHT_PER_PIXEL = 0.01;
 const CAMERA_WHEEL_ZOOM_PER_DELTA = 0.0015;
-const CAMERA_PRESETS = ['top', 'front', 'right', 'home'] as const;
+const CAMERA_PRESETS = ['reset', 'home', 'front', 'left', 'right', 'top'] as const;
 const CAMERA_ARROW_DIRECTIONS = ['up', 'down', 'left', 'right'] as const;
 const CAMERA_CARDINAL_STEP_DEGREES = 90;
 
@@ -42,6 +42,24 @@ export function isCameraArrowDirection(value: string | undefined): value is Came
 
 export function cameraViewForPreset(preset: CameraPreset): PreviewCameraView {
   switch (preset) {
+    case 'reset':
+    case 'home':
+      return { ...DEFAULT_PREVIEW_CAMERA_VIEW };
+    case 'front':
+      return {
+        ...DEFAULT_PREVIEW_CAMERA_VIEW,
+        yawDegrees: 0,
+      };
+    case 'left':
+      return {
+        ...DEFAULT_PREVIEW_CAMERA_VIEW,
+        yawDegrees: -90,
+      };
+    case 'right':
+      return {
+        ...DEFAULT_PREVIEW_CAMERA_VIEW,
+        yawDegrees: 90,
+      };
     case 'top':
       return {
         distance: 0.9,
@@ -51,18 +69,6 @@ export function cameraViewForPreset(preset: CameraPreset): PreviewCameraView {
         targetHeight: 0,
         targetZ: 0,
       };
-    case 'right':
-      return {
-        ...DEFAULT_PREVIEW_CAMERA_VIEW,
-        yawDegrees: 90,
-      };
-    case 'front':
-      return {
-        ...DEFAULT_PREVIEW_CAMERA_VIEW,
-        yawDegrees: 0,
-      };
-    case 'home':
-      return { ...DEFAULT_PREVIEW_CAMERA_VIEW };
   }
 }
 

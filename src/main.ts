@@ -1,14 +1,10 @@
 import './style.css';
-import { AR_MARKERS } from './ar/markerCatalog';
 import { startMarkerAR, type MarkerARSession } from './ar/mindarRuntime';
 import { createRuntimeMarkerTargets } from './ar/markerTargets';
 import {
   DEFAULT_GENERATE_MODEL_API_URL,
-  extractProcessedBaseImage,
   loadCloudflareModelOptions,
-  processedImageDataUrl,
   type CloudflareModelOption,
-  type ProcessedBaseImage,
 } from './app/cloudflareModels';
 import {
   createImageTarget,
@@ -66,18 +62,13 @@ import {
   type TargetTextStylePreset,
 } from './app/targetEditorObjects';
 import {
-  captureVideoFrame,
   imageFileToCapturedImage,
-  startCameraPreview,
-  stopCameraPreview,
-  type CapturedImage,
 } from './capture/cameraCapture';
 import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
   type PreviewCameraView,
-  cameraViewForArrowOrbit,
-  cameraViewForDrag,
-  isCameraArrowDirection,
+  cameraViewForPreset,
+  isCameraPreset,
 } from './scene/previewCamera';
 import { ImageTargetPreview } from './scene/ImageTargetPreview';
 import type { PreviewTransformMode } from './scene/ImageTargetPreview';
@@ -87,6 +78,7 @@ import { routeFromHash } from './ui/pageRoutes';
 import { activateRoute } from './ui/pageRouter';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectListItem } from './ui/targetObjectList';
+import { decorateDeleteIconButton } from './ui/deleteIconButton';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -94,8 +86,8 @@ if (!app) {
   throw new Error('App root not found');
 }
 
-app.innerHTML = renderAppShell(AR_MARKERS);
-setupTargetInspectorTabs(app);
+app.innerHTML = renderAppShell();
+const targetInspectorTabs = setupTargetInspectorTabs(app);
 
 const shell = queryRequired<HTMLElement>('[data-app-shell]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
@@ -106,22 +98,11 @@ const workerEmailInput = queryRequired<HTMLInputElement>('#worker-email');
 const workerPasswordInput = queryRequired<HTMLInputElement>('#worker-password');
 const workerLogoutButton = queryRequired<HTMLButtonElement>('#worker-logout');
 const workerStatus = queryRequired<HTMLParagraphElement>('#worker-status');
-const captureVideo = queryRequired<HTMLVideoElement>('#base-capture-video');
-const startBaseCameraButton = queryRequired<HTMLButtonElement>('#start-base-camera');
-const processBaseButton = queryRequired<HTMLButtonElement>('#process-base-image');
-const baseImageFileInput = queryRequired<HTMLInputElement>('#base-image-file');
-const baseImageStatus = queryRequired<HTMLParagraphElement>('#base-image-status');
-const processedBasePreview = queryRequired<HTMLImageElement>('#processed-base-preview');
-const modelSelect = queryRequired<HTMLSelectElement>('#cloudflare-model-select');
-const reloadModelsButton = queryRequired<HTMLButtonElement>('#reload-cloudflare-models');
-const modelStatus = queryRequired<HTMLParagraphElement>('#cloudflare-model-status');
 const targetImageFile = document.querySelector<HTMLInputElement>('#target-image-file');
 const targetLabelInput = document.querySelector<HTMLInputElement>('#target-label');
 const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-model-select');
 const targetPreviewStage = document.querySelector<HTMLElement>('#target-preview-stage');
 const targetModelRail = document.querySelector<HTMLElement>('#target-model-rail');
-const addTargetObjectButton = document.querySelector<HTMLButtonElement>('#add-target-object');
-const removeTargetObjectButton = document.querySelector<HTMLButtonElement>('#remove-target-object');
 const targetObjectList = document.querySelector<HTMLElement>('#target-object-list');
 const targetTextValueInput = document.querySelector<HTMLTextAreaElement>('#target-text-value');
 const targetTextPresetSelect = document.querySelector<HTMLSelectElement>('#target-text-preset');
@@ -137,6 +118,7 @@ const targetTextDepthInput = document.querySelector<HTMLInputElement>('#target-t
 const targetTextBevelInput = document.querySelector<HTMLInputElement>('#target-text-bevel');
 const targetTextGlossInput = document.querySelector<HTMLInputElement>('#target-text-gloss');
 const addTargetTextButton = document.querySelector<HTMLButtonElement>('#add-target-text');
+const targetTextStylePanel = document.querySelector<HTMLDetailsElement>('[data-selected-text-style]');
 const targetScaleInput = document.querySelector<HTMLInputElement>('#target-scale');
 const targetOffsetXInput = document.querySelector<HTMLInputElement>('#target-offset-x');
 const targetOffsetYInput = document.querySelector<HTMLInputElement>('#target-offset-y');
@@ -150,7 +132,7 @@ const targetCameraDistanceInput = document.querySelector<HTMLInputElement>('#tar
 const targetCameraHeightInput = document.querySelector<HTMLInputElement>('#target-camera-height');
 const targetCameraYawInput = document.querySelector<HTMLInputElement>('#target-camera-yaw');
 const targetCameraTargetInput = document.querySelector<HTMLInputElement>('#target-camera-target');
-const targetCameraGizmo = document.querySelector<HTMLElement>('#target-camera-gizmo');
+const targetCameraPresetButtons = document.querySelectorAll<HTMLButtonElement>('[data-camera-preset]');
 const targetSpinAxisSelect = document.querySelector<HTMLSelectElement>('#target-spin-axis');
 const targetSpinSpeedInput = document.querySelector<HTMLInputElement>('#target-spin-speed');
 const targetBobHeightInput = document.querySelector<HTMLInputElement>('#target-bob-height');
@@ -161,9 +143,7 @@ const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#re
 const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-status');
 const savedImageTargetList = document.querySelector<HTMLElement>('#saved-image-target-list');
 let session: MarkerARSession | undefined;
-let captureStream: MediaStream | null = null;
 let authToken = loadWorkerAuthToken();
-let processedBaseImage: ProcessedBaseImage | undefined;
 let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
@@ -174,16 +154,6 @@ let targetTransformMode: PreviewTransformMode = 'translate';
 let targetObjects: TargetEditorObject[] = [];
 let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
-let targetCameraGizmoDrag:
-  | {
-      pointerId: number;
-      startX: number;
-      startY: number;
-      startView: PreviewCameraView;
-      didMove: boolean;
-    }
-  | undefined;
-let suppressedCameraGizmoClick: { x: number; y: number } | undefined;
 
 activateRoute(shell, routeFromHash(window.location.hash));
 void initializeCloudflareControls();
@@ -197,16 +167,11 @@ startButton.addEventListener('click', async () => {
   status.textContent = 'Preparing marker targets';
   session?.stop();
   stage.replaceChildren();
-  stopCameraPreview(captureStream);
-  captureStream = null;
 
   try {
-    const selectedModel = getSelectedModel();
     const runtimeTargets = createRuntimeMarkerTargets({
       cloudTargets: cloudImageTargets,
       draftTarget: createCurrentDraftTarget(),
-      selectedModel,
-      processedBaseImage,
     });
     session = await startMarkerAR(stage, {
       targets: runtimeTargets,
@@ -217,7 +182,7 @@ startButton.addEventListener('click', async () => {
         status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
       },
       onReady: () => {
-        status.textContent = 'Camera active. Scan a built-in marker or saved cloud image target.';
+        status.textContent = 'Camera active. Scan a saved cloud image target.';
       },
     });
     startButton.textContent = 'Restart AR';
@@ -260,64 +225,6 @@ workerLogoutButton.addEventListener('click', async () => {
   workerStatus.textContent = 'Signed out. Public models only';
   await refreshCloudflareModels();
   await refreshImageTargets();
-});
-
-startBaseCameraButton.addEventListener('click', async () => {
-  startBaseCameraButton.disabled = true;
-  baseImageStatus.textContent = 'Starting camera';
-
-  try {
-    stopCameraPreview(captureStream);
-    captureStream = await startCameraPreview(captureVideo);
-    baseImageStatus.textContent = 'Camera ready';
-  } catch (error) {
-    baseImageStatus.textContent = errorMessage(error, 'Unable to start camera');
-  } finally {
-    startBaseCameraButton.disabled = false;
-  }
-});
-
-processBaseButton.addEventListener('click', async () => {
-  processBaseButton.disabled = true;
-  baseImageStatus.textContent = 'Processing with OpenAI';
-
-  try {
-    const capturedImage = await captureVideoFrame(captureVideo);
-    await processCapturedBaseImage(capturedImage);
-  } catch (error) {
-    baseImageStatus.textContent = errorMessage(error, 'Unable to process base image');
-  } finally {
-    processBaseButton.disabled = false;
-  }
-});
-
-baseImageFileInput.addEventListener('change', async () => {
-  const file = baseImageFileInput.files?.[0];
-  if (!file) {
-    return;
-  }
-
-  processBaseButton.disabled = true;
-  baseImageStatus.textContent = 'Processing selected image';
-  try {
-    const capturedImage = await imageFileToCapturedImage(file);
-    await processCapturedBaseImage(capturedImage);
-  } catch (error) {
-    baseImageStatus.textContent = errorMessage(error, 'Unable to process selected image');
-  } finally {
-    processBaseButton.disabled = false;
-  }
-});
-
-reloadModelsButton.addEventListener('click', () => {
-  void refreshCloudflareModelsAndTargets();
-});
-
-modelSelect.addEventListener('change', () => {
-  const selectedModel = getSelectedModel();
-  modelStatus.textContent = selectedModel
-    ? `${selectedModel.label} selected`
-    : 'No model selected';
 });
 
 targetImageFile?.addEventListener('change', async () => {
@@ -371,65 +278,15 @@ targetTransformModeButtons.forEach((button) => {
   });
 });
 
-targetCameraGizmo?.addEventListener('click', (event) => {
-  if (suppressedCameraGizmoClick) {
-    const distanceFromDragEnd = Math.hypot(
-      event.clientX - suppressedCameraGizmoClick.x,
-      event.clientY - suppressedCameraGizmoClick.y,
-    );
-    suppressedCameraGizmoClick = undefined;
-    if (distanceFromDragEnd < 6) {
-      event.preventDefault();
-      event.stopPropagation();
+targetCameraPresetButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    if (!isCameraPreset(button.dataset.cameraPreset)) {
       return;
     }
-  }
 
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-camera-orbit]');
-  if (!button || !isCameraArrowDirection(button.dataset.cameraOrbit)) {
-    return;
-  }
-
-  targetCameraView = cameraViewForArrowOrbit(targetCameraView, button.dataset.cameraOrbit);
-  syncTargetCameraInputs(targetCameraView);
-  void updateTargetPreview();
+    applyTargetCameraView(cameraViewForPreset(button.dataset.cameraPreset));
+  });
 });
-
-targetCameraGizmo?.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0 && event.pointerType !== 'touch') {
-    return;
-  }
-
-  targetCameraGizmoDrag = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    startView: targetCameraView,
-    didMove: false,
-  };
-  targetCameraGizmo.classList.add('is-dragging');
-  window.addEventListener('pointermove', handleTargetCameraGizmoPointerMove);
-  window.addEventListener('pointerup', handleTargetCameraGizmoPointerEnd);
-  window.addEventListener('pointercancel', handleTargetCameraGizmoPointerEnd);
-});
-
-function handleTargetCameraGizmoPointerMove(event: PointerEvent): void {
-  if (!targetCameraGizmoDrag || targetCameraGizmoDrag.pointerId !== event.pointerId) {
-    return;
-  }
-
-  const deltaX = event.clientX - targetCameraGizmoDrag.startX;
-  const deltaY = event.clientY - targetCameraGizmoDrag.startY;
-  if (!targetCameraGizmoDrag.didMove && Math.hypot(deltaX, deltaY) < 3) {
-    return;
-  }
-
-  targetCameraGizmoDrag.didMove = true;
-  targetCameraView = cameraViewForDrag(targetCameraGizmoDrag.startView, { deltaX, deltaY });
-  syncTargetCameraInputs(targetCameraView);
-  void updateTargetPreview();
-  event.preventDefault();
-}
 
 [targetSpinSpeedInput, targetBobHeightInput, targetBobSpeedInput].forEach((input) => {
   input?.addEventListener('input', () => {
@@ -456,14 +313,6 @@ targetTextPresetSelect?.addEventListener('change', () => {
 
 targetModelSelect?.addEventListener('change', () => {
   handleTargetModelSelectionChange();
-});
-
-addTargetObjectButton?.addEventListener('click', () => {
-  addTargetObjectFromSelection();
-});
-
-removeTargetObjectButton?.addEventListener('click', () => {
-  removeSelectedTargetObject();
 });
 
 targetTextLanguageSelect?.addEventListener('change', () => {
@@ -522,6 +371,7 @@ syncTargetCameraInputs(targetCameraView);
 syncTargetTransformModeButtons(targetTransformMode);
 syncTargetAnimationInputs(targetAnimation);
 syncTargetTextAction();
+syncTargetObjectControlsTab();
 
 async function initializeCloudflareControls(): Promise<void> {
   if (authToken) {
@@ -550,69 +400,23 @@ async function refreshCloudflareModelsAndTargets(): Promise<void> {
 }
 
 async function refreshCloudflareModels(): Promise<void> {
-  reloadModelsButton.disabled = true;
-  modelStatus.textContent = 'Loading Cloudflare models';
-
   try {
     cloudflareModels = await loadCloudflareModelOptions({
       apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
       authToken,
     });
-    renderModelOptions(cloudflareModels);
     renderTargetModelOptions(cloudflareModels);
-    modelStatus.textContent = `${cloudflareModels.length} Cloudflare models available`;
     if (!authToken) {
       workerStatus.textContent = 'Public models ready';
     }
   } catch (error) {
-    modelSelect.innerHTML = '<option value="">Unable to load models</option>';
+    cloudflareModels = [];
     if (targetModelSelect) {
       targetModelSelect.innerHTML = '<option value="">Unable to load models</option>';
     }
     renderTargetModelRailOptions([]);
-    modelStatus.textContent = errorMessage(error, 'Unable to load models');
-  } finally {
-    reloadModelsButton.disabled = false;
+    workerStatus.textContent = errorMessage(error, 'Unable to load models');
   }
-}
-
-async function processCapturedBaseImage(image: CapturedImage): Promise<void> {
-  const selectedModel = getSelectedModel();
-  processedBaseImage = await extractProcessedBaseImage({
-    apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
-    imageBase64: image.imageBase64,
-    imageMimeType: image.imageMimeType,
-    targetObject: selectedModel?.label,
-    authToken,
-  });
-  processedBasePreview.src = processedImageDataUrl(processedBaseImage);
-  processedBasePreview.hidden = false;
-  baseImageStatus.textContent = 'Processed base ready';
-}
-
-function renderModelOptions(models: CloudflareModelOption[]): void {
-  const selectedValue = modelSelect.value;
-  modelSelect.replaceChildren();
-
-  const emptyOption = document.createElement('option');
-  emptyOption.value = '';
-  emptyOption.textContent = 'Use marker object';
-  modelSelect.append(emptyOption);
-
-  for (const model of models) {
-    const option = document.createElement('option');
-    option.value = model.id;
-    option.textContent = model.visibility === 'private'
-      ? `${model.label} (private)`
-      : model.label;
-    modelSelect.append(option);
-  }
-
-  modelSelect.value = models.some((model) => model.id === selectedValue) ? selectedValue : '';
-}
-
-function getSelectedModel(): CloudflareModelOption | undefined {
-  return cloudflareModels.find((model) => model.id === modelSelect.value);
 }
 
 function renderTargetModelOptions(models: CloudflareModelOption[]): void {
@@ -654,6 +458,7 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
       if (!selectedTargetObjectId || selectedTargetObjectId === objectId) {
         selectedTargetObjectId = objectId;
         syncTargetPlacementInputs(placement);
+        syncTargetObjectControlsTab({ activateWhenSelected: true });
       }
       renderTargetObjectList();
     },
@@ -801,20 +606,6 @@ function createTargetModelObject(model: CloudflareModelOption): CloudImageTarget
   };
 }
 
-function removeSelectedTargetObject(): void {
-  if (targetObjects.length === 0) {
-    updateImageTargetStatus('No placed objects to remove.', true);
-    return;
-  }
-
-  const selectedIndex = targetObjects.findIndex((object) => object.id === selectedTargetObjectId);
-  const removeIndex = selectedIndex >= 0 ? selectedIndex : targetObjects.length - 1;
-  const object = targetObjects[removeIndex];
-  if (object) {
-    removeTargetObjectById(object.id);
-  }
-}
-
 function removeTargetObjectById(objectId: string): void {
   const removeIndex = targetObjects.findIndex((object) => object.id === objectId);
   if (removeIndex < 0) {
@@ -840,6 +631,7 @@ function removeTargetObjectById(objectId: string): void {
   syncTargetPlacementInputs(targetPlacement);
   syncTargetAnimationInputs(targetAnimation);
   syncTargetTextAction();
+  syncTargetObjectControlsTab({ activateWhenSelected: Boolean(selectedObject) });
   renderTargetObjectList();
   updateImageTargetStatus(
     targetObjects.length > 0
@@ -869,6 +661,7 @@ function selectTargetObject(objectId: string, options?: { refreshPreview?: boole
   syncTargetPlacementInputs(object.placement);
   syncTargetAnimationInputs(targetAnimation);
   syncTargetTextAction();
+  syncTargetObjectControlsTab({ activateWhenSelected: true });
   renderTargetObjectList();
   updateImageTargetStatus(
     isTextTargetObject(object) ? `${object.text.value} text selected.` : `${object.model.label} selected.`,
@@ -890,6 +683,7 @@ function clearSelectedTargetObject(options?: { refreshPreview?: boolean }): void
   syncTargetPlacementInputs(targetPlacement);
   syncTargetAnimationInputs(targetAnimation);
   syncTargetTextAction();
+  syncTargetObjectControlsTab();
   renderTargetObjectList();
   updateImageTargetStatus('No object selected.', false);
   if (options?.refreshPreview !== false) {
@@ -919,6 +713,22 @@ function getSelectedTargetObject(): TargetEditorObject | undefined {
   return targetObjects.find((object) => object.id === selectedTargetObjectId);
 }
 
+function syncTargetObjectControlsTab(options?: { activateWhenSelected?: boolean }): void {
+  const hasSelection = Boolean(getSelectedTargetObject());
+  targetInspectorTabs.setTabEnabled('object-controls', hasSelection);
+
+  if (hasSelection) {
+    if (options?.activateWhenSelected) {
+      targetInspectorTabs.activate('object-controls');
+    }
+    return;
+  }
+
+  if (targetInspectorTabs.getActiveTab() === 'object-controls') {
+    targetInspectorTabs.activate('objects');
+  }
+}
+
 function getSelectedTextTargetObject(): ReturnType<typeof createLocalTextObject> | undefined {
   const object = getSelectedTargetObject();
   return object && isTextTargetObject(object) ? object : undefined;
@@ -927,13 +737,6 @@ function getSelectedTextTargetObject(): ReturnType<typeof createLocalTextObject>
 function renderTargetObjectList(): void {
   if (!targetObjectList) {
     return;
-  }
-
-  if (addTargetObjectButton) {
-    addTargetObjectButton.disabled = !getSelectedTargetModel();
-  }
-  if (removeTargetObjectButton) {
-    removeTargetObjectButton.disabled = targetObjects.length === 0;
   }
 
   targetObjectList.innerHTML = '';
@@ -1137,13 +940,26 @@ function syncTargetTextInputs(text: Partial<TargetTextContent>): void {
 }
 
 function syncTargetTextAction(): void {
+  const selectedText = getSelectedTextTargetObject();
+  syncSelectedTextStyleVisibility(Boolean(selectedText));
+
   if (!addTargetTextButton) {
     return;
   }
 
-  const selectedText = getSelectedTextTargetObject();
   addTargetTextButton.textContent = selectedText ? 'Update text' : 'Add text';
   addTargetTextButton.dataset.targetTextAction = selectedText ? 'update' : 'add';
+}
+
+function syncSelectedTextStyleVisibility(isTextSelected: boolean): void {
+  if (!targetTextStylePanel) {
+    return;
+  }
+
+  targetTextStylePanel.hidden = !isTextSelected;
+  if (!isTextSelected) {
+    targetTextStylePanel.open = false;
+  }
 }
 
 function readRangeNumber(input: HTMLInputElement | null, fallback: number): number {
@@ -1179,27 +995,16 @@ function syncTargetCameraInputs(cameraView: PreviewCameraView): void {
   setRangeInputValue(targetCameraTargetInput, cameraView.targetHeight);
 }
 
+function applyTargetCameraView(cameraView: PreviewCameraView): void {
+  targetCameraView = cameraView;
+  syncTargetCameraInputs(cameraView);
+  void updateTargetPreview();
+}
+
 function syncTargetTransformModeButtons(mode: PreviewTransformMode): void {
   targetTransformModeButtons.forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.transformMode === mode));
   });
-}
-
-function handleTargetCameraGizmoPointerEnd(event: PointerEvent): void {
-  if (!targetCameraGizmoDrag || targetCameraGizmoDrag.pointerId !== event.pointerId) {
-    return;
-  }
-
-  if (targetCameraGizmoDrag.didMove) {
-    suppressedCameraGizmoClick = { x: event.clientX, y: event.clientY };
-    event.preventDefault();
-  }
-
-  targetCameraGizmoDrag = undefined;
-  targetCameraGizmo?.classList.remove('is-dragging');
-  window.removeEventListener('pointermove', handleTargetCameraGizmoPointerMove);
-  window.removeEventListener('pointerup', handleTargetCameraGizmoPointerEnd);
-  window.removeEventListener('pointercancel', handleTargetCameraGizmoPointerEnd);
 }
 
 function setRangeInputValue(input: HTMLInputElement | null, value: number): void {
@@ -1366,8 +1171,9 @@ function renderSavedImageTargets(): void {
 
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
+    deleteButton.className = 'saved-target-delete';
     deleteButton.dataset.deleteTarget = target.id;
-    deleteButton.textContent = 'Delete';
+    decorateDeleteIconButton(deleteButton, `Delete target ${target.label}`);
     deleteButton.addEventListener('click', async () => {
       await deleteImageTarget({
         apiUrl: DEFAULT_GENERATE_MODEL_API_URL,

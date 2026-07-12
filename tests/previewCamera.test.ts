@@ -13,10 +13,15 @@ import {
 
 describe('preview camera presets', () => {
   it('maps camera gizmo presets to deterministic preview camera views', () => {
+    expect(cameraViewForPreset('reset')).toEqual(DEFAULT_PREVIEW_CAMERA_VIEW);
     expect(cameraViewForPreset('home')).toEqual(DEFAULT_PREVIEW_CAMERA_VIEW);
     expect(cameraViewForPreset('front')).toMatchObject({
       distance: DEFAULT_PREVIEW_CAMERA_VIEW.distance,
       yawDegrees: 0,
+    });
+    expect(cameraViewForPreset('left')).toMatchObject({
+      distance: DEFAULT_PREVIEW_CAMERA_VIEW.distance,
+      yawDegrees: -90,
     });
     expect(cameraViewForPreset('right')).toMatchObject({
       distance: DEFAULT_PREVIEW_CAMERA_VIEW.distance,
@@ -30,10 +35,13 @@ describe('preview camera presets', () => {
   });
 
   it('recognizes supported camera preset ids from DOM buttons', () => {
+    expect(isCameraPreset('reset')).toBe(true);
     expect(isCameraPreset('top')).toBe(true);
     expect(isCameraPreset('front')).toBe(true);
+    expect(isCameraPreset('left')).toBe(true);
     expect(isCameraPreset('right')).toBe(true);
     expect(isCameraPreset('home')).toBe(true);
+    expect(isCameraPreset('bottom')).toBe(false);
     expect(isCameraPreset('sideways')).toBe(false);
   });
 

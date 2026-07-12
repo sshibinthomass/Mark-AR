@@ -7,6 +7,7 @@ import {
   normalizeTargetText,
   type TargetEditorObject,
 } from '../app/targetEditorObjects';
+import { decorateDeleteIconButton } from './deleteIconButton';
 
 export type TargetObjectListItemOptions = {
   object: TargetEditorObject;
@@ -78,8 +79,7 @@ function createDeleteButton(
   deleteButton.type = 'button';
   deleteButton.className = 'target-object-delete';
   deleteButton.dataset.deleteTargetObject = objectId;
-  deleteButton.textContent = 'Delete';
-  deleteButton.setAttribute('aria-label', label);
+  decorateDeleteIconButton(deleteButton, label);
   deleteButton.addEventListener('click', () => onDelete(objectId));
   return deleteButton;
 }
