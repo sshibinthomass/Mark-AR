@@ -77,6 +77,7 @@ import type { PreviewTransformMode } from './scene/ImageTargetPreview';
 import {
   applyAuthUi,
   isAuthenticated,
+  resolveLoginResult,
   resolveSignupResult,
   type AuthUiState,
 } from './ui/authUi';
@@ -263,18 +264,12 @@ async function signInToWorker(message = 'Signing in…'): Promise<void> {
       email: workerEmailInput.value,
       password: workerPasswordInput.value,
     });
-    if (!sessionResult.token) {
-      throw new Error('Worker did not return a session token.');
-    }
+    const result = resolveLoginResult(sessionResult);
 
-    authToken = sessionResult.token;
-    saveWorkerAuthToken(sessionResult.token);
+    authToken = result.token;
+    saveWorkerAuthToken(result.token);
     workerPasswordInput.value = '';
-    setAuthUiState({
-      status: 'signed-in',
-      email: sessionResult.user.email,
-      message: 'Image Targets unlocked.',
-    });
+    setAuthUiState(result.state);
     await refreshCloudflareModels();
     await refreshImageTargets();
     restorePendingProtectedRoute();

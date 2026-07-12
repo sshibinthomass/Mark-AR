@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyAuthUi,
   isAuthenticated,
+  resolveLoginResult,
   resolveSignupResult,
   resolveAccessibleRoute,
   type AuthUiState,
@@ -24,6 +25,35 @@ const signedIn: AuthUiState = {
 };
 
 describe('auth UI state', () => {
+  it('rejects a token-bearing login while the account is pending', () => {
+    expect(() => resolveLoginResult({
+      user: {
+        email: 'maker@example.com',
+        role: 'user',
+        status: 'pending',
+      },
+      token: 'unexpected-token',
+    })).toThrow('Account pending admin approval.');
+  });
+
+  it('accepts only an active token-bearing login', () => {
+    expect(resolveLoginResult({
+      user: {
+        email: 'maker@example.com',
+        role: 'user',
+        status: 'active',
+      },
+      token: 'login-token',
+    })).toEqual({
+      token: 'login-token',
+      state: {
+        status: 'signed-in',
+        email: 'maker@example.com',
+        message: 'Image Targets unlocked.',
+      },
+    });
+  });
+
   it('keeps a pending signup signed out until admin approval', () => {
     expect(resolveSignupResult({
       user: {

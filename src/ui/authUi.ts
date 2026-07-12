@@ -10,6 +10,28 @@ export type SignupResult =
   | { kind: 'pending'; email: string; message: string }
   | { kind: 'signed-in'; token: string; state: Extract<AuthUiState, { status: 'signed-in' }> };
 
+export type LoginResult = {
+  token: string;
+  state: Extract<AuthUiState, { status: 'signed-in' }>;
+};
+
+export function resolveLoginResult(session: AuthSession): LoginResult {
+  if (session.user.status !== 'active') {
+    throw new Error('Account pending admin approval.');
+  }
+  if (!session.token) {
+    throw new Error('Worker did not return a session token.');
+  }
+  return {
+    token: session.token,
+    state: {
+      status: 'signed-in',
+      email: session.user.email,
+      message: 'Image Targets unlocked.',
+    },
+  };
+}
+
 export function resolveSignupResult(session: AuthSession): SignupResult {
   if (!session.token || session.user.status !== 'active') {
     return {
