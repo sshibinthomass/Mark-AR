@@ -1,4 +1,23 @@
 import type { AppRoute } from './pageRoutes';
+import { resolveAccessibleRoute, type AuthUiState } from './authUi';
+
+export type AccessibleRouteResult = {
+  activeRoute: AppRoute;
+  blocked: boolean;
+};
+
+export function activateAccessibleRoute(
+  root: HTMLElement,
+  requestedRoute: AppRoute,
+  authState: AuthUiState,
+): AccessibleRouteResult {
+  const activeRoute = resolveAccessibleRoute(requestedRoute, authState);
+  activateRoute(root, activeRoute);
+  return {
+    activeRoute,
+    blocked: activeRoute !== requestedRoute,
+  };
+}
 
 export function activateRoute(root: HTMLElement, route: AppRoute): void {
   root.dataset.activePage = route;

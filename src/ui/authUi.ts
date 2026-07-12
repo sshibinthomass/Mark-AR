@@ -1,0 +1,55 @@
+import type { AppRoute } from './pageRoutes';
+
+export type AuthUiState =
+  | { status: 'checking'; message: string }
+  | { status: 'signed-out'; message: string }
+  | { status: 'signed-in'; message: string; email: string };
+
+export function isAuthenticated(state: AuthUiState): state is Extract<AuthUiState, { status: 'signed-in' }> {
+  return state.status === 'signed-in';
+}
+
+export function resolveAccessibleRoute(route: AppRoute, state: AuthUiState): AppRoute {
+  return route === 'targets' && !isAuthenticated(state) ? 'account' : route;
+}
+
+export function applyAuthUi(root: HTMLElement, state: AuthUiState): void {
+  const authenticated = isAuthenticated(state);
+  root.dataset.authState = state.status;
+
+  root.querySelectorAll<HTMLElement>('[data-auth-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.authPanel !== state.status;
+  });
+
+  const status = root.querySelector<HTMLElement>('#worker-status');
+  if (status) {
+    status.textContent = state.message;
+  }
+
+  setText(root, '[data-auth-account-label]', authenticated ? 'Account' : 'Sign in');
+  setText(root, '[data-auth-access-label]', authenticated ? 'Unlocked' : state.status === 'checking' ? 'Checking' : 'Locked');
+  setText(root, '[data-auth-protected-label]', authenticated ? 'Create target' : state.status === 'checking' ? 'Checking access' : 'Sign in to unlock');
+  setText(root, '[data-auth-account-action]', authenticated ? 'View account' : 'Sign in');
+  setText(root, '[data-auth-email]', authenticated ? state.email : '');
+
+  root.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link) => {
+    if (authenticated) {
+      link.href = link.dataset.unlockedHref ?? '#/targets';
+      link.removeAttribute('aria-disabled');
+      link.removeAttribute('data-auth-locked');
+      link.removeAttribute('title');
+      return;
+    }
+
+    link.href = '#/account';
+    link.setAttribute('aria-disabled', 'true');
+    link.dataset.authLocked = 'true';
+    link.title = state.status === 'checking' ? 'Checking your session' : 'Sign in to use Image Targets';
+  });
+}
+
+function setText(root: HTMLElement, selector: string, value: string): void {
+  root.querySelectorAll<HTMLElement>(selector).forEach((element) => {
+    element.textContent = value;
+  });
+}

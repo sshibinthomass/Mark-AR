@@ -48,7 +48,7 @@ export function renderAppShell(): string {
         <div class="route-tabs">
           ${renderRouteLink('scan', 'Scan')}
           ${renderRouteLink('targets', 'Targets')}
-          ${renderRouteLink('account', 'Account')}
+          ${renderRouteLink('account', '<span data-auth-account-label>Sign in</span>')}
         </div>
       </nav>
 
@@ -366,26 +366,71 @@ export function renderAppShell(): string {
       </section>
 
       <section class="page" data-page="account" hidden aria-label="Web AR Worker login">
-        ${renderPageHeader('Account', 'Use your approved Web-AR Worker login for protected OpenAI processing.')}
-        <section class="tool-card worker-card">
-          <div class="tool-card-head">
-            <p class="eyebrow">Web-AR Worker</p>
-            <p id="worker-status">Public models loading</p>
-          </div>
-          <form id="worker-login-form" class="login-form">
-            <label>
-              <span>Email</span>
-              <input id="worker-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
-            </label>
-            <label>
-              <span>Password</span>
-              <input id="worker-password" name="password" type="password" autocomplete="current-password" />
-            </label>
-            <div class="button-row">
-              <button id="worker-login" class="primary" type="submit">Sign in</button>
-              <button id="worker-logout" type="button">Sign out</button>
+        ${renderPageHeader('Account', 'Sign in to create and manage cloud image targets.')}
+        <section class="auth-layout">
+          <aside class="auth-access-card" aria-label="Image Targets access status">
+            <div class="auth-orbit" aria-hidden="true">
+              <span></span>
+              <i></i>
             </div>
-          </form>
+            <div class="auth-access-copy">
+              <p class="eyebrow">Image Targets access</p>
+              <h3>Your cloud workspace stays protected.</h3>
+              <p>Sign in with your Web-AR account to upload target images, place 3D objects, and save the result.</p>
+            </div>
+            <div class="auth-access-state">
+              <span class="auth-access-dot" aria-hidden="true"></span>
+              <span>
+                <small>Workspace</small>
+                <strong data-auth-access-label>Locked</strong>
+              </span>
+            </div>
+          </aside>
+
+          <section class="tool-card worker-card auth-control-card">
+            <div class="tool-card-head auth-card-head">
+              <p class="eyebrow">Web-AR account</p>
+              <h3>Continue to Marker AR studio</h3>
+              <p id="worker-status" aria-live="polite">Sign in to use Image Targets.</p>
+            </div>
+
+            <div data-auth-panel="signed-out">
+              <form id="worker-login-form" class="login-form">
+                <label>
+                  <span>Email</span>
+                  <input id="worker-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+                </label>
+                <label>
+                  <span>Password</span>
+                  <input id="worker-password" name="password" type="password" autocomplete="current-password" required />
+                </label>
+                <button id="worker-login" class="primary auth-primary-action" type="submit">Sign in</button>
+              </form>
+            </div>
+
+            <div class="auth-checking" data-auth-panel="checking" hidden aria-live="polite">
+              <span class="auth-spinner" aria-hidden="true"></span>
+              <strong>Checking your saved session</strong>
+              <p>This only takes a moment.</p>
+            </div>
+
+            <div class="auth-signed-in" data-auth-panel="signed-in" hidden>
+              <div class="auth-identity">
+                <span class="auth-avatar" aria-hidden="true">ID</span>
+                <span>
+                  <small>Signed in as</small>
+                  <strong data-auth-email></strong>
+                </span>
+              </div>
+              <a class="auth-primary-action primary-link" href="${hrefForRoute('targets')}" data-auth-open-targets>
+                Open Image Targets
+              </a>
+              <div class="auth-signout-row">
+                <span>Finished on this device?</span>
+                <button id="worker-logout" type="button">Sign out</button>
+              </div>
+            </div>
+          </section>
         </section>
       </section>
     </main>
@@ -393,6 +438,9 @@ export function renderAppShell(): string {
 }
 
 function renderRouteLink(route: AppRoute, label: string): string {
+  if (route === 'targets') {
+    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in to use Image Targets">${label}</a>`;
+  }
   return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${label}</a>`;
 }
 
@@ -410,12 +458,20 @@ function renderPageHeader(title: string, text: string): string {
 }
 
 function renderModeCard(card: ModeCard): string {
+  const protectedAttributes = card.route === 'targets'
+    ? `href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in to use Image Targets"`
+    : `href="${hrefForRoute(card.route)}"`;
+  const actionAttribute = card.route === 'targets'
+    ? ' data-auth-protected-label'
+    : card.route === 'account'
+      ? ' data-auth-account-action'
+      : '';
   return `
-    <a class="mode-card" href="${hrefForRoute(card.route)}">
+    <a class="mode-card" ${protectedAttributes}>
       <span>${card.badge}</span>
       <strong>${card.title}</strong>
       <small>${card.text}</small>
-      <em>${card.action}</em>
+      <em${actionAttribute}>${card.route === 'targets' ? 'Sign in to unlock' : card.action}</em>
     </a>
   `;
 }

@@ -72,10 +72,15 @@ import {
 } from './scene/previewCamera';
 import { ImageTargetPreview } from './scene/ImageTargetPreview';
 import type { PreviewTransformMode } from './scene/ImageTargetPreview';
+import {
+  applyAuthUi,
+  isAuthenticated,
+  type AuthUiState,
+} from './ui/authUi';
 import { renderAppShell } from './ui/appShell';
 import { renderTargetModelRail } from './ui/modelRail';
-import { routeFromHash } from './ui/pageRoutes';
-import { activateRoute } from './ui/pageRouter';
+import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
+import { activateAccessibleRoute } from './ui/pageRouter';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectListItem } from './ui/targetObjectList';
 import { decorateDeleteIconButton } from './ui/deleteIconButton';
@@ -97,7 +102,6 @@ const workerLoginForm = queryRequired<HTMLFormElement>('#worker-login-form');
 const workerEmailInput = queryRequired<HTMLInputElement>('#worker-email');
 const workerPasswordInput = queryRequired<HTMLInputElement>('#worker-password');
 const workerLogoutButton = queryRequired<HTMLButtonElement>('#worker-logout');
-const workerStatus = queryRequired<HTMLParagraphElement>('#worker-status');
 const targetImageFile = document.querySelector<HTMLInputElement>('#target-image-file');
 const targetLabelInput = document.querySelector<HTMLInputElement>('#target-label');
 const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-model-select');
@@ -144,6 +148,10 @@ const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-sta
 const savedImageTargetList = document.querySelector<HTMLElement>('#saved-image-target-list');
 let session: MarkerARSession | undefined;
 let authToken = loadWorkerAuthToken();
+let authUiState: AuthUiState = authToken
+  ? { status: 'checking', message: 'Checking your saved session…' }
+  : { status: 'signed-out', message: 'Sign in to use Image Targets.' };
+let pendingProtectedRoute: AppRoute | undefined;
 let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
@@ -155,11 +163,27 @@ let targetObjects: TargetEditorObject[] = [];
 let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
 
-activateRoute(shell, routeFromHash(window.location.hash));
+applyAuthUi(shell, authUiState);
+activateRequestedRoute(routeFromHash(window.location.hash));
 void initializeCloudflareControls();
 
 window.addEventListener('hashchange', () => {
-  activateRoute(shell, routeFromHash(window.location.hash));
+  activateRequestedRoute(routeFromHash(window.location.hash));
+});
+
+shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link) => {
+  link.addEventListener('click', () => {
+    if (isAuthenticated(authUiState)) {
+      return;
+    }
+    pendingProtectedRoute = 'targets';
+    setAuthUiState({
+      ...authUiState,
+      message: authUiState.status === 'checking'
+        ? 'Checking your session before opening Image Targets…'
+        : 'Sign in to open Image Targets.',
+    });
+  });
 });
 
 startButton.addEventListener('click', async () => {
@@ -196,7 +220,7 @@ startButton.addEventListener('click', async () => {
 
 workerLoginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  workerStatus.textContent = 'Signing in';
+  setAuthUiState({ status: 'checking', message: 'Signing in…' });
 
   try {
     const sessionResult = await loginToWebArWorker({
@@ -211,18 +235,30 @@ workerLoginForm.addEventListener('submit', async (event) => {
     authToken = sessionResult.token;
     saveWorkerAuthToken(sessionResult.token);
     workerPasswordInput.value = '';
-    workerStatus.textContent = `Signed in as ${sessionResult.user.email}`;
+    setAuthUiState({
+      status: 'signed-in',
+      email: sessionResult.user.email,
+      message: 'Image Targets unlocked.',
+    });
     await refreshCloudflareModels();
     await refreshImageTargets();
+    restorePendingProtectedRoute();
   } catch (error) {
-    workerStatus.textContent = errorMessage(error, 'Unable to sign in');
+    setAuthUiState({
+      status: 'signed-out',
+      message: errorMessage(error, 'Unable to sign in'),
+    });
   }
 });
 
 workerLogoutButton.addEventListener('click', async () => {
   authToken = null;
   clearWorkerAuthToken();
-  workerStatus.textContent = 'Signed out. Public models only';
+  pendingProtectedRoute = undefined;
+  setAuthUiState({ status: 'signed-out', message: 'Signed out. Sign in to use Image Targets.' });
+  if (shell.dataset.activePage === 'targets') {
+    window.location.hash = hrefForRoute('account');
+  }
   await refreshCloudflareModels();
   await refreshImageTargets();
 });
@@ -375,19 +411,34 @@ syncTargetObjectControlsTab();
 
 async function initializeCloudflareControls(): Promise<void> {
   if (authToken) {
-    workerStatus.textContent = 'Checking saved Worker session';
+    setAuthUiState({ status: 'checking', message: 'Checking your saved session…' });
     try {
       const user = await getCurrentWebArUser({
         apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
         token: authToken,
       });
-      workerStatus.textContent = user ? `Signed in as ${user.email}` : 'Saved session expired';
-      if (!user) {
+      if (user) {
+        setAuthUiState({
+          status: 'signed-in',
+          email: user.email,
+          message: 'Image Targets unlocked.',
+        });
+        restorePendingProtectedRoute();
+      } else {
         authToken = null;
         clearWorkerAuthToken();
+        setAuthUiState({
+          status: 'signed-out',
+          message: 'Your saved session expired. Sign in again to use Image Targets.',
+        });
       }
     } catch (error) {
-      workerStatus.textContent = errorMessage(error, 'Could not verify saved session');
+      authToken = null;
+      clearWorkerAuthToken();
+      setAuthUiState({
+        status: 'signed-out',
+        message: errorMessage(error, 'Could not verify saved session'),
+      });
     }
   }
 
@@ -406,17 +457,50 @@ async function refreshCloudflareModels(): Promise<void> {
       authToken,
     });
     renderTargetModelOptions(cloudflareModels);
-    if (!authToken) {
-      workerStatus.textContent = 'Public models ready';
-    }
-  } catch (error) {
+  } catch {
     cloudflareModels = [];
     if (targetModelSelect) {
       targetModelSelect.innerHTML = '<option value="">Unable to load models</option>';
     }
     renderTargetModelRailOptions([]);
-    workerStatus.textContent = errorMessage(error, 'Unable to load models');
   }
+}
+
+function setAuthUiState(state: AuthUiState): void {
+  authUiState = state;
+  applyAuthUi(shell, state);
+}
+
+function activateRequestedRoute(requestedRoute: AppRoute): void {
+  const result = activateAccessibleRoute(shell, requestedRoute, authUiState);
+  if (!result.blocked) {
+    return;
+  }
+
+  pendingProtectedRoute = requestedRoute;
+  setAuthUiState({
+    ...authUiState,
+    message: authUiState.status === 'checking'
+      ? 'Checking your session before opening Image Targets…'
+      : 'Sign in to open Image Targets.',
+  });
+  if (window.location.hash !== hrefForRoute(result.activeRoute)) {
+    window.history.replaceState(null, '', hrefForRoute(result.activeRoute));
+  }
+}
+
+function restorePendingProtectedRoute(): void {
+  if (!pendingProtectedRoute || !isAuthenticated(authUiState)) {
+    return;
+  }
+
+  const route = pendingProtectedRoute;
+  pendingProtectedRoute = undefined;
+  if (window.location.hash === hrefForRoute(route)) {
+    activateRequestedRoute(route);
+    return;
+  }
+  window.location.hash = hrefForRoute(route);
 }
 
 function renderTargetModelOptions(models: CloudflareModelOption[]): void {

@@ -14,8 +14,8 @@ describe('renderAppShell', () => {
       })),
     ).toEqual([
       { href: '#/scan', text: 'Scan' },
-      { href: '#/targets', text: 'Targets' },
-      { href: '#/account', text: 'Account' },
+      { href: '#/account', text: 'Targets' },
+      { href: '#/account', text: 'Sign in' },
     ]);
     expect(
       [...container.querySelectorAll<HTMLElement>('.mode-card strong')].map((title) => title.textContent?.trim()),
@@ -24,6 +24,21 @@ describe('renderAppShell', () => {
       [...container.querySelectorAll<HTMLElement>('[data-page]')].map((page) => page.dataset.page),
     ).toEqual(['home', 'scan', 'targets', 'account']);
     expect(container.querySelector('[data-page="targets"]')).toBeTruthy();
+    const protectedLinks = [...container.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]')];
+    expect(protectedLinks).toHaveLength(2);
+    expect(protectedLinks.every((link) => link.dataset.unlockedHref === '#/targets')).toBe(true);
+    expect(protectedLinks.every((link) => link.getAttribute('href') === '#/account')).toBe(true);
+    expect(protectedLinks.every((link) => link.getAttribute('aria-disabled') === 'true')).toBe(true);
+    expect(container.querySelector('[data-auth-account-label]')?.textContent).toBe('Sign in');
+    expect(container.querySelector('[data-auth-access-label]')?.textContent).toBe('Locked');
+    expect(container.querySelector('[data-auth-panel="signed-out"]')?.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('[data-auth-panel="checking"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-auth-panel="signed-in"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('#worker-login-form')?.closest('[data-auth-panel="signed-out"]')).toBeTruthy();
+    expect(container.querySelector('#worker-logout')?.closest('[data-auth-panel="signed-in"]')).toBeTruthy();
+    expect(container.querySelector('#worker-logout')?.closest('#worker-login-form')).toBeNull();
+    expect(container.querySelector('[data-auth-email]')).toBeTruthy();
+    expect(container.querySelector('[data-auth-open-targets]')?.getAttribute('href')).toBe('#/targets');
     expect(html).toContain('id="ar-stage"');
     expect(html).toContain('id="start-ar"');
     expect(html).toContain('id="worker-email"');
