@@ -14,6 +14,8 @@ export type CloudImageTargetObject = {
   model: CloudflareModelOption;
   placement: ImageTargetPlacement;
   animation?: ImageTargetAnimation;
+  groupId?: string;
+  localPlacement?: ImageTargetPlacement;
 };
 
 export type CloudImageTarget = {

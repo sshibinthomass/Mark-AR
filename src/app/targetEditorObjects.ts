@@ -187,6 +187,8 @@ export type LocalTextTargetObject = {
   text: TargetTextContent;
   placement: ImageTargetPlacement;
   animation?: ImageTargetAnimation;
+  groupId?: string;
+  localPlacement?: ImageTargetPlacement;
 };
 
 export type TargetEditorObject = CloudImageTargetObject | LocalTextTargetObject;
