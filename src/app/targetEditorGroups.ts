@@ -1,6 +1,10 @@
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { DEFAULT_IMAGE_TARGET_ANIMATION, normalizeAnimation, type ImageTargetAnimation } from './imageTargetAnimation';
-import type { ImageTargetPlacement } from './imageTargetPayload';
+import type {
+  ImageTargetPlacement,
+  PlacementTransformReset,
+  PlacementTransformResetAxis,
+} from './imageTargetPayload';
 import type { TargetEditorObject } from './targetEditorObjects';
 
 export type TargetEditorGroup = {
@@ -231,6 +235,42 @@ export function placementFromMatrix(matrix: Matrix4): ImageTargetPlacement {
     rotationY: radiansToDegrees(euler.y),
     rotationZ: radiansToDegrees(euler.z),
   });
+}
+
+export function normalizeLocalPlacement(value: Partial<ImageTargetPlacement>): ImageTargetPlacement {
+  const placement = finitePlacement(value);
+  return {
+    ...placement,
+    scale: clamp(placement.scale, 0.1, 5),
+    offsetX: clamp(placement.offsetX, -2, 2),
+    offsetY: clamp(placement.offsetY, -2, 2),
+    height: clamp(placement.height, -2, 2),
+  };
+}
+
+export function resetLocalPlacementTransform(
+  value: ImageTargetPlacement,
+  transform: PlacementTransformReset,
+  axis: PlacementTransformResetAxis = 'all',
+): ImageTargetPlacement {
+  const placement = normalizeLocalPlacement(value);
+  if (transform === 'move') {
+    return {
+      ...placement,
+      ...(axis === 'all' || axis === 'x' ? { offsetX: 0 } : {}),
+      ...(axis === 'all' || axis === 'y' ? { height: 0 } : {}),
+      ...(axis === 'all' || axis === 'z' ? { offsetY: 0 } : {}),
+    };
+  }
+  if (transform === 'rotate') {
+    return {
+      ...placement,
+      ...(axis === 'all' || axis === 'x' ? { rotationX: 0 } : {}),
+      ...(axis === 'all' || axis === 'y' ? { rotationY: 0 } : {}),
+      ...(axis === 'all' || axis === 'z' ? { rotationZ: 0 } : {}),
+    };
+  }
+  return { ...placement, scale: 1 };
 }
 
 function finitePlacement(value: Partial<ImageTargetPlacement>): ImageTargetPlacement {

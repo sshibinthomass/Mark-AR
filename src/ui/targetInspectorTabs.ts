@@ -5,6 +5,7 @@ export type TargetInspectorTabsController = {
   activate: (tabId: string) => boolean;
   getActiveTab: () => string | undefined;
   setTabEnabled: (tabId: string, enabled: boolean) => void;
+  setTabLabel: (tabId: string, label: string) => void;
 };
 
 export function setupTargetInspectorTabs(root: ParentNode = document): TargetInspectorTabsController {
@@ -15,6 +16,7 @@ export function setupTargetInspectorTabs(root: ParentNode = document): TargetIns
       activate: () => false,
       getActiveTab: () => undefined,
       setTabEnabled: () => undefined,
+      setTabLabel: () => undefined,
     };
   }
 
@@ -28,6 +30,12 @@ export function setupTargetInspectorTabs(root: ParentNode = document): TargetIns
       }
       tab.disabled = !enabled;
       tab.setAttribute('aria-disabled', String(!enabled));
+    },
+    setTabLabel: (tabId, label) => {
+      const tab = tabs.find((entry) => entry.dataset.targetInspectorTab === tabId);
+      if (tab) {
+        tab.textContent = label;
+      }
     },
   };
 

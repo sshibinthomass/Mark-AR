@@ -32,6 +32,7 @@ import {
   type TargetEditorObject,
   type TargetTextContent,
 } from '../app/targetEditorObjects';
+import type { TargetEditorGroup, TargetEditorSelection } from '../app/targetEditorGroups';
 import {
   cameraViewForOrbit,
   cameraViewForPan,
@@ -75,11 +76,13 @@ type PreviewDeps = {
   onTransformModeChange?: (mode: PreviewTransformMode) => void;
 };
 
-type PreviewState = {
+export type PreviewState = {
   imageUrl?: string;
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;
   objects?: TargetEditorObject[];
+  groups?: TargetEditorGroup[];
+  selection?: TargetEditorSelection;
   selectedObjectId?: string;
   camera?: Partial<PreviewCameraView>;
   transformMode?: PreviewTransformMode;

@@ -7,6 +7,7 @@ import {
   localPlacementForGroup,
   normalizeTargetEditorSelection,
   resolveObjectPlacement,
+  resetLocalPlacementTransform,
   selectionPivotPlacement,
   toggleTargetObjectSelection,
   transformSelectionPlacements,
@@ -82,6 +83,24 @@ describe('target editor group transforms', () => {
     );
 
     expect(Object.values(result).every(Number.isFinite)).toBe(true);
+  });
+
+  it('resets child-local axes without clamping or moving unrelated values', () => {
+    const local = { ...identity, scale: 1.7, offsetX: -0.3, offsetY: 0.2, height: -0.4, rotationX: 35, rotationY: 20 };
+    expect(resetLocalPlacementTransform(local, 'rotate', 'x')).toEqual({
+      ...local,
+      rotationX: 0,
+    });
+    expect(resetLocalPlacementTransform(local, 'scale', 'all')).toEqual({
+      ...local,
+      scale: 1,
+    });
+    expect(resetLocalPlacementTransform(local, 'move', 'all')).toEqual({
+      ...local,
+      offsetX: 0,
+      offsetY: 0,
+      height: 0,
+    });
   });
 
   it('creates and ungroups a group without moving its objects', () => {

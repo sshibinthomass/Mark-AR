@@ -71,6 +71,19 @@ import {
   type TargetTextStylePreset,
 } from './app/targetEditorObjects';
 import {
+  createTargetEditorGroup,
+  normalizeLocalPlacement,
+  normalizeTargetEditorSelection,
+  resolveObjectPlacement,
+  resetLocalPlacementTransform,
+  selectionPivotPlacement,
+  toggleTargetObjectSelection,
+  transformSelectionPlacements,
+  ungroupTargetEditorGroup,
+  type TargetEditorGroup,
+  type TargetEditorSelection,
+} from './app/targetEditorGroups';
+import {
   imageFileToCapturedImage,
 } from './capture/cameraCapture';
 import {
@@ -95,7 +108,7 @@ import { createAnimationTrackEditor } from './ui/animationTrackEditor';
 import { renderTargetModelRail } from './ui/modelRail';
 import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
-import { renderTargetObjectListItem } from './ui/targetObjectList';
+import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
 import { decorateDeleteIconButton } from './ui/deleteIconButton';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -123,6 +136,7 @@ const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-mod
 const targetPreviewStage = document.querySelector<HTMLElement>('#target-preview-stage');
 const targetModelRail = document.querySelector<HTMLElement>('#target-model-rail');
 const targetObjectList = document.querySelector<HTMLElement>('#target-object-list');
+const groupSelectedObjectsButton = document.querySelector<HTMLButtonElement>('#group-selected-objects');
 const targetTextValueInput = document.querySelector<HTMLTextAreaElement>('#target-text-value');
 const targetTextPresetSelect = document.querySelector<HTMLSelectElement>('#target-text-preset');
 const targetTextLanguageSelect = document.querySelector<HTMLSelectElement>('#target-text-language');
@@ -175,7 +189,9 @@ let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
 let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
 let targetTransformMode: PreviewTransformMode = 'translate';
 let targetObjects: TargetEditorObject[] = [];
-let selectedTargetObjectId: string | undefined;
+let targetGroups: TargetEditorGroup[] = [];
+let targetSelection: TargetEditorSelection = { objectIds: [] };
+let targetAnimationMixed = false;
 let imageTargetPreview: ImageTargetPreview | undefined;
 const animationTrackEditor = targetAnimationTracks
   ? createAnimationTrackEditor(targetAnimationTracks, {
@@ -381,7 +397,10 @@ targetPlacementResetButtons.forEach((button) => {
       return;
     }
 
-    const nextPlacement = resetPlacementTransform(readTargetPlacement(), button.dataset.resetTransform, button.dataset.resetAxis);
+    const currentPlacement = readTargetPlacement();
+    const nextPlacement = getSelectedTargetObject()?.groupId
+      ? resetLocalPlacementTransform(currentPlacement, button.dataset.resetTransform, button.dataset.resetAxis)
+      : resetPlacementTransform(currentPlacement, button.dataset.resetTransform, button.dataset.resetAxis);
     updateSelectedTargetObjectPlacement(nextPlacement);
     syncTargetPlacementInputs(nextPlacement);
     void updateTargetPreview();
@@ -435,6 +454,10 @@ resetTargetAnimationButton?.addEventListener('click', () => {
   updateSelectedTargetObjectAnimation(animation);
   syncTargetAnimationInputs(animation);
   void updateTargetPreview();
+});
+
+groupSelectedObjectsButton?.addEventListener('click', () => {
+  groupSelectedTargetObjects();
 });
 
 targetTextPresetSelect?.addEventListener('change', () => {
@@ -633,12 +656,17 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
     onPlacementChange: ({ objectId, placement }) => {
       const object = targetObjects.find((entry) => entry.id === objectId);
       if (object) {
-        object.placement = placement;
+        if (object.groupId) {
+          object.localPlacement = normalizeLocalPlacement(placement);
+          object.placement = resolveObjectPlacement(object, targetGroups);
+        } else {
+          object.placement = placement;
+        }
       }
       targetPlacement = placement;
-      if (!selectedTargetObjectId || selectedTargetObjectId === objectId) {
-        selectedTargetObjectId = objectId;
-        syncTargetPlacementInputs(placement);
+      if (targetSelection.objectIds.length <= 1 || targetSelection.objectIds.includes(objectId)) {
+        targetSelection = { objectIds: [objectId] };
+        syncTargetPlacementInputs(placement, { local: Boolean(object?.groupId) });
         syncTargetObjectControlsTab({ activateWhenSelected: true });
       }
       renderTargetObjectList();
@@ -663,7 +691,7 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
 }
 
 function readTargetPlacement(): ImageTargetPlacement {
-  return normalizePlacement({
+  const placement = {
     scale: Number(targetScaleInput?.value),
     offsetX: Number(targetOffsetXInput?.value),
     offsetY: Number(targetOffsetYInput?.value),
@@ -671,7 +699,8 @@ function readTargetPlacement(): ImageTargetPlacement {
     rotationX: Number(targetRotationXInput?.value),
     rotationY: Number(targetRotationYInput?.value),
     rotationZ: Number(targetRotationZInput?.value),
-  });
+  };
+  return getSelectedTargetObject()?.groupId ? normalizeLocalPlacement(placement) : normalizePlacement(placement);
 }
 
 function readTargetCameraView(): PreviewCameraView {
@@ -786,24 +815,20 @@ function removeTargetObjectById(objectId: string): void {
 
   const removedObject = targetObjects[removeIndex];
   targetObjects = targetObjects.filter((object) => object.id !== objectId);
-  if (selectedTargetObjectId === objectId) {
-    selectedTargetObjectId = targetObjects[Math.min(removeIndex, targetObjects.length - 1)]?.id;
-  }
+  targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
 
-  const selectedObject = getSelectedTargetObject();
-  targetPlacement = selectedObject?.placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT;
-  targetAnimation = selectedObject?.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION;
-  if (targetModelSelect) {
-    targetModelSelect.value = selectedObject && !isTextTargetObject(selectedObject) ? selectedObject.model.id : '';
+  const affectedGroupId = removedObject.groupId;
+  if (affectedGroupId && targetObjects.filter((object) => object.groupId === affectedGroupId).length < 2) {
+    const ungrouped = ungroupTargetEditorGroup({ groupId: affectedGroupId, objects: targetObjects, groups: targetGroups });
+    targetObjects = ungrouped.objects;
+    targetGroups = ungrouped.groups;
+    targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
   }
-  if (selectedObject && isTextTargetObject(selectedObject)) {
-    syncTargetTextInputs(selectedObject.text);
+  if (targetSelection.objectIds.length === 0 && !targetSelection.groupId) {
+    const nextObject = targetObjects[Math.min(removeIndex, targetObjects.length - 1)];
+    targetSelection = { objectIds: nextObject ? [nextObject.id] : [] };
   }
-  syncTargetModelRailSelection();
-  syncTargetPlacementInputs(targetPlacement);
-  syncTargetAnimationInputs(targetAnimation);
-  syncTargetTextAction();
-  syncTargetObjectControlsTab({ activateWhenSelected: Boolean(selectedObject) });
+  syncSelectionToInspector({ activateWhenSelected: targetSelection.objectIds.length > 0 || Boolean(targetSelection.groupId) });
   renderTargetObjectList();
   updateImageTargetStatus(
     targetObjects.length > 0
@@ -814,29 +839,29 @@ function removeTargetObjectById(objectId: string): void {
   void updateTargetPreview();
 }
 
-function selectTargetObject(objectId: string, options?: { refreshPreview?: boolean }): void {
+function selectTargetObject(
+  objectId: string,
+  options?: { refreshPreview?: boolean; additive?: boolean },
+): void {
   const object = targetObjects.find((entry) => entry.id === objectId);
   if (!object) {
     return;
   }
 
-  selectedTargetObjectId = object.id;
-  targetPlacement = object.placement;
-  targetAnimation = object.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION;
-  if (targetModelSelect) {
-    targetModelSelect.value = isTextTargetObject(object) ? '' : object.model.id;
+  if (options?.additive) {
+    targetSelection = toggleTargetObjectSelection(targetSelection, object.id);
+  } else if (targetSelection.objectIds.length > 1 && targetSelection.objectIds.includes(object.id)) {
+    targetSelection = { objectIds: [...targetSelection.objectIds.filter((id) => id !== object.id), object.id] };
+  } else {
+    targetSelection = { objectIds: [object.id] };
   }
-  if (isTextTargetObject(object)) {
-    syncTargetTextInputs(object.text);
-  }
-  syncTargetModelRailSelection();
-  syncTargetPlacementInputs(object.placement);
-  syncTargetAnimationInputs(targetAnimation);
-  syncTargetTextAction();
-  syncTargetObjectControlsTab({ activateWhenSelected: true });
+  targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
+  syncSelectionToInspector({ activateWhenSelected: targetSelection.objectIds.length > 0 });
   renderTargetObjectList();
   updateImageTargetStatus(
-    isTextTargetObject(object) ? `${object.text.value} text selected.` : `${object.model.label} selected.`,
+    targetSelection.objectIds.length > 1
+      ? `${targetSelection.objectIds.length} objects selected.`
+      : isTextTargetObject(object) ? `${object.text.value} text selected.` : `${object.model.label} selected.`,
     false,
   );
   if (options?.refreshPreview !== false) {
@@ -845,17 +870,8 @@ function selectTargetObject(objectId: string, options?: { refreshPreview?: boole
 }
 
 function clearSelectedTargetObject(options?: { refreshPreview?: boolean }): void {
-  selectedTargetObjectId = undefined;
-  targetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
-  targetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
-  if (targetModelSelect) {
-    targetModelSelect.value = '';
-  }
-  syncTargetModelRailSelection();
-  syncTargetPlacementInputs(targetPlacement);
-  syncTargetAnimationInputs(targetAnimation);
-  syncTargetTextAction();
-  syncTargetObjectControlsTab();
+  targetSelection = { objectIds: [] };
+  syncSelectionToInspector();
   renderTargetObjectList();
   updateImageTargetStatus('No object selected.', false);
   if (options?.refreshPreview !== false) {
@@ -864,30 +880,74 @@ function clearSelectedTargetObject(options?: { refreshPreview?: boolean }): void
 }
 
 function updateSelectedTargetObjectPlacement(placement: ImageTargetPlacement): void {
-  targetPlacement = normalizePlacement(placement);
-  const object = getSelectedTargetObject();
-  if (object) {
-    object.placement = targetPlacement;
-    renderTargetObjectList();
+  const selectedGroup = getSelectedTargetGroup();
+  const selectedObjects = getSelectedTargetObjects();
+  const activeObject = selectedObjects.at(-1);
+  const nextPlacement = activeObject?.groupId && selectedObjects.length === 1
+    ? normalizeLocalPlacement(placement)
+    : normalizePlacement(placement);
+
+  if (selectedGroup) {
+    selectedGroup.placement = nextPlacement;
+    targetObjects = targetObjects.map((object) => object.groupId === selectedGroup.id
+      ? { ...object, placement: resolveObjectPlacement(object, targetGroups) }
+      : object);
+  } else if (selectedObjects.length > 1) {
+    targetObjects = transformSelectionPlacements({
+      objects: targetObjects,
+      groups: targetGroups,
+      objectIds: targetSelection.objectIds,
+      startPivot: targetPlacement,
+      endPivot: nextPlacement,
+    });
+  } else if (activeObject) {
+    if (activeObject.groupId) {
+      activeObject.localPlacement = nextPlacement;
+      activeObject.placement = resolveObjectPlacement(activeObject, targetGroups);
+    } else {
+      activeObject.placement = nextPlacement;
+    }
   }
+  targetPlacement = nextPlacement;
+  renderTargetObjectList();
 }
 
 function updateSelectedTargetObjectAnimation(animation: ImageTargetAnimation): void {
   targetAnimation = normalizeAnimation(animation);
-  const object = getSelectedTargetObject();
-  if (object) {
-    object.animation = targetAnimation;
-    renderTargetObjectList();
+  targetAnimationMixed = false;
+  const selectedGroup = getSelectedTargetGroup();
+  if (selectedGroup) {
+    selectedGroup.animation = cloneTargetAnimation(targetAnimation);
+  } else {
+    const selectedIds = new Set(targetSelection.objectIds);
+    targetObjects = targetObjects.map((object) => selectedIds.has(object.id)
+      ? { ...object, animation: cloneTargetAnimation(targetAnimation) }
+      : object);
   }
+  renderTargetObjectList();
 }
 
 function getSelectedTargetObject(): TargetEditorObject | undefined {
-  return targetObjects.find((object) => object.id === selectedTargetObjectId);
+  if (targetSelection.objectIds.length !== 1) {
+    return undefined;
+  }
+  return targetObjects.find((object) => object.id === targetSelection.objectIds[0]);
+}
+
+function getSelectedTargetObjects(): TargetEditorObject[] {
+  return targetSelection.objectIds
+    .map((objectId) => targetObjects.find((object) => object.id === objectId))
+    .filter((object): object is TargetEditorObject => Boolean(object));
+}
+
+function getSelectedTargetGroup(): TargetEditorGroup | undefined {
+  return targetGroups.find((group) => group.id === targetSelection.groupId);
 }
 
 function syncTargetObjectControlsTab(options?: { activateWhenSelected?: boolean }): void {
-  const hasSelection = Boolean(getSelectedTargetObject());
+  const hasSelection = targetSelection.objectIds.length > 0 || Boolean(getSelectedTargetGroup());
   targetInspectorTabs.setTabEnabled('object-controls', hasSelection);
+  targetInspectorTabs.setTabLabel('object-controls', targetControlsTabLabel());
 
   if (hasSelection) {
     if (options?.activateWhenSelected) {
@@ -914,18 +974,127 @@ function renderTargetObjectList(): void {
   targetObjectList.innerHTML = '';
   if (targetObjects.length === 0) {
     targetObjectList.textContent = 'No objects placed yet.';
+    if (groupSelectedObjectsButton) {
+      groupSelectedObjectsButton.disabled = true;
+    }
     return;
   }
 
-  for (const [index, object] of targetObjects.entries()) {
-    targetObjectList.append(renderTargetObjectListItem({
-      object,
-      index,
-      selectedObjectId: selectedTargetObjectId,
-      onSelect: (objectId) => selectTargetObject(objectId),
-      onDelete: removeTargetObjectById,
-    }));
+  const rendered = createTargetObjectList({
+    objects: targetObjects,
+    groups: targetGroups,
+    selection: targetSelection,
+    onSelectObject: (objectId, additive) => selectTargetObject(objectId, { additive }),
+    onSelectGroup: selectTargetGroup,
+    onUngroup: ungroupTargetObjects,
+    onDeleteObject: removeTargetObjectById,
+  });
+  targetObjectList.append(...rendered.children);
+  if (groupSelectedObjectsButton) {
+    const selectedObjects = getSelectedTargetObjects();
+    groupSelectedObjectsButton.disabled = selectedObjects.length < 2 || selectedObjects.some((object) => object.groupId);
   }
+}
+
+function groupSelectedTargetObjects(): void {
+  const selectedObjects = getSelectedTargetObjects();
+  if (selectedObjects.length < 2 || selectedObjects.some((object) => object.groupId)) {
+    return;
+  }
+  const nextNumber = targetGroups.length + 1;
+  const created = createTargetEditorGroup({
+    id: createTargetGroupId(),
+    label: `Group ${nextNumber}`,
+    objectIds: targetSelection.objectIds,
+    objects: targetObjects,
+    groups: targetGroups,
+  });
+  targetObjects = created.objects;
+  targetGroups = created.groups;
+  targetSelection = { objectIds: [], groupId: created.group.id };
+  syncSelectionToInspector({ activateWhenSelected: true });
+  renderTargetObjectList();
+  updateImageTargetStatus(`${created.group.label} created with ${selectedObjects.length} objects.`, false);
+  void updateTargetPreview();
+}
+
+function selectTargetGroup(groupId: string): void {
+  const group = targetGroups.find((candidate) => candidate.id === groupId);
+  if (!group) {
+    return;
+  }
+  targetSelection = { objectIds: [], groupId };
+  syncSelectionToInspector({ activateWhenSelected: true });
+  renderTargetObjectList();
+  updateImageTargetStatus(`${group.label} selected.`, false);
+  void updateTargetPreview();
+}
+
+function ungroupTargetObjects(groupId: string): void {
+  const group = targetGroups.find((candidate) => candidate.id === groupId);
+  if (!group) {
+    return;
+  }
+  const memberIds = targetObjects.filter((object) => object.groupId === groupId).map((object) => object.id);
+  const ungrouped = ungroupTargetEditorGroup({ groupId, objects: targetObjects, groups: targetGroups });
+  targetObjects = ungrouped.objects;
+  targetGroups = ungrouped.groups;
+  targetSelection = { objectIds: memberIds };
+  syncSelectionToInspector({ activateWhenSelected: memberIds.length > 0 });
+  renderTargetObjectList();
+  updateImageTargetStatus(`${group.label} ungrouped. Individual properties are preserved.`, false);
+  void updateTargetPreview();
+}
+
+function syncSelectionToInspector(options?: { activateWhenSelected?: boolean }): void {
+  const group = getSelectedTargetGroup();
+  const selectedObjects = getSelectedTargetObjects();
+  const activeObject = selectedObjects.at(-1);
+  targetPlacement = group?.placement
+    ?? (selectedObjects.length > 1
+      ? selectionPivotPlacement(targetObjects, targetGroups, targetSelection.objectIds)
+      : activeObject?.localPlacement ?? activeObject?.placement)
+    ?? DEFAULT_IMAGE_TARGET_PLACEMENT;
+
+  const animations = group
+    ? [group.animation]
+    : selectedObjects.map((object) => normalizeAnimation(object.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION));
+  targetAnimationMixed = animations.length > 1 && animations.some((animation) => (
+    JSON.stringify(animation) !== JSON.stringify(animations[0])
+  ));
+  targetAnimation = targetAnimationMixed ? DEFAULT_IMAGE_TARGET_ANIMATION : animations[0] ?? DEFAULT_IMAGE_TARGET_ANIMATION;
+
+  if (targetModelSelect) {
+    targetModelSelect.value = activeObject && !isTextTargetObject(activeObject) ? activeObject.model.id : '';
+  }
+  if (activeObject && selectedObjects.length === 1 && isTextTargetObject(activeObject)) {
+    syncTargetTextInputs(activeObject.text);
+  }
+  syncTargetModelRailSelection();
+  syncTargetPlacementInputs(targetPlacement, { local: Boolean(activeObject?.groupId && selectedObjects.length === 1) });
+  syncTargetAnimationInputs(targetAnimation, { mixed: targetAnimationMixed });
+  syncTargetTextAction();
+  syncTargetObjectControlsTab({ activateWhenSelected: options?.activateWhenSelected });
+}
+
+function targetControlsTabLabel(): string {
+  const group = getSelectedTargetGroup();
+  if (group) {
+    return group.label;
+  }
+  if (targetSelection.objectIds.length > 1) {
+    return `Selection (${targetSelection.objectIds.length})`;
+  }
+  const object = getSelectedTargetObject();
+  if (object?.groupId) {
+    const parent = targetGroups.find((candidate) => candidate.id === object.groupId);
+    return parent ? `Child of ${parent.label}` : 'Object';
+  }
+  return 'Object';
+}
+
+function cloneTargetAnimation(animation: ImageTargetAnimation): ImageTargetAnimation {
+  return normalizeAnimation({ preset: animation.preset, tracks: animation.tracks.map((track) => ({ ...track })) });
 }
 
 function nextTargetObjectPlacement(): ImageTargetPlacement {
@@ -946,6 +1115,13 @@ function createTargetObjectId(): string {
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `object-${cryptoId}`;
+}
+
+function createTargetGroupId(): string {
+  const cryptoId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `group-${cryptoId}`;
 }
 
 function readTargetTextLanguage(): TargetTextLanguage {
@@ -1139,8 +1315,20 @@ function readRangeNumber(input: HTMLInputElement | null, fallback: number): numb
   return Number.isFinite(value) ? value : fallback;
 }
 
-function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
-  const normalized = normalizePlacement(placement);
+function syncTargetPlacementInputs(placement: ImageTargetPlacement, options?: { local?: boolean }): void {
+  const normalized = options?.local ? normalizeLocalPlacement(placement) : normalizePlacement(placement);
+  if (targetOffsetXInput) {
+    targetOffsetXInput.min = options?.local ? '-2' : '-1';
+    targetOffsetXInput.max = options?.local ? '2' : '1';
+  }
+  if (targetOffsetYInput) {
+    targetOffsetYInput.min = options?.local ? '-2' : '-1';
+    targetOffsetYInput.max = options?.local ? '2' : '1';
+  }
+  if (targetHeightInput) {
+    targetHeightInput.min = options?.local ? '-2' : '0';
+    targetHeightInput.max = options?.local ? '2' : '1';
+  }
   setRangeInputValue(targetScaleInput, normalized.scale);
   setRangeInputValue(targetOffsetXInput, normalized.offsetX);
   setRangeInputValue(targetOffsetYInput, normalized.offsetY);
@@ -1150,12 +1338,12 @@ function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
   setRangeInputValue(targetRotationZInput, normalized.rotationZ);
 }
 
-function syncTargetAnimationInputs(animation: ImageTargetAnimation): void {
+function syncTargetAnimationInputs(animation: ImageTargetAnimation, options?: { mixed?: boolean }): void {
   const normalized = normalizeAnimation(animation);
   if (targetAnimationPresetSelect) {
-    targetAnimationPresetSelect.value = normalized.preset;
+    targetAnimationPresetSelect.value = options?.mixed ? 'mixed' : normalized.preset;
   }
-  animationTrackEditor?.render(normalized);
+  animationTrackEditor?.render(options?.mixed ? DEFAULT_IMAGE_TARGET_ANIMATION : normalized);
 }
 
 function syncTargetCameraInputs(cameraView: PreviewCameraView): void {
@@ -1205,7 +1393,9 @@ async function updateTargetPreview(): Promise<void> {
   await preview.update({
     imageUrl: targetImagePayload ? imageTargetDataUrl(targetImagePayload) : undefined,
     objects: targetObjects,
-    selectedObjectId: selectedTargetObjectId,
+    groups: targetGroups,
+    selection: targetSelection,
+    selectedObjectId: targetSelection.objectIds.at(-1),
     camera: targetCameraView,
     transformMode: targetTransformMode,
   });

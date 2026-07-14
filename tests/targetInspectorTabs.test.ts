@@ -51,4 +51,17 @@ describe('setupTargetInspectorTabs', () => {
     expect(root.querySelector('[data-target-inspector-panel="target"]')?.hasAttribute('hidden')).toBe(true);
     expect(root.querySelector('[data-target-inspector-panel="object-controls"]')?.hasAttribute('hidden')).toBe(false);
   });
+
+  it('updates a tab label for the current selection context', () => {
+    const root = document.createElement('div');
+    root.innerHTML = `
+      <button data-target-inspector-tab="object-controls">Object</button>
+      <section data-target-inspector-panel="object-controls"></section>
+    `;
+    const inspector = setupTargetInspectorTabs(root);
+
+    inspector.setTabLabel('object-controls', 'Selection (3)');
+
+    expect(root.querySelector('[data-target-inspector-tab="object-controls"]')?.textContent).toBe('Selection (3)');
+  });
 });

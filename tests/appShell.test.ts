@@ -206,6 +206,7 @@ describe('renderAppShell', () => {
     expect(animationPreset).toBeTruthy();
     expect(animationPreset?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(Array.from(animationPreset?.options ?? []).map((option) => option.textContent)).toEqual([
+      'Mixed',
       'None',
       'Gentle float',
       'Turntable',

@@ -348,6 +348,7 @@ export function renderAppShell(): string {
                       <label>
                         <span>Preset</span>
                         <select id="target-animation-preset">
+                          <option value="mixed" disabled hidden>Mixed</option>
                           <option value="none" selected>None</option>
                           <option value="gentle-float">Gentle float</option>
                           <option value="turntable">Turntable</option>
