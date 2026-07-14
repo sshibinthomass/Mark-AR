@@ -3,6 +3,59 @@ import { Group } from 'three';
 import { createCloudflareMarkerObject } from '../src/ar/cloudflareMarkerObject';
 
 describe('createCloudflareMarkerObject', () => {
+  it('renders group roots with shared animation and additive child animation', async () => {
+    const loadedModels = [new Group(), new Group(), new Group()];
+    const markerObject = createCloudflareMarkerObject({
+      groups: [{
+        id: 'room', label: 'Room',
+        placement: { scale: 1.5, offsetX: 0.2, offsetY: -0.1, height: 0.3, rotationX: 0, rotationY: 30, rotationZ: 0 },
+        animation: { preset: 'custom', tracks: [{ property: 'positionY', motion: 'smooth', amount: 0.1, speed: 0.5, phase: 0 }] },
+      }],
+      objects: [
+        {
+          id: 'chair-object', model: { id: 'chair', label: 'Chair', url: 'chair.glb' }, groupId: 'room',
+          localPlacement: { scale: 1, offsetX: -0.2, offsetY: 0, height: 0, rotationX: 0, rotationY: 0, rotationZ: 0 },
+          placement: { scale: 1.5, offsetX: -0.1, offsetY: -0.1, height: 0.3, rotationX: 0, rotationY: 30, rotationZ: 0 },
+          animation: { preset: 'custom', tracks: [{ property: 'rotationZ', motion: 'smooth', amount: 30, speed: 0.5, phase: 0 }] },
+        },
+        {
+          id: 'lamp-object', model: { id: 'lamp', label: 'Lamp', url: 'lamp.glb' }, groupId: 'room',
+          localPlacement: { scale: 0.8, offsetX: 0.2, offsetY: 0, height: 0.1, rotationX: 0, rotationY: 0, rotationZ: 0 },
+          placement: { scale: 1.2, offsetX: 0.5, offsetY: -0.1, height: 0.45, rotationX: 0, rotationY: 30, rotationZ: 0 },
+        },
+        {
+          id: 'orphan-object', model: { id: 'plant', label: 'Plant', url: 'plant.glb' }, groupId: 'missing',
+          localPlacement: { scale: 1, offsetX: 9, offsetY: 9, height: 9, rotationX: 0, rotationY: 0, rotationZ: 0 },
+          placement: { scale: 0.7, offsetX: -0.4, offsetY: 0.2, height: 0.05, rotationX: 0, rotationY: 0, rotationZ: 0 },
+        },
+      ],
+      loadModelGroup: async () => loadedModels.shift() ?? new Group(),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const groupRoot = markerObject.group.getObjectByName('cloudflare-group-root-room') as Group;
+    const chairRoot = markerObject.group.getObjectByName('cloudflare-model-root-chair-object') as Group;
+    const lampRoot = markerObject.group.getObjectByName('cloudflare-model-root-lamp-object') as Group;
+    const orphanRoot = markerObject.group.getObjectByName('cloudflare-model-root-orphan-object') as Group;
+    expect(groupRoot).toBeTruthy();
+    expect(groupRoot.position.x).toBeCloseTo(0.2);
+    expect(groupRoot.position.y).toBeCloseTo(-0.1);
+    expect(groupRoot.position.z).toBeCloseTo(0.3);
+    expect(groupRoot.scale.x).toBeCloseTo(1.5);
+    expect(chairRoot.parent).toBe(groupRoot);
+    expect(lampRoot.parent).toBe(groupRoot);
+    expect(chairRoot.position.x).toBeCloseTo(-0.2);
+    expect(lampRoot.position.z).toBeCloseTo(0.1);
+    expect(orphanRoot.parent).toBe(markerObject.group);
+    expect(orphanRoot.position.x).toBeCloseTo(-0.4);
+
+    markerObject.update(0.5);
+    expect(groupRoot.position.y).toBeCloseTo(0);
+    expect(chairRoot.rotation.z).toBeCloseTo(Math.PI / 6);
+    expect(lampRoot.rotation.z).toBeCloseTo(0);
+  });
+
   it('loads the selected Cloudflare model into a marker object', async () => {
     const loadedModel = new Group();
     loadedModel.name = 'loaded-chair';

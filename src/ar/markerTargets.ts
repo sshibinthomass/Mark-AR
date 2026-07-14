@@ -35,6 +35,7 @@ export function createRuntimeMarkerTargets({
       model: target.model,
       placement: target.placement,
       objects: target.objects,
+      groups: target.groups,
     },
   }));
 
@@ -49,6 +50,7 @@ export function createRuntimeMarkerTargets({
         },
         cloudflareAsset: {
           objects: draftTarget.objects,
+          groups: draftTarget.groups,
         },
       }]
     : [];

@@ -26,6 +26,7 @@ describe('marker target mapping', () => {
               placement: { scale: 0.8, offsetX: -0.3, offsetY: 0.2, height: 0.08 },
             },
           ],
+          groups: [],
         },
       ],
     });
@@ -53,6 +54,7 @@ describe('marker target mapping', () => {
             placement: { scale: 0.8, offsetX: -0.3, offsetY: 0.2, height: 0.08 },
           },
         ],
+        groups: [],
       },
     });
   });

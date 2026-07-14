@@ -12,6 +12,7 @@ import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { evaluateAnimationFrame, normalizeAnimation } from '../app/imageTargetAnimation';
 import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
+import { normalizeLocalPlacement, type TargetEditorGroup } from '../app/targetEditorGroups';
 import {
   isTextTargetObject,
   type LocalTextTargetObject,
@@ -26,6 +27,8 @@ export type CloudflareModelPlacedObject = {
   model: CloudflareModelOption;
   placement?: ImageTargetPlacement;
   animation?: ImageTargetAnimation;
+  groupId?: string;
+  localPlacement?: ImageTargetPlacement;
 };
 
 export type CloudflarePlacedObject = CloudflareModelPlacedObject | LocalTextTargetObject;
@@ -34,6 +37,7 @@ export type CloudflarePlacedAsset = {
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;
   objects?: CloudflarePlacedObject[];
+  groups?: TargetEditorGroup[];
   loadModelGroup?: ModelGroupLoader;
   createTextObject?: (text: LocalTextTargetObject['text']) => Group;
 };
@@ -45,29 +49,49 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
   const createTextObject = asset.createTextObject ?? createTextObject3D;
   const placedObjects = createPlacedObjects(asset);
-  const animatedRoots = placedObjects.map((object, index) => {
+  const groupRoots = new Map<string, Group>();
+  const animatedRoots: Array<{
+    root: Group;
+    placement: ImageTargetPlacement;
+    animation: ImageTargetAnimation;
+    elapsedSeconds: number;
+  }> = [];
+  for (const targetGroup of normalizeAssetGroups(asset.groups)) {
+    const root = new Group();
+    root.name = `cloudflare-group-root-${targetGroup.id}`;
+    const placement = normalizePlacement(targetGroup.placement);
+    applyPlacement(root, placement);
+    group.add(root);
+    groupRoots.set(targetGroup.id, root);
+    animatedRoots.push({
+      root,
+      placement,
+      animation: normalizeAnimation(targetGroup.animation),
+      elapsedSeconds: 0,
+    });
+  }
+
+  for (const [index, object] of placedObjects.entries()) {
     const modelRoot = new Group();
     modelRoot.name = modelRootName(object, index, placedObjects.length);
-    const placement = object.placement
-      ? normalizePlacement(object.placement)
-      : normalizePlacement({ height: 0.04 });
-    modelRoot.position.set(placement.offsetX, placement.offsetY, placement.height);
-    modelRoot.scale.setScalar(placement.scale);
-    modelRoot.rotation.set(
-      degreesToRadians(placement.rotationX),
-      degreesToRadians(placement.rotationY),
-      degreesToRadians(placement.rotationZ),
-    );
-    group.add(modelRoot);
+    const parentGroup = object.groupId ? groupRoots.get(object.groupId) : undefined;
+    const placement = parentGroup && object.localPlacement
+      ? normalizeLocalPlacement(object.localPlacement)
+      : object.placement
+        ? normalizePlacement(object.placement)
+        : normalizePlacement({ height: 0.04 });
+    applyPlacement(modelRoot, placement);
+    (parentGroup ?? group).add(modelRoot);
 
     if (isTextTargetObject(object)) {
       modelRoot.add(createTextObject(object.text));
-      return {
+      animatedRoots.push({
         root: modelRoot,
         placement,
         animation: normalizeAnimation(object.animation),
         elapsedSeconds: 0,
-      };
+      });
+      continue;
     }
 
     void loadModelGroup(object.model.url)
@@ -79,13 +103,13 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
         modelRoot.add(createModelLoadFallback());
       });
 
-    return {
+    animatedRoots.push({
       root: modelRoot,
       placement,
       animation: normalizeAnimation(object.animation),
       elapsedSeconds: 0,
-    };
-  });
+    });
+  }
 
   return {
     group,
@@ -96,6 +120,27 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
       }
     },
   };
+}
+
+function normalizeAssetGroups(groups: TargetEditorGroup[] | undefined): TargetEditorGroup[] {
+  const seen = new Set<string>();
+  return (groups ?? []).filter((group) => {
+    if (!group.id || seen.has(group.id)) {
+      return false;
+    }
+    seen.add(group.id);
+    return true;
+  });
+}
+
+function applyPlacement(root: Group, placement: ImageTargetPlacement): void {
+  root.position.set(placement.offsetX, placement.offsetY, placement.height);
+  root.scale.setScalar(placement.scale);
+  root.rotation.set(
+    degreesToRadians(placement.rotationX),
+    degreesToRadians(placement.rotationY),
+    degreesToRadians(placement.rotationZ),
+  );
 }
 
 function degreesToRadians(value: number): number {
