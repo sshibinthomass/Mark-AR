@@ -32,7 +32,16 @@ import {
   type TargetEditorObject,
   type TargetTextContent,
 } from '../app/targetEditorObjects';
-import type { TargetEditorGroup, TargetEditorSelection } from '../app/targetEditorGroups';
+import {
+  normalizeLocalPlacement,
+  normalizeTargetEditorSelection,
+  resolveObjectPlacement,
+  selectionPivotPlacement,
+  toggleTargetObjectSelection,
+  transformSelectionPlacements,
+  type TargetEditorGroup,
+  type TargetEditorSelection,
+} from '../app/targetEditorGroups';
 import {
   cameraViewForOrbit,
   cameraViewForPan,
@@ -57,9 +66,16 @@ type PointerPoint = {
 
 type CameraDragMode = 'orbit' | 'pan' | 'zoom';
 export type PreviewTransformMode = 'translate' | 'rotate' | 'scale';
+const selectionTargetKey = '@selection';
+const groupTargetPrefix = '@group:';
 
 export type PreviewPlacementChange = {
   objectId: string;
+  placement: ImageTargetPlacement;
+};
+
+export type PreviewGroupPlacementChange = {
+  groupId: string;
   placement: ImageTargetPlacement;
 };
 
@@ -71,8 +87,10 @@ type PreviewDeps = {
   loadModel?: (url: string) => Promise<Group | undefined>;
   createTextObject?: (text: TargetTextContent) => Group;
   onPlacementChange?: (change: PreviewPlacementChange) => void;
+  onPlacementsChange?: (changes: PreviewPlacementChange[]) => void;
+  onGroupPlacementChange?: (change: PreviewGroupPlacementChange) => void;
   onCameraChange?: (camera: PreviewCameraView) => void;
-  onSelectionChange?: (objectId: string | undefined) => void;
+  onSelectionChange?: (selection: TargetEditorSelection) => void;
   onTransformModeChange?: (mode: PreviewTransformMode) => void;
 };
 
@@ -98,8 +116,10 @@ export class ImageTargetPreview {
   private readonly loadModel: (url: string) => Promise<Group | undefined>;
   private readonly createTextObject: (text: TargetTextContent) => Group;
   private readonly onPlacementChange?: (change: PreviewPlacementChange) => void;
+  private readonly onPlacementsChange?: (changes: PreviewPlacementChange[]) => void;
+  private readonly onGroupPlacementChange?: (change: PreviewGroupPlacementChange) => void;
   private readonly onCameraChange?: (camera: PreviewCameraView) => void;
-  private readonly onSelectionChange?: (objectId: string | undefined) => void;
+  private readonly onSelectionChange?: (selection: TargetEditorSelection) => void;
   private readonly onTransformModeChange?: (mode: PreviewTransformMode) => void;
   private readonly container: HTMLElement;
   private readonly imageRoot = new Group();
@@ -111,8 +131,12 @@ export class ImageTargetPreview {
   private readonly transformControls: TransformControls;
   private readonly activePointers = new Map<number, PointerPoint>();
   private readonly loadedModels = new Map<string, Group>();
+  private readonly groupRoots = new Map<string, Group>();
   private readonly placements = new Map<string, ImageTargetPlacement>();
   private readonly animations = new Map<string, ImageTargetAnimation>();
+  private readonly groupPlacements = new Map<string, ImageTargetPlacement>();
+  private readonly groupAnimations = new Map<string, ImageTargetAnimation>();
+  private readonly selectionPivotRoot = new Group();
   private readonly pointerObjectHits = new Map<number, string>();
   private frameId = 0;
   private disposed = false;
@@ -120,7 +144,14 @@ export class ImageTargetPreview {
   private elapsedSeconds = 0;
   private lastFrameTimestamp: number | undefined;
   private cameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
+  private previewObjects: TargetEditorObject[] = [];
+  private groups: TargetEditorGroup[] = [];
+  private selection: TargetEditorSelection = { objectIds: [] };
   private selectedObjectId?: string;
+  private selectionTransformStart?: {
+    pivot: ImageTargetPlacement;
+    objects: TargetEditorObject[];
+  };
   private previewTransformMode: PreviewTransformMode = 'translate';
   private dragStart?: { pointer: PointerPoint; objectId: string; placement: ImageTargetPlacement };
   private rotateDragStart?: { pointer: PointerPoint; objectId: string; placement: ImageTargetPlacement };
@@ -144,9 +175,12 @@ export class ImageTargetPreview {
     this.loadModel = deps.loadModel ?? defaultLoadModel;
     this.createTextObject = deps.createTextObject ?? createTextObject3D;
     this.onPlacementChange = deps.onPlacementChange;
+    this.onPlacementsChange = deps.onPlacementsChange;
+    this.onGroupPlacementChange = deps.onGroupPlacementChange;
     this.onCameraChange = deps.onCameraChange;
     this.onSelectionChange = deps.onSelectionChange;
     this.onTransformModeChange = deps.onTransformModeChange;
+    this.selectionPivotRoot.name = 'target-selection-pivot';
 
     this.applyCameraView();
     this.scene.background = new Color(0x6b6b6b);
@@ -193,8 +227,11 @@ export class ImageTargetPreview {
     this.clearGroup(this.imageRoot);
     this.clearGroup(this.modelRoot);
     this.loadedModels.clear();
+    this.groupRoots.clear();
     this.placements.clear();
     this.animations.clear();
+    this.groupPlacements.clear();
+    this.groupAnimations.clear();
     this.pointerObjectHits.clear();
     this.activePointers.clear();
     this.dragStart = undefined;
@@ -204,15 +241,45 @@ export class ImageTargetPreview {
     this.cameraDragStart = undefined;
     this.cameraPinchStart = undefined;
     this.emptySelectionClick = undefined;
-    this.selectedObjectId = selectPreviewObjectId(
-      previewObjects,
-      state.selectedObjectId,
-      Object.prototype.hasOwnProperty.call(state, 'selectedObjectId'),
-    );
-
-    for (const object of previewObjects) {
-      this.placements.set(object.id, normalizePlacement(object.placement));
+    this.selectionTransformStart = undefined;
+    this.groups = normalizePreviewGroups(state.groups);
+    const validGroupIds = new Set(this.groups.map((group) => group.id));
+    this.previewObjects = previewObjects.map((object) => {
+      const hasValidGroup = Boolean(object.groupId && object.localPlacement && validGroupIds.has(object.groupId));
+      const nextObject = {
+        ...object,
+        ...(hasValidGroup
+          ? { localPlacement: normalizeLocalPlacement(object.localPlacement!) }
+          : { groupId: undefined, localPlacement: undefined }),
+        placement: normalizePlacement(object.placement),
+      } as TargetEditorObject;
+      this.placements.set(
+        object.id,
+        hasValidGroup ? normalizeLocalPlacement(object.localPlacement!) : normalizePlacement(object.placement),
+      );
       this.animations.set(object.id, normalizeAnimation(object.animation));
+      return nextObject;
+    });
+    if (state.selection) {
+      this.selection = normalizeTargetEditorSelection(state.selection, this.previewObjects, this.groups);
+    } else {
+      const selectedObjectId = selectPreviewObjectId(
+        this.previewObjects,
+        state.selectedObjectId,
+        Object.prototype.hasOwnProperty.call(state, 'selectedObjectId'),
+      );
+      this.selection = { objectIds: selectedObjectId ? [selectedObjectId] : [] };
+    }
+    this.selectedObjectId = this.selection.objectIds.at(-1);
+
+    for (const group of this.groups) {
+      const root = new Group();
+      root.name = `target-group-${group.id}`;
+      this.groupRoots.set(group.id, root);
+      this.groupPlacements.set(group.id, normalizePlacement(group.placement));
+      this.groupAnimations.set(group.id, normalizeAnimation(group.animation));
+      this.applyPlacementToRoot(root, group.placement);
+      this.modelRoot.add(root);
     }
 
     if (state.imageUrl) {
@@ -227,12 +294,13 @@ export class ImageTargetPreview {
       this.imageRoot.add(plane);
     }
 
-    for (const object of previewObjects) {
+    for (const object of this.previewObjects) {
       if (isTextTargetObject(object)) {
         const textObject = this.createTextObject(object.text);
+        textObject.name = `target-object-${object.id}`;
         this.loadedModels.set(object.id, textObject);
         this.applyPlacementToObject(object.id);
-        this.modelRoot.add(textObject);
+        this.parentForObject(object).add(textObject);
         continue;
       }
 
@@ -246,9 +314,10 @@ export class ImageTargetPreview {
         }
         continue;
       }
+      model.name = `target-object-${object.id}`;
       this.loadedModels.set(object.id, model);
       this.applyPlacementToObject(object.id);
-      this.modelRoot.add(model);
+      this.parentForObject(object).add(model);
     }
     this.attachTransformControls();
   }
@@ -268,8 +337,11 @@ export class ImageTargetPreview {
     this.clearGroup(this.imageRoot);
     this.clearGroup(this.modelRoot);
     this.loadedModels.clear();
+    this.groupRoots.clear();
     this.placements.clear();
     this.animations.clear();
+    this.groupPlacements.clear();
+    this.groupAnimations.clear();
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown, true);
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove, true);
     this.renderer.domElement.removeEventListener('pointerup', this.handlePointerEnd, true);
@@ -328,13 +400,19 @@ export class ImageTargetPreview {
     safeSetPointerCapture(this.renderer.domElement, event.pointerId);
     const pointer = pointerFromEvent(event);
     const cameraDragMode = cameraDragModeFromEvent(event);
-    const shouldPickObject = !event.altKey && cameraDragMode === 'orbit';
+    const shouldPickObject = !event.altKey && (cameraDragMode === 'orbit' || event.ctrlKey || event.metaKey);
     const pickedObjectId = shouldPickObject ? this.pickObjectIdAtPointer(pointer) : undefined;
     if (pickedObjectId) {
       this.pointerObjectHits.set(event.pointerId, pickedObjectId);
-      this.selectObject(pickedObjectId, true);
+      this.selectObject(pickedObjectId, true, event.ctrlKey || event.metaKey);
+      if (event.ctrlKey || event.metaKey) {
+        this.pointerObjectHits.delete(event.pointerId);
+        safeReleasePointerCapture(this.renderer.domElement, event.pointerId);
+        this.updateCanvasCursor(false);
+        return;
+      }
     }
-    this.emptySelectionClick = !pickedObjectId && shouldPickObject && this.selectedObjectId
+    this.emptySelectionClick = !pickedObjectId && cameraDragMode === 'orbit' && this.hasSelection()
       ? { pointerId: event.pointerId, pointer }
       : undefined;
     this.activePointers.set(event.pointerId, pointer);
@@ -446,11 +524,11 @@ export class ImageTargetPreview {
     }
 
     const { viewportWidth: width, viewportHeight: height } = this.previewViewportSize();
-    const nextPlacement = normalizePlacement({
+    const nextPlacement = {
       ...this.dragStart.placement,
       offsetX: this.dragStart.placement.offsetX + ((pointer.x - this.dragStart.pointer.x) / width) * 2,
       offsetY: this.dragStart.placement.offsetY + ((pointer.y - this.dragStart.pointer.y) / height) * 2,
-    });
+    };
     this.updatePlacement(this.dragStart.objectId, nextPlacement);
   };
 
@@ -549,6 +627,18 @@ export class ImageTargetPreview {
   };
 
   private readonly handleTransformControlObjectChange = (): void => {
+    const selectedGroup = this.selectedGroup();
+    if (selectedGroup) {
+      const root = this.groupRoots.get(selectedGroup.id);
+      if (root) {
+        this.updateGroupPlacement(selectedGroup.id, placementFromObject(root));
+      }
+      return;
+    }
+    if (this.selection.objectIds.length > 1) {
+      this.updateSelectionPlacement(placementFromObject(this.selectionPivotRoot));
+      return;
+    }
     const objectId = this.selectedObjectId;
     const selectedModel = this.selectedLoadedModel();
     if (!objectId || !selectedModel) {
@@ -683,8 +773,28 @@ export class ImageTargetPreview {
   }
 
   private updatePlacement(objectId: string, placement: ImageTargetPlacement): void {
-    const nextPlacement = normalizePlacement(placement);
+    if (objectId === selectionTargetKey) {
+      this.updateSelectionPlacement(placement);
+      return;
+    }
+    if (objectId.startsWith(groupTargetPrefix)) {
+      this.updateGroupPlacement(objectId.slice(groupTargetPrefix.length), placement);
+      return;
+    }
+    const objectIndex = this.previewObjects.findIndex((object) => object.id === objectId);
+    const object = this.previewObjects[objectIndex];
+    if (!object) {
+      return;
+    }
+    const grouped = Boolean(object.groupId && object.localPlacement && this.groupRoots.has(object.groupId));
+    const nextPlacement = grouped ? normalizeLocalPlacement(placement) : normalizePlacement(placement);
     this.placements.set(objectId, nextPlacement);
+    const nextObject = {
+      ...object,
+      ...(grouped ? { localPlacement: nextPlacement } : {}),
+    } as TargetEditorObject;
+    nextObject.placement = grouped ? resolveObjectPlacement(nextObject, this.groups) : nextPlacement;
+    this.previewObjects[objectIndex] = nextObject;
     this.applyPlacementToObject(objectId);
     this.onPlacementChange?.({ objectId, placement: { ...nextPlacement } });
   }
@@ -696,16 +806,17 @@ export class ImageTargetPreview {
       return;
     }
 
-    loadedModel.position.set(placement.offsetX, placement.height, placement.offsetY);
-    loadedModel.scale.setScalar(placement.scale);
-    loadedModel.rotation.set(
-      degreesToRadians(placement.rotationX),
-      degreesToRadians(placement.rotationY),
-      degreesToRadians(placement.rotationZ),
-    );
+    this.applyPlacementToRoot(loadedModel, placement);
   }
 
   private applyObjectAnimations(): void {
+    for (const [groupId, root] of this.groupRoots) {
+      const animation = this.groupAnimations.get(groupId);
+      const placement = this.groupPlacements.get(groupId);
+      if (animation && placement) {
+        this.applyAnimatedPlacement(root, placement, animation);
+      }
+    }
     for (const [objectId, loadedModel] of this.loadedModels) {
       const animation = this.animations.get(objectId);
       const placement = this.placements.get(objectId);
@@ -713,19 +824,94 @@ export class ImageTargetPreview {
         continue;
       }
 
-      const frame = evaluateAnimationFrame(animation, this.elapsedSeconds);
-      loadedModel.position.set(
-        placement.offsetX + frame.position.x,
-        placement.height + frame.position.y,
-        placement.offsetY + frame.position.z,
-      );
-      loadedModel.scale.setScalar(placement.scale * frame.scaleMultiplier);
-      loadedModel.rotation.set(
-        degreesToRadians(placement.rotationX) + frame.rotationRadians.x,
-        degreesToRadians(placement.rotationY) + frame.rotationRadians.y,
-        degreesToRadians(placement.rotationZ) + frame.rotationRadians.z,
-      );
+      this.applyAnimatedPlacement(loadedModel, placement, animation);
     }
+  }
+
+  private applyPlacementToRoot(root: Object3D, placement: ImageTargetPlacement): void {
+    root.position.set(placement.offsetX, placement.height, placement.offsetY);
+    root.scale.setScalar(placement.scale);
+    root.rotation.set(
+      degreesToRadians(placement.rotationX),
+      degreesToRadians(placement.rotationY),
+      degreesToRadians(placement.rotationZ),
+    );
+  }
+
+  private applyAnimatedPlacement(
+    root: Object3D,
+    placement: ImageTargetPlacement,
+    animation: ImageTargetAnimation,
+  ): void {
+    const frame = evaluateAnimationFrame(animation, this.elapsedSeconds);
+    root.position.set(
+      placement.offsetX + frame.position.x,
+      placement.height + frame.position.y,
+      placement.offsetY + frame.position.z,
+    );
+    root.scale.setScalar(placement.scale * frame.scaleMultiplier);
+    root.rotation.set(
+      degreesToRadians(placement.rotationX) + frame.rotationRadians.x,
+      degreesToRadians(placement.rotationY) + frame.rotationRadians.y,
+      degreesToRadians(placement.rotationZ) + frame.rotationRadians.z,
+    );
+  }
+
+  private updateGroupPlacement(groupId: string, placement: ImageTargetPlacement): void {
+    const nextPlacement = normalizePlacement(placement);
+    const group = this.groups.find((candidate) => candidate.id === groupId);
+    const root = this.groupRoots.get(groupId);
+    if (!group || !root) {
+      return;
+    }
+    group.placement = nextPlacement;
+    this.groupPlacements.set(groupId, nextPlacement);
+    this.applyPlacementToRoot(root, nextPlacement);
+    this.previewObjects = this.previewObjects.map((object) => object.groupId === groupId
+      ? { ...object, placement: resolveObjectPlacement(object, this.groups) } as TargetEditorObject
+      : object);
+    this.onGroupPlacementChange?.({ groupId, placement: { ...nextPlacement } });
+  }
+
+  private updateSelectionPlacement(placement: ImageTargetPlacement): void {
+    if (this.selection.objectIds.length < 2) {
+      return;
+    }
+    this.selectionTransformStart ??= {
+      pivot: selectionPivotPlacement(this.previewObjects, this.groups, this.selection.objectIds),
+      objects: this.previewObjects.map(clonePreviewObject),
+    };
+    const nextPivot = normalizePlacement(placement);
+    this.previewObjects = transformSelectionPlacements({
+      objects: this.selectionTransformStart.objects,
+      groups: this.groups,
+      objectIds: this.selection.objectIds,
+      startPivot: this.selectionTransformStart.pivot,
+      endPivot: nextPivot,
+    });
+    const selectedIds = new Set(this.selection.objectIds);
+    const changes: PreviewPlacementChange[] = [];
+    for (const object of this.previewObjects) {
+      if (!selectedIds.has(object.id)) {
+        continue;
+      }
+      const editablePlacement = object.groupId && object.localPlacement
+        ? normalizeLocalPlacement(object.localPlacement)
+        : normalizePlacement(object.placement);
+      this.placements.set(object.id, editablePlacement);
+      this.applyPlacementToObject(object.id);
+      changes.push({ objectId: object.id, placement: { ...editablePlacement } });
+    }
+    this.applyPlacementToRoot(this.selectionPivotRoot, nextPivot);
+    if (this.onPlacementsChange) {
+      this.onPlacementsChange(changes);
+    } else {
+      changes.forEach((change) => this.onPlacementChange?.(change));
+    }
+  }
+
+  private parentForObject(object: TargetEditorObject): Group {
+    return object.groupId ? this.groupRoots.get(object.groupId) ?? this.modelRoot : this.modelRoot;
   }
 
   private frameDeltaSeconds(timestamp: number): number {
@@ -795,31 +981,34 @@ export class ImageTargetPreview {
     }
   }
 
-  private selectObject(objectId: string, emitChange: boolean): void {
-    if (this.selectedObjectId === objectId) {
-      this.attachTransformControls();
-      if (emitChange) {
-        this.onSelectionChange?.(objectId);
-      }
-      return;
+  private selectObject(objectId: string, emitChange: boolean, additive = false): void {
+    if (additive) {
+      this.selection = toggleTargetObjectSelection(this.selection, objectId);
+    } else if (this.selection.objectIds.length > 1 && this.selection.objectIds.includes(objectId)) {
+      this.selection = { objectIds: [...this.selection.objectIds.filter((id) => id !== objectId), objectId] };
+    } else {
+      this.selection = { objectIds: [objectId] };
     }
-
-    this.selectedObjectId = objectId;
+    this.selection = normalizeTargetEditorSelection(this.selection, this.previewObjects, this.groups);
+    this.selectedObjectId = this.selection.objectIds.at(-1);
+    this.selectionTransformStart = undefined;
     this.attachTransformControls();
     if (emitChange) {
-      this.onSelectionChange?.(objectId);
+      this.onSelectionChange?.(cloneSelection(this.selection));
     }
   }
 
   private clearSelection(emitChange: boolean): void {
-    if (!this.selectedObjectId) {
+    if (!this.hasSelection()) {
       return;
     }
 
+    this.selection = { objectIds: [] };
     this.selectedObjectId = undefined;
+    this.selectionTransformStart = undefined;
     this.attachTransformControls();
     if (emitChange) {
-      this.onSelectionChange?.(undefined);
+      this.onSelectionChange?.({ objectIds: [] });
     }
   }
 
@@ -831,6 +1020,17 @@ export class ImageTargetPreview {
       return;
     }
 
+    if (selectedModel === this.selectionPivotRoot) {
+      const pivot = selectionPivotPlacement(this.previewObjects, this.groups, this.selection.objectIds);
+      this.applyPlacementToRoot(this.selectionPivotRoot, pivot);
+      if (!this.selectionPivotRoot.parent) {
+        this.modelRoot.add(this.selectionPivotRoot);
+      }
+      this.selectionTransformStart = {
+        pivot,
+        objects: this.previewObjects.map(clonePreviewObject),
+      };
+    }
     this.transformControls.attach(selectedModel);
     this.transformControls.setMode(this.previewTransformMode);
     this.transformControls.visible = true;
@@ -860,10 +1060,30 @@ export class ImageTargetPreview {
   }
 
   private selectedLoadedModel(): Group | undefined {
+    const group = this.selectedGroup();
+    if (group) {
+      return this.groupRoots.get(group.id);
+    }
+    if (this.selection.objectIds.length > 1) {
+      return this.selectionPivotRoot;
+    }
     return this.selectedObjectId ? this.loadedModels.get(this.selectedObjectId) : undefined;
   }
 
   private selectedPlacement(): { objectId: string; placement: ImageTargetPlacement } | undefined {
+    const group = this.selectedGroup();
+    if (group) {
+      const placement = this.groupPlacements.get(group.id);
+      return placement ? { objectId: `${groupTargetPrefix}${group.id}`, placement } : undefined;
+    }
+    if (this.selection.objectIds.length > 1) {
+      const placement = selectionPivotPlacement(this.previewObjects, this.groups, this.selection.objectIds);
+      this.selectionTransformStart = {
+        pivot: placement,
+        objects: this.previewObjects.map(clonePreviewObject),
+      };
+      return { objectId: selectionTargetKey, placement };
+    }
     const objectId = this.selectedObjectId;
     if (!objectId) {
       return undefined;
@@ -871,6 +1091,16 @@ export class ImageTargetPreview {
 
     const placement = this.placements.get(objectId);
     return placement ? { objectId, placement } : undefined;
+  }
+
+  private selectedGroup(): TargetEditorGroup | undefined {
+    return this.selection.groupId
+      ? this.groups.find((group) => group.id === this.selection.groupId)
+      : undefined;
+  }
+
+  private hasSelection(): boolean {
+    return this.selection.objectIds.length > 0 || Boolean(this.selectedGroup());
   }
 }
 
@@ -894,6 +1124,37 @@ function previewObjectsFromState(state: PreviewState): TargetEditorObject[] {
       placement: normalizePlacement(state.placement),
     },
   ];
+}
+
+function normalizePreviewGroups(groups: TargetEditorGroup[] | undefined): TargetEditorGroup[] {
+  const seen = new Set<string>();
+  return (groups ?? []).flatMap((group) => {
+    if (!group.id || seen.has(group.id)) {
+      return [];
+    }
+    seen.add(group.id);
+    return [{
+      ...group,
+      placement: normalizePlacement(group.placement),
+      animation: normalizeAnimation(group.animation),
+    }];
+  });
+}
+
+function clonePreviewObject(object: TargetEditorObject): TargetEditorObject {
+  return {
+    ...object,
+    placement: { ...object.placement },
+    ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
+    animation: normalizeAnimation(object.animation),
+  } as TargetEditorObject;
+}
+
+function cloneSelection(selection: TargetEditorSelection): TargetEditorSelection {
+  return {
+    objectIds: [...selection.objectIds],
+    ...(selection.groupId ? { groupId: selection.groupId } : {}),
+  };
 }
 
 function selectPreviewObjectId(

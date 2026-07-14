@@ -671,16 +671,52 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
       }
       renderTargetObjectList();
     },
+    onPlacementsChange: (changes) => {
+      for (const { objectId, placement } of changes) {
+        const object = targetObjects.find((entry) => entry.id === objectId);
+        if (!object) {
+          continue;
+        }
+        if (object.groupId) {
+          object.localPlacement = normalizeLocalPlacement(placement);
+          object.placement = resolveObjectPlacement(object, targetGroups);
+        } else {
+          object.placement = normalizePlacement(placement);
+        }
+      }
+      targetPlacement = selectionPivotPlacement(targetObjects, targetGroups, targetSelection.objectIds);
+      syncTargetPlacementInputs(targetPlacement);
+      renderTargetObjectList();
+    },
+    onGroupPlacementChange: ({ groupId, placement }) => {
+      const group = targetGroups.find((candidate) => candidate.id === groupId);
+      if (!group) {
+        return;
+      }
+      group.placement = normalizePlacement(placement);
+      targetObjects = targetObjects.map((object) => object.groupId === groupId
+        ? { ...object, placement: resolveObjectPlacement(object, targetGroups) }
+        : object);
+      targetPlacement = group.placement;
+      syncTargetPlacementInputs(group.placement);
+      renderTargetObjectList();
+    },
     onCameraChange: (cameraView) => {
       targetCameraView = cameraView;
       syncTargetCameraInputs(cameraView);
     },
-    onSelectionChange: (objectId) => {
-      if (objectId) {
-        selectTargetObject(objectId, { refreshPreview: false });
-        return;
-      }
-      clearSelectedTargetObject({ refreshPreview: false });
+    onSelectionChange: (selection) => {
+      targetSelection = normalizeTargetEditorSelection(selection, targetObjects, targetGroups);
+      syncSelectionToInspector({ activateWhenSelected: targetSelection.objectIds.length > 0 || Boolean(targetSelection.groupId) });
+      renderTargetObjectList();
+      updateImageTargetStatus(
+        targetSelection.objectIds.length > 1
+          ? `${targetSelection.objectIds.length} objects selected.`
+          : targetSelection.objectIds.length === 1
+            ? 'Object selected.'
+            : 'No object selected.',
+        false,
+      );
     },
     onTransformModeChange: (mode) => {
       targetTransformMode = mode;
@@ -864,16 +900,6 @@ function selectTargetObject(
       : isTextTargetObject(object) ? `${object.text.value} text selected.` : `${object.model.label} selected.`,
     false,
   );
-  if (options?.refreshPreview !== false) {
-    void updateTargetPreview();
-  }
-}
-
-function clearSelectedTargetObject(options?: { refreshPreview?: boolean }): void {
-  targetSelection = { objectIds: [] };
-  syncSelectionToInspector();
-  renderTargetObjectList();
-  updateImageTargetStatus('No object selected.', false);
   if (options?.refreshPreview !== false) {
     void updateTargetPreview();
   }

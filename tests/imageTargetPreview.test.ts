@@ -196,7 +196,7 @@ describe('ImageTargetPreview', () => {
       render: vi.fn(),
       dispose: vi.fn(),
     };
-    const selectionChanges: string[] = [];
+    const selectionChanges: unknown[] = [];
     const model = createDisposableModel();
 
     const preview = new ImageTargetPreview(container, {
@@ -205,7 +205,7 @@ describe('ImageTargetPreview', () => {
       cancelFrame: vi.fn(),
       loadModel: vi.fn(async () => model.group),
       loadTexture: vi.fn(async () => undefined),
-      onSelectionChange: (objectId) => selectionChanges.push(objectId),
+      onSelectionChange: (selection) => selectionChanges.push(selection),
     });
 
     await preview.update({
@@ -221,7 +221,7 @@ describe('ImageTargetPreview', () => {
     dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 250, clientY: 250 });
     dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 250 });
 
-    expect(selectionChanges).toEqual(['chair-object']);
+    expect(selectionChanges).toEqual([{ objectIds: ['chair-object'] }]);
 
     preview.dispose();
   });
@@ -241,7 +241,7 @@ describe('ImageTargetPreview', () => {
       render: vi.fn(),
       dispose: vi.fn(),
     };
-    const selectionChanges: Array<string | undefined> = [];
+    const selectionChanges: unknown[] = [];
     const model = createDisposableModel();
 
     const preview = new ImageTargetPreview(container, {
@@ -250,7 +250,7 @@ describe('ImageTargetPreview', () => {
       cancelFrame: vi.fn(),
       loadModel: vi.fn(async () => model.group),
       loadTexture: vi.fn(async () => undefined),
-      onSelectionChange: (objectId) => selectionChanges.push(objectId),
+      onSelectionChange: (selection) => selectionChanges.push(selection),
     });
 
     await preview.update({
@@ -267,7 +267,7 @@ describe('ImageTargetPreview', () => {
     dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 20, clientY: 20 });
     dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 20, clientY: 20 });
 
-    expect(selectionChanges).toEqual([undefined]);
+    expect(selectionChanges).toEqual([{ objectIds: [] }]);
 
     preview.dispose();
   });
@@ -1007,6 +1007,161 @@ describe('ImageTargetPreview', () => {
     expect(model.group.rotation.z).toBeCloseTo(Math.PI / 6);
     expect(model.group.scale.x).toBeCloseTo(2);
 
+    preview.dispose();
+  });
+
+  it('uses Ctrl/Command object hits for additive selection while empty Ctrl drag still zooms', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, { clientWidth: { value: 500 }, clientHeight: { value: 500 } });
+    const rendererElement = document.createElement('canvas');
+    mockCanvasRect(rendererElement, { width: 500, height: 500 });
+    const renderer = { domElement: rendererElement, setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+    const selectionChanges: unknown[] = [];
+    const cameraChanges: unknown[] = [];
+
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => createDisposableModel().group),
+      loadTexture: vi.fn(async () => undefined),
+      onSelectionChange: (selection) => selectionChanges.push(selection),
+      onCameraChange: (camera) => cameraChanges.push(camera),
+    });
+    await preview.update({
+      objects: [
+        { id: 'chair', model: { id: 'chair', label: 'Chair', url: 'chair.glb' }, placement: { scale: 1, offsetX: -0.2, offsetY: 0, height: 0.1 } },
+        { id: 'lamp', model: { id: 'lamp', label: 'Lamp', url: 'lamp.glb' }, placement: { scale: 1, offsetX: 0.2, offsetY: 0, height: 0.1 } },
+      ],
+      selection: { objectIds: [] },
+    });
+    const internals = preview as unknown as { pickObjectIdAtPointer: () => string | undefined };
+
+    internals.pickObjectIdAtPointer = () => 'chair';
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 200, clientY: 250 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 200, clientY: 250 });
+    internals.pickObjectIdAtPointer = () => 'lamp';
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 2, clientX: 300, clientY: 250, ctrlKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 2, clientX: 300, clientY: 250, ctrlKey: true });
+    internals.pickObjectIdAtPointer = () => 'chair';
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 3, clientX: 200, clientY: 250 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 3, clientX: 200, clientY: 250 });
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 4, clientX: 200, clientY: 250, metaKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 4, clientX: 200, clientY: 250, metaKey: true });
+
+    expect(selectionChanges).toEqual([
+      { objectIds: ['chair'] },
+      { objectIds: ['chair', 'lamp'] },
+      { objectIds: ['lamp', 'chair'] },
+      { objectIds: ['lamp'] },
+    ]);
+
+    internals.pickObjectIdAtPointer = () => undefined;
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 5, clientX: 20, clientY: 20, ctrlKey: true });
+    dispatchPointer(rendererElement, 'pointermove', { pointerId: 5, clientX: 20, clientY: 80, ctrlKey: true });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 5, clientX: 20, clientY: 80, ctrlKey: true });
+    expect(cameraChanges.length).toBeGreaterThan(0);
+    expect(selectionChanges).toHaveLength(4);
+
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 6, clientX: 20, clientY: 20 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 6, clientX: 20, clientY: 20 });
+    expect(selectionChanges.at(-1)).toEqual({ objectIds: [] });
+    preview.dispose();
+  });
+
+  it('builds group roots, layers group and child animation, and attaches controls by selection level', async () => {
+    const container = document.createElement('div');
+    const renderer = { domElement: document.createElement('canvas'), setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+    let frameCallback: FrameRequestCallback | undefined;
+    const models = [createDisposableModel(), createDisposableModel()];
+    let modelIndex = 0;
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: (callback) => { frameCallback = callback; return 1; },
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => models[modelIndex++].group),
+      loadTexture: vi.fn(async () => undefined),
+    });
+    const groupPlacement = { scale: 1.2, offsetX: 0.3, offsetY: -0.1, height: 0.4, rotationX: 0, rotationY: 20, rotationZ: 0 };
+    await preview.update({
+      groups: [{
+        id: 'room', label: 'Room', placement: groupPlacement,
+        animation: { preset: 'custom', tracks: [{ property: 'positionY', motion: 'smooth', amount: 0.1, speed: 0.5, phase: 0 }] },
+      }],
+      objects: [
+        {
+          id: 'chair', model: { id: 'chair', label: 'Chair', url: 'chair.glb' }, placement: groupPlacement,
+          groupId: 'room', localPlacement: { scale: 1, offsetX: -0.2, offsetY: 0, height: 0, rotationX: 0, rotationY: 0, rotationZ: 0 },
+          animation: { preset: 'custom', tracks: [{ property: 'rotationZ', motion: 'smooth', amount: 30, speed: 0.5, phase: 0 }] },
+        },
+        {
+          id: 'lamp', model: { id: 'lamp', label: 'Lamp', url: 'lamp.glb' }, placement: groupPlacement,
+          groupId: 'room', localPlacement: { scale: 1, offsetX: 0.2, offsetY: 0, height: 0, rotationX: 0, rotationY: 0, rotationZ: 0 },
+        },
+      ],
+      selection: { objectIds: [], groupId: 'room' },
+    });
+    const internals = preview as unknown as {
+      groupRoots: Map<string, Group>;
+      loadedModels: Map<string, Group>;
+      transformControls: { object?: Group };
+    };
+    const groupRoot = internals.groupRoots.get('room')!;
+    expect(groupRoot.name).toBe('target-group-room');
+    expect(internals.loadedModels.get('chair')?.parent).toBe(groupRoot);
+    expect(internals.loadedModels.get('lamp')?.parent).toBe(groupRoot);
+    expect(internals.transformControls.object).toBe(groupRoot);
+
+    frameCallback?.(1000);
+    frameCallback?.(1500);
+    expect(groupRoot.position.y).toBeCloseTo(0.5);
+    expect(internals.loadedModels.get('chair')?.rotation.z).toBeCloseTo(Math.PI / 6);
+
+    modelIndex = 0;
+    await preview.update({
+      groups: [{ id: 'room', label: 'Room', placement: groupPlacement, animation: { preset: 'none', tracks: [] } }],
+      objects: [
+        { id: 'chair', model: { id: 'chair', label: 'Chair', url: 'chair.glb' }, placement: groupPlacement, groupId: 'room', localPlacement: { scale: 1, offsetX: -0.2, offsetY: 0, height: 0, rotationX: 0, rotationY: 0, rotationZ: 0 } },
+        { id: 'lamp', model: { id: 'lamp', label: 'Lamp', url: 'lamp.glb' }, placement: groupPlacement, groupId: 'room', localPlacement: { scale: 1, offsetX: 0.2, offsetY: 0, height: 0, rotationX: 0, rotationY: 0, rotationZ: 0 } },
+      ],
+      selection: { objectIds: ['chair'] },
+    });
+    expect(internals.transformControls.object).toBe(internals.loadedModels.get('chair'));
+    preview.dispose();
+  });
+
+  it('uses a shared centroid proxy to emit placement changes for every selected object', async () => {
+    const container = document.createElement('div');
+    const renderer = { domElement: document.createElement('canvas'), setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+    const changes: unknown[] = [];
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => createDisposableModel().group),
+      loadTexture: vi.fn(async () => undefined),
+      onPlacementsChange: (next) => changes.push(next),
+    });
+    await preview.update({
+      objects: [
+        { id: 'chair', model: { id: 'chair', label: 'Chair', url: 'chair.glb' }, placement: { scale: 1, offsetX: -0.4, offsetY: 0, height: 0.2 } },
+        { id: 'lamp', model: { id: 'lamp', label: 'Lamp', url: 'lamp.glb' }, placement: { scale: 1, offsetX: 0.4, offsetY: 0, height: 0.2 } },
+      ],
+      selection: { objectIds: ['chair', 'lamp'] },
+    });
+    const internals = preview as unknown as {
+      selectionPivotRoot: Group;
+      transformControls: { object?: Group };
+      handleTransformControlObjectChange: () => void;
+    };
+    expect(internals.transformControls.object).toBe(internals.selectionPivotRoot);
+    internals.selectionPivotRoot.position.x += 0.25;
+    internals.handleTransformControlObjectChange();
+
+    const latest = changes.at(-1) as Array<{ objectId: string; placement: { offsetX: number } }>;
+    expect(latest.map((change) => change.objectId)).toEqual(['chair', 'lamp']);
+    expect(latest[0].placement.offsetX).toBeCloseTo(-0.15);
+    expect(latest[1].placement.offsetX).toBeCloseTo(0.65);
     preview.dispose();
   });
 });
