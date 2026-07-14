@@ -1529,7 +1529,7 @@ function createCurrentDraftTarget(): LocalImageTargetDraft | undefined {
   }
 
   return {
-    id: 'current-target',
+    id: editingTarget?.targetId ?? 'current-target',
     label: targetLabelInput?.value.trim() || 'Current target',
     imageUrl,
     objects: targetObjects,

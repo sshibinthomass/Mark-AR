@@ -96,4 +96,79 @@ describe('marker target mapping', () => {
       },
     });
   });
+
+  it('maps a saved text-only cloud target into reusable AR content', () => {
+    const targets = createRuntimeMarkerTargets({
+      builtInMarkers: [],
+      cloudTargets: [{
+        id: 'saved-text',
+        label: 'Saved text marker',
+        imageUrl: 'https://worker.example/image-targets/images/saved-text.png',
+        imageObjectKey: 'image-targets/images/saved-text.png',
+        objects: [{
+          kind: 'text',
+          id: 'saved-text-object',
+          text: {
+            value: 'Reusable text',
+            language: 'english',
+            font: 'studio-serif-bold',
+            color: '#123456',
+          },
+          placement: { scale: 1, offsetX: 0.2, offsetY: 0, height: 0.2, rotationX: 0, rotationY: 45, rotationZ: 0 },
+        }],
+        groups: [],
+      }],
+    });
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0]).toMatchObject({
+      marker: { id: 'cloud-saved-text', imagePath: 'https://worker.example/image-targets/images/saved-text.png' },
+      cloudflareAsset: {
+        objects: [expect.objectContaining({
+          kind: 'text',
+          id: 'saved-text-object',
+          text: expect.objectContaining({ value: 'Reusable text', font: 'studio-serif-bold' }),
+        })],
+      },
+    });
+  });
+
+  it('replaces a matching saved cloud target with its active editor draft', () => {
+    const imageUrl = 'https://worker.example/image-targets/images/editing.jpg';
+    const targets = createRuntimeMarkerTargets({
+      builtInMarkers: [],
+      cloudTargets: [{
+        id: 'editing-target',
+        label: 'Saved version',
+        imageUrl,
+        imageObjectKey: 'image-targets/images/editing.jpg',
+        objects: [{
+          id: 'saved-chair',
+          model: { id: 'chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+          placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 },
+        }],
+        groups: [],
+      }],
+      draftTarget: {
+        id: 'editing-target',
+        label: 'Unsaved editor version',
+        imageUrl,
+        objects: [{
+          kind: 'text',
+          id: 'draft-text',
+          text: { value: 'Edited text', language: 'english', font: 'studio-sans-bold' },
+          placement: { scale: 1, offsetX: 0.2, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 },
+        }],
+        groups: [],
+      },
+    });
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0]).toMatchObject({
+      marker: { id: 'draft-editing-target', label: 'Unsaved editor version', targetIndex: 0, imagePath: imageUrl },
+      cloudflareAsset: {
+        objects: [expect.objectContaining({ kind: 'text', id: 'draft-text' })],
+      },
+    });
+  });
 });

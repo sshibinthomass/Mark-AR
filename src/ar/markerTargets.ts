@@ -23,7 +23,10 @@ export function createRuntimeMarkerTargets({
     marker: { ...marker, targetIndex: index },
   }));
 
-  const cloudRuntimeTargets = cloudTargets.map((target, index) => ({
+  const visibleCloudTargets = draftTarget
+    ? cloudTargets.filter((target) => target.id !== draftTarget.id)
+    : cloudTargets;
+  const cloudRuntimeTargets = visibleCloudTargets.map((target, index) => ({
     marker: {
       id: `cloud-${target.id}`,
       label: target.label,

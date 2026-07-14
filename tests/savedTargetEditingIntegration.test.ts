@@ -76,6 +76,10 @@ const previewMocks = vi.hoisted(() => ({
   update: vi.fn(async () => undefined),
 }));
 
+const markerArMocks = vi.hoisted(() => ({
+  startMarkerAR: vi.fn(async () => ({ stop: vi.fn() })),
+}));
+
 vi.mock('../src/app/cloudflareModels', () => ({
   DEFAULT_GENERATE_MODEL_API_URL: 'https://worker.example/generate-3d',
   loadCloudflareModelOptions: vi.fn(async () => [{
@@ -101,7 +105,7 @@ vi.mock('../src/capture/cameraCapture', () => ({
 }));
 
 vi.mock('../src/ar/mindarRuntime', () => ({
-  startMarkerAR: vi.fn(),
+  startMarkerAR: markerArMocks.startMarkerAR,
 }));
 
 vi.mock('../src/scene/ImageTargetPreview', () => ({
@@ -121,6 +125,7 @@ describe('saved target editing integration', () => {
     cloudImageTargetMocks.updateImageTarget.mockClear();
     cloudImageTargetMocks.updateImageTarget.mockResolvedValue(savedTarget);
     previewMocks.update.mockClear();
+    markerArMocks.startMarkerAR.mockClear();
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
   });
@@ -179,6 +184,34 @@ describe('saved target editing integration', () => {
     expect(document.querySelectorAll('.target-object-row')).toHaveLength(0);
     expect(document.querySelector<HTMLButtonElement>('#new-image-target')?.hidden).toBe(true);
     expect(document.querySelector('[data-edit-target="target-1"]')?.getAttribute('aria-current')).toBe('false');
+  });
+
+  it('uses one active editor version of a saved target when starting AR', async () => {
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelector<HTMLButtonElement>('#save-image-target')?.textContent === 'Update target');
+
+    document.querySelector<HTMLButtonElement>('#start-ar')?.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+
+    const options = markerArMocks.startMarkerAR.mock.calls[0][1] as {
+      targets: Array<{
+        marker: { id: string; imagePath?: string };
+        cloudflareAsset?: { objects?: Array<{ id?: string; kind?: string }> };
+      }>;
+    };
+    const activeTargets = options.targets.filter((target) => target.marker.imagePath === savedTarget.imageUrl);
+    expect(activeTargets).toHaveLength(1);
+    expect(activeTargets[0]).toMatchObject({
+      marker: { id: 'draft-target-1' },
+      cloudflareAsset: {
+        objects: expect.arrayContaining([
+          expect.objectContaining({ id: 'chair-1' }),
+          expect.objectContaining({ kind: 'text', id: 'text-1' }),
+        ]),
+      },
+    });
   });
 });
 
