@@ -8,6 +8,13 @@ import type {
 import { normalizeAnimation } from './imageTargetAnimation';
 import type { ImageTargetImagePayload, ImageTargetPlacement } from './imageTargetPayload';
 import { normalizePlacement } from './imageTargetPayload';
+import {
+  composeGroupPlacement,
+  normalizeLocalPlacement,
+  type TargetEditorGroup,
+} from './targetEditorGroups';
+
+export type CloudImageTargetGroup = TargetEditorGroup;
 
 export type CloudImageTargetObject = {
   id: string;
@@ -26,6 +33,7 @@ export type CloudImageTarget = {
   model: CloudflareModelOption;
   placement: ImageTargetPlacement;
   objects: CloudImageTargetObject[];
+  groups: CloudImageTargetGroup[];
   ownerEmail?: string;
   visibility?: ModelVisibility;
   createdAt?: string;
@@ -51,6 +59,8 @@ type WorkerImageTargetObject = {
     rotation_y?: number;
     rotation_z?: number;
   };
+  group_id?: string;
+  local_placement?: WorkerImageTargetPlacement;
   animation?: {
     preset?: string;
     tracks?: Array<{
@@ -65,6 +75,23 @@ type WorkerImageTargetObject = {
     bob_height?: number;
     bob_speed?: number;
   };
+};
+
+type WorkerImageTargetPlacement = {
+  scale?: number;
+  offset_x?: number;
+  offset_y?: number;
+  height?: number;
+  rotation_x?: number;
+  rotation_y?: number;
+  rotation_z?: number;
+};
+
+type WorkerImageTargetGroup = {
+  id?: string;
+  label?: string;
+  placement?: WorkerImageTargetPlacement;
+  animation?: WorkerImageTargetObject['animation'];
 };
 
 type WorkerImageTargetEntry = {
@@ -83,6 +110,7 @@ type WorkerImageTargetEntry = {
     rotation_z?: number;
   };
   objects?: WorkerImageTargetObject[];
+  groups?: WorkerImageTargetGroup[];
   owner_email?: string;
   visibility?: ModelVisibility;
   created_at?: string;
@@ -110,6 +138,7 @@ type CreateImageTargetInput = ClientInput &
     model?: CloudflareModelOption;
     placement?: ImageTargetPlacement;
     objects?: CloudImageTargetObject[];
+    groups?: CloudImageTargetGroup[];
   };
 
 type UpdateImageTargetInput = ClientInput & {
@@ -118,6 +147,7 @@ type UpdateImageTargetInput = ClientInput & {
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;
   objects?: CloudImageTargetObject[];
+  groups?: CloudImageTargetGroup[];
 } & Partial<ImageTargetImagePayload>;
 
 type DeleteImageTargetInput = ClientInput & {
@@ -153,8 +183,10 @@ export async function createImageTarget({
   model,
   placement,
   objects,
+  groups,
 }: CreateImageTargetInput): Promise<CloudImageTarget> {
-  const requestObjects = imageTargetObjectsRequestBody(objects, model, placement);
+  const normalizedGroups = normalizeCloudImageTargetGroups(groups);
+  const requestObjects = imageTargetObjectsRequestBody(objects, normalizedGroups, model, placement);
   const response = await fetchImpl(imageTargetsUrl(apiUrl), {
     method: 'POST',
     headers: jsonHeaders(authToken),
@@ -165,6 +197,7 @@ export async function createImageTarget({
       model: requestObjects[0].model,
       placement: requestObjects[0].placement,
       objects: requestObjects,
+      ...(normalizedGroups.length > 0 ? { groups: normalizedGroups.map(groupRequestBody) } : {}),
     }),
   });
   return parseImageTargetResponse(response, 'Image target create failed');
@@ -179,6 +212,7 @@ export async function updateImageTarget({
   model,
   placement,
   objects,
+  groups,
   imageBase64,
   imageMimeType,
 }: UpdateImageTargetInput): Promise<CloudImageTarget> {
@@ -193,10 +227,14 @@ export async function updateImageTarget({
     body.placement = placementRequestBody(placement);
   }
   if (objects) {
-    const requestObjects = imageTargetObjectsRequestBody(objects, model, placement);
+    const normalizedGroups = normalizeCloudImageTargetGroups(groups);
+    const requestObjects = imageTargetObjectsRequestBody(objects, normalizedGroups, model, placement);
     body.objects = requestObjects;
     body.model = requestObjects[0].model;
     body.placement = requestObjects[0].placement;
+    body.groups = normalizedGroups.map(groupRequestBody);
+  } else if (groups) {
+    body.groups = normalizeCloudImageTargetGroups(groups).map(groupRequestBody);
   }
   if (imageBase64 !== undefined) {
     body.image_base64 = imageBase64;
@@ -233,7 +271,8 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
   if (!entry.id || !entry.label || !entry.image_url || !entry.image_object_key) {
     return null;
   }
-  const objects = mapImageTargetObjects(entry);
+  const groups = mapImageTargetGroups(entry.groups);
+  const objects = mapImageTargetObjects(entry, groups);
   const firstObject = objects[0];
   if (!firstObject) {
     return null;
@@ -247,6 +286,7 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
     model: firstObject.model,
     placement: firstObject.placement,
     objects,
+    groups,
     ...(entry.owner_email ? { ownerEmail: entry.owner_email } : {}),
     ...(entry.visibility ? { visibility: entry.visibility } : {}),
     ...(entry.created_at ? { createdAt: entry.created_at } : {}),
@@ -254,9 +294,12 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
   };
 }
 
-function mapImageTargetObjects(entry: WorkerImageTargetEntry): CloudImageTargetObject[] {
+function mapImageTargetObjects(
+  entry: WorkerImageTargetEntry,
+  groups: CloudImageTargetGroup[],
+): CloudImageTargetObject[] {
   const objects = (entry.objects ?? [])
-    .map((object, index) => mapImageTargetObject(object, index))
+    .map((object, index) => mapImageTargetObject(object, index, groups))
     .filter((object): object is CloudImageTargetObject => Boolean(object));
   if (objects.length > 0) {
     return objects;
@@ -266,15 +309,26 @@ function mapImageTargetObjects(entry: WorkerImageTargetEntry): CloudImageTargetO
     id: 'object-1',
     model: entry.model,
     placement: entry.placement,
-  }, 0);
+  }, 0, groups);
   return legacyObject ? [legacyObject] : [];
 }
 
-function mapImageTargetObject(object: WorkerImageTargetObject, index: number): CloudImageTargetObject | null {
+function mapImageTargetObject(
+  object: WorkerImageTargetObject,
+  index: number,
+  groups: CloudImageTargetGroup[],
+): CloudImageTargetObject | null {
   if (!object.model?.id || !object.model.label || !object.model.url) {
     return null;
   }
 
+  const group = object.group_id ? groups.find((candidate) => candidate.id === object.group_id) : undefined;
+  const localPlacement = group && object.local_placement
+    ? normalizeLocalPlacement(placementFromWire(object.local_placement))
+    : undefined;
+  const placement = localPlacement && group
+    ? composeGroupPlacement(group.placement, localPlacement)
+    : normalizePlacement(placementFromWire(object.placement));
   return {
     id: object.id || `object-${index + 1}`,
     model: {
@@ -283,32 +337,43 @@ function mapImageTargetObject(object: WorkerImageTargetObject, index: number): C
       url: object.model.url,
       ...(object.model.preview_url ? { previewUrl: object.model.preview_url } : {}),
     },
-    placement: normalizePlacement({
-      scale: object.placement?.scale,
-      offsetX: object.placement?.offset_x,
-      offsetY: object.placement?.offset_y,
-      height: object.placement?.height,
-      rotationX: object.placement?.rotation_x,
-      rotationY: object.placement?.rotation_y,
-      rotationZ: object.placement?.rotation_z,
-    }),
-    ...(object.animation ? {
-      animation: normalizeAnimation({
-        preset: object.animation.preset as ImageTargetAnimationPreset | undefined,
-        tracks: object.animation.tracks?.map((track) => ({
-          property: animationPropertyFromWire(track.property),
-          motion: track.motion as ImageTargetAnimationMotion | undefined,
-          amount: track.amount,
-          speed: track.speed,
-          phase: track.phase,
-        })) as ImageTargetAnimation['tracks'] | undefined,
-        spinAxis: object.animation.spin_axis as 'none' | 'x' | 'y' | 'z' | undefined,
-        spinSpeed: object.animation.spin_speed,
-        bobHeight: object.animation.bob_height,
-        bobSpeed: object.animation.bob_speed,
-      }),
-    } : {}),
+    placement,
+    ...(group && localPlacement ? { groupId: group.id, localPlacement } : {}),
+    ...(object.animation ? { animation: animationFromWire(object.animation) } : {}),
   };
+}
+
+function mapImageTargetGroups(groups: WorkerImageTargetGroup[] | undefined): CloudImageTargetGroup[] {
+  const seen = new Set<string>();
+  return (groups ?? []).flatMap((group) => {
+    if (!group.id || !group.label || seen.has(group.id)) {
+      return [];
+    }
+    seen.add(group.id);
+    return [{
+      id: group.id,
+      label: group.label,
+      placement: normalizePlacement(placementFromWire(group.placement)),
+      animation: group.animation ? animationFromWire(group.animation) : normalizeAnimation(),
+    }];
+  });
+}
+
+function animationFromWire(animation: NonNullable<WorkerImageTargetObject['animation']>): ImageTargetAnimation {
+  return normalizeAnimation({
+    preset: animation.preset as ImageTargetAnimationPreset | undefined,
+    tracks: animation.tracks?.map((track) => ({
+      property: animationPropertyFromWire(track.property),
+      motion: track.motion as ImageTargetAnimationMotion | undefined,
+      amount: track.amount,
+      speed: track.speed,
+      phase: track.phase,
+    })) as ImageTargetAnimation['tracks'] | undefined,
+    spinAxis: animation.spin_axis as 'none' | 'x' | 'y' | 'z' | undefined,
+    spinSpeed: animation.spin_speed,
+    bobHeight: animation.bob_height,
+    bobSpeed: animation.bob_speed,
+  });
 }
 
 async function parseImageTargetResponse(response: Response, fallback: string): Promise<CloudImageTarget> {
@@ -342,6 +407,7 @@ function modelRequestBody(model: CloudflareModelOption): Record<string, string> 
 
 function imageTargetObjectsRequestBody(
   objects: CloudImageTargetObject[] | undefined,
+  groups: CloudImageTargetGroup[],
   legacyModel?: CloudflareModelOption,
   legacyPlacement?: ImageTargetPlacement,
 ): Array<{
@@ -360,12 +426,67 @@ function imageTargetObjectsRequestBody(
     throw new Error('Choose at least one Cloudflare model.');
   }
 
-  return requestObjects.map((object, index) => ({
+  const resolvedObjects = resolveGroupedObjectsForSave(requestObjects, groups);
+  return resolvedObjects.map((object, index) => ({
     id: object.id || `object-${index + 1}`,
     model: modelRequestBody(object.model),
     placement: placementRequestBody(object.placement),
+    ...(object.groupId && object.localPlacement ? {
+      group_id: object.groupId,
+      local_placement: localPlacementRequestBody(object.localPlacement),
+    } : {}),
     ...(object.animation ? { animation: animationRequestBody(object.animation) } : {}),
   }));
+}
+
+export function resolveGroupedObjectsForSave(
+  objects: CloudImageTargetObject[],
+  groups: CloudImageTargetGroup[],
+): CloudImageTargetObject[] {
+  const normalizedGroups = normalizeCloudImageTargetGroups(groups);
+  return objects.map((object) => {
+    const group = object.groupId
+      ? normalizedGroups.find((candidate) => candidate.id === object.groupId)
+      : undefined;
+    if (!group || !object.localPlacement) {
+      const { groupId: _groupId, localPlacement: _localPlacement, ...ungrouped } = object;
+      return { ...ungrouped, placement: normalizePlacement(object.placement) };
+    }
+    const localPlacement = normalizeLocalPlacement(object.localPlacement);
+    return {
+      ...object,
+      groupId: group.id,
+      localPlacement,
+      placement: composeGroupPlacement(group.placement, localPlacement),
+    };
+  });
+}
+
+export function normalizeCloudImageTargetGroups(
+  groups: CloudImageTargetGroup[] | undefined,
+): CloudImageTargetGroup[] {
+  const seen = new Set<string>();
+  return (groups ?? []).flatMap((group) => {
+    if (!group.id || !group.label || seen.has(group.id)) {
+      return [];
+    }
+    seen.add(group.id);
+    return [{
+      id: group.id,
+      label: group.label,
+      placement: normalizePlacement(group.placement),
+      animation: normalizeAnimation(group.animation),
+    }];
+  });
+}
+
+function groupRequestBody(group: CloudImageTargetGroup): Record<string, unknown> {
+  return {
+    id: group.id,
+    label: group.label,
+    placement: placementRequestBody(group.placement),
+    animation: animationRequestBody(group.animation),
+  };
 }
 
 type WorkerAnimationRequestBody = {
@@ -442,6 +563,31 @@ function placementRequestBody(placement: ImageTargetPlacement): Record<string, n
     rotation_x: normalized.rotationX,
     rotation_y: normalized.rotationY,
     rotation_z: normalized.rotationZ,
+  };
+}
+
+function localPlacementRequestBody(placement: ImageTargetPlacement): Record<string, number> {
+  const normalized = normalizeLocalPlacement(placement);
+  return {
+    scale: normalized.scale,
+    offset_x: normalized.offsetX,
+    offset_y: normalized.offsetY,
+    height: normalized.height,
+    rotation_x: normalized.rotationX,
+    rotation_y: normalized.rotationY,
+    rotation_z: normalized.rotationZ,
+  };
+}
+
+function placementFromWire(placement: WorkerImageTargetPlacement | undefined): Partial<ImageTargetPlacement> {
+  return {
+    scale: placement?.scale,
+    offsetX: placement?.offset_x,
+    offsetY: placement?.offset_y,
+    height: placement?.height,
+    rotationX: placement?.rotation_x,
+    rotationY: placement?.rotation_y,
+    rotationZ: placement?.rotation_z,
   };
 }
 

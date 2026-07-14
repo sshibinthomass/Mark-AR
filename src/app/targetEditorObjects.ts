@@ -1,4 +1,5 @@
 import type { CloudImageTargetObject } from './cloudImageTargets';
+import type { TargetEditorGroup } from './targetEditorGroups';
 import {
   DEFAULT_IMAGE_TARGET_ANIMATION,
   normalizeAnimation,
@@ -198,6 +199,7 @@ export type LocalImageTargetDraft = {
   label: string;
   imageUrl: string;
   objects: TargetEditorObject[];
+  groups?: TargetEditorGroup[];
 };
 
 export const DEFAULT_TARGET_TEXT: TargetTextContent = {

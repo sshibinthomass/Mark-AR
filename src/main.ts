@@ -1466,6 +1466,10 @@ async function saveCurrentImageTarget(): Promise<void> {
     placement: normalizePlacement(object.placement),
     animation: normalizeAnimation(object.animation),
   }));
+  const saveableObjectIds = new Set(objects.map((object) => object.id));
+  const groups = targetGroups.filter((group) => targetObjects.some((object) => (
+    object.groupId === group.id && saveableObjectIds.has(object.id)
+  )));
   updateImageTargetStatus('Saving image target...', false);
 
   try {
@@ -1478,6 +1482,7 @@ async function saveCurrentImageTarget(): Promise<void> {
       model: objects[0].model,
       placement: objects[0].placement,
       objects,
+      groups,
     });
     await refreshImageTargets({ rethrowOnError: true });
     updateImageTargetStatus(
@@ -1501,6 +1506,7 @@ function createCurrentDraftTarget(): LocalImageTargetDraft | undefined {
     label: targetLabelInput?.value.trim() || 'Current target',
     imageUrl: imageTargetDataUrl(targetImagePayload),
     objects: targetObjects,
+    groups: targetGroups,
   };
 }
 
