@@ -74,17 +74,15 @@ describe('new target object animation defaults', () => {
     cards[0].click();
     await waitFor(() => latestObjects().length === 1);
 
-    setInputValue('#target-spin-speed', '2');
-    setInputValue('#target-bob-height', '0.25');
-    setInputValue('#target-bob-speed', '3');
-    await waitFor(() => latestObjects()[0]?.animation?.spinSpeed === 2);
+    selectAnimationPreset('showcase');
+    await waitFor(() => latestObjects()[0]?.animation?.preset === 'showcase');
 
     document.querySelector<HTMLButtonElement>('#add-target-text')?.click();
     await waitFor(() => latestObjects().length === 2);
     expect(latestObjects()[1]?.animation).toEqual(DEFAULT_IMAGE_TARGET_ANIMATION);
 
     document.querySelector<HTMLButtonElement>('[data-select-target-object]')?.click();
-    await waitFor(() => latestObjects()[0]?.animation?.spinSpeed === 2);
+    await waitFor(() => latestObjects()[0]?.animation?.preset === 'showcase');
 
     cards[1].click();
     await waitFor(() => latestObjects().length === 3);
@@ -92,13 +90,13 @@ describe('new target object animation defaults', () => {
   }, 10000);
 });
 
-function setInputValue(selector: string, value: string): void {
-  const input = document.querySelector<HTMLInputElement>(selector);
-  if (!input) {
-    throw new Error(`Input not found: ${selector}`);
+function selectAnimationPreset(value: string): void {
+  const select = document.querySelector<HTMLSelectElement>('#target-animation-preset');
+  if (!select) {
+    throw new Error('Animation preset not found');
   }
-  input.value = value;
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+  select.value = value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function latestObjects(): TargetEditorObject[] {

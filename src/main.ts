@@ -15,9 +15,10 @@ import {
 } from './app/cloudImageTargets';
 import {
   DEFAULT_IMAGE_TARGET_ANIMATION,
+  animationForPreset,
   normalizeAnimation,
   type ImageTargetAnimation,
-  type ImageTargetSpinAxis,
+  type ImageTargetAnimationPreset,
 } from './app/imageTargetAnimation';
 import {
   DEFAULT_IMAGE_TARGET_PLACEMENT,
@@ -90,6 +91,7 @@ import {
 import { AuthNavigation } from './ui/authNavigation';
 import { applyAuthFormMode, type AuthFormMode } from './ui/authFormMode';
 import { renderAppShell } from './ui/appShell';
+import { createAnimationTrackEditor } from './ui/animationTrackEditor';
 import { renderTargetModelRail } from './ui/modelRail';
 import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
@@ -150,10 +152,9 @@ const targetCameraHeightInput = document.querySelector<HTMLInputElement>('#targe
 const targetCameraYawInput = document.querySelector<HTMLInputElement>('#target-camera-yaw');
 const targetCameraTargetInput = document.querySelector<HTMLInputElement>('#target-camera-target');
 const targetCameraPresetButtons = document.querySelectorAll<HTMLButtonElement>('[data-camera-preset]');
-const targetSpinAxisSelect = document.querySelector<HTMLSelectElement>('#target-spin-axis');
-const targetSpinSpeedInput = document.querySelector<HTMLInputElement>('#target-spin-speed');
-const targetBobHeightInput = document.querySelector<HTMLInputElement>('#target-bob-height');
-const targetBobSpeedInput = document.querySelector<HTMLInputElement>('#target-bob-speed');
+const targetAnimationPresetSelect = document.querySelector<HTMLSelectElement>('#target-animation-preset');
+const targetAnimationTracks = document.querySelector<HTMLElement>('#target-animation-tracks');
+const addTargetAnimationTrackButton = document.querySelector<HTMLButtonElement>('#add-target-animation-track');
 const resetTargetAnimationButton = document.querySelector<HTMLButtonElement>('#reset-target-animation');
 const saveImageTargetButton = document.querySelector<HTMLButtonElement>('#save-image-target');
 const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#refresh-image-targets');
@@ -176,6 +177,17 @@ let targetTransformMode: PreviewTransformMode = 'translate';
 let targetObjects: TargetEditorObject[] = [];
 let selectedTargetObjectId: string | undefined;
 let imageTargetPreview: ImageTargetPreview | undefined;
+const animationTrackEditor = targetAnimationTracks
+  ? createAnimationTrackEditor(targetAnimationTracks, {
+      onChange: (animation) => {
+        updateSelectedTargetObjectAnimation(animation);
+        if (targetAnimationPresetSelect) {
+          targetAnimationPresetSelect.value = 'custom';
+        }
+        void updateTargetPreview();
+      },
+    })
+  : undefined;
 
 applyAuthUi(shell, authUiState);
 applyAuthFormMode(shell, authFormMode);
@@ -404,21 +416,24 @@ targetCameraPresetButtons.forEach((button) => {
   });
 });
 
-[targetSpinSpeedInput, targetBobHeightInput, targetBobSpeedInput].forEach((input) => {
-  input?.addEventListener('input', () => {
-    updateSelectedTargetObjectAnimation(readTargetAnimation());
-    void updateTargetPreview();
-  });
-});
-
-targetSpinAxisSelect?.addEventListener('change', () => {
-  updateSelectedTargetObjectAnimation(readTargetAnimation());
+targetAnimationPresetSelect?.addEventListener('change', () => {
+  const preset = targetAnimationPresetSelect.value as ImageTargetAnimationPreset;
+  const animation = preset === 'custom'
+    ? { ...normalizeAnimation(targetAnimation), preset: 'custom' as const }
+    : animationForPreset(preset);
+  updateSelectedTargetObjectAnimation(animation);
+  syncTargetAnimationInputs(animation);
   void updateTargetPreview();
 });
 
+addTargetAnimationTrackButton?.addEventListener('click', () => {
+  animationTrackEditor?.addTrack();
+});
+
 resetTargetAnimationButton?.addEventListener('click', () => {
-  updateSelectedTargetObjectAnimation(DEFAULT_IMAGE_TARGET_ANIMATION);
-  syncTargetAnimationInputs(DEFAULT_IMAGE_TARGET_ANIMATION);
+  const animation = animationForPreset('none');
+  updateSelectedTargetObjectAnimation(animation);
+  syncTargetAnimationInputs(animation);
   void updateTargetPreview();
 });
 
@@ -668,15 +683,6 @@ function readTargetCameraView(): PreviewCameraView {
     targetHeight: Number(targetCameraTargetInput?.value) || DEFAULT_PREVIEW_CAMERA_VIEW.targetHeight,
     targetZ: targetCameraView.targetZ,
   };
-}
-
-function readTargetAnimation(): ImageTargetAnimation {
-  return normalizeAnimation({
-    spinAxis: targetSpinAxisSelect?.value as ImageTargetSpinAxis | undefined,
-    spinSpeed: Number(targetSpinSpeedInput?.value),
-    bobHeight: Number(targetBobHeightInput?.value),
-    bobSpeed: Number(targetBobSpeedInput?.value),
-  });
 }
 
 function renderTargetModelRailOptions(models: CloudflareModelOption[]): void {
@@ -1146,12 +1152,10 @@ function syncTargetPlacementInputs(placement: ImageTargetPlacement): void {
 
 function syncTargetAnimationInputs(animation: ImageTargetAnimation): void {
   const normalized = normalizeAnimation(animation);
-  if (targetSpinAxisSelect) {
-    targetSpinAxisSelect.value = normalized.spinAxis;
+  if (targetAnimationPresetSelect) {
+    targetAnimationPresetSelect.value = normalized.preset;
   }
-  setRangeInputValue(targetSpinSpeedInput, normalized.spinSpeed);
-  setRangeInputValue(targetBobHeightInput, normalized.bobHeight);
-  setRangeInputValue(targetBobSpeedInput, normalized.bobSpeed);
+  animationTrackEditor?.render(normalized);
 }
 
 function syncTargetCameraInputs(cameraView: PreviewCameraView): void {
