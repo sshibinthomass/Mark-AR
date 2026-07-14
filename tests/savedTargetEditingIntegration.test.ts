@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CloudImageTarget } from '../src/app/cloudImageTargets';
+import { composeGroupPlacement } from '../src/app/targetEditorGroups';
 
 const placement = {
   scale: 1,
@@ -11,21 +12,27 @@ const placement = {
   rotationZ: 0,
 };
 
+const groupPlacement = { ...placement, height: 0.2, rotationY: 20 };
+const chairLocalPlacement = { ...placement, offsetX: -0.15, height: 0 };
+const textLocalPlacement = { ...placement, offsetX: 0.15, height: 0 };
+const chairPlacement = composeGroupPlacement(groupPlacement, chairLocalPlacement);
+const textPlacement = composeGroupPlacement(groupPlacement, textLocalPlacement);
+
 const savedTarget: CloudImageTarget = {
   id: 'target-1',
   label: 'Kitchen marker',
   imageUrl: 'https://worker.example/image-targets/images/kitchen.jpg',
   imageObjectKey: 'image-targets/images/kitchen.jpg',
   model: { id: 'chair', label: 'Chair', url: 'https://worker.example/models/chair.glb' },
-  placement,
+  placement: chairPlacement,
   objects: [
     {
       kind: 'model',
       id: 'chair-1',
       model: { id: 'chair', label: 'Chair', url: 'https://worker.example/models/chair.glb' },
-      placement,
+      placement: chairPlacement,
       groupId: 'group-1',
-      localPlacement: { ...placement, offsetX: -0.15 },
+      localPlacement: chairLocalPlacement,
     },
     {
       kind: 'text',
@@ -45,9 +52,9 @@ const savedTarget: CloudImageTarget = {
         gloss: 0.9,
         stylePreset: 'gold-bevel',
       },
-      placement: { ...placement, offsetX: 0.2 },
+      placement: textPlacement,
       groupId: 'group-1',
-      localPlacement: { ...placement, offsetX: 0.15 },
+      localPlacement: textLocalPlacement,
       animation: {
         preset: 'custom',
         tracks: [{ property: 'rotationY', motion: 'spin', amount: 360, speed: 0.25, phase: 0 }],
@@ -57,7 +64,7 @@ const savedTarget: CloudImageTarget = {
   groups: [{
     id: 'group-1',
     label: 'Welcome set',
-    placement: { ...placement, height: 0.2, rotationY: 20 },
+    placement: groupPlacement,
     animation: {
       preset: 'custom',
       tracks: [{ property: 'height', motion: 'triangle', amount: 0.1, speed: 0.5, phase: 0 }],
@@ -184,6 +191,156 @@ describe('saved target editing integration', () => {
     expect(document.querySelectorAll('.target-object-row')).toHaveLength(0);
     expect(document.querySelector<HTMLButtonElement>('#new-image-target')?.hidden).toBe(true);
     expect(document.querySelector('[data-edit-target="target-1"]')?.getAttribute('aria-current')).toBe('false');
+  });
+
+  it('reopens complete text styles and keeps animation scoped to the saved text object', async () => {
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelectorAll('.target-object-row').length === 2);
+
+    document.querySelector<HTMLButtonElement>('[data-select-target-object="text-1"]')?.click();
+    await waitFor(() => document.querySelector<HTMLTextAreaElement>('#target-text-value')?.value === 'Welcome');
+    expect(document.querySelector<HTMLSelectElement>('#target-text-fill-mode')?.value).toBe('gradient');
+    expect(document.querySelector<HTMLInputElement>('#target-text-gradient-start')?.value).toBe('#234567');
+    expect(document.querySelector<HTMLInputElement>('#target-text-gradient-end')?.value).toBe('#345678');
+    expect(document.querySelector<HTMLInputElement>('#target-text-gloss')?.value).toBe('0.9');
+    expect(document.querySelector<HTMLSelectElement>('#target-animation-preset')?.value).toBe('custom');
+    expect(document.querySelectorAll('[data-animation-track]')).toHaveLength(1);
+
+    document.querySelector<HTMLButtonElement>('#save-image-target')?.click();
+    await waitFor(() => cloudImageTargetMocks.updateImageTarget.mock.calls.length === 1);
+    expect(cloudImageTargetMocks.updateImageTarget).toHaveBeenCalledWith(expect.objectContaining({
+      objects: [
+        expect.objectContaining({ id: 'chair-1', animation: { preset: 'none', tracks: [] } }),
+        expect.objectContaining({
+          kind: 'text',
+          id: 'text-1',
+          text: expect.objectContaining({
+            value: 'Welcome',
+            fillMode: 'gradient',
+            gradientStart: '#234567',
+            gradientEnd: '#345678',
+            gloss: 0.9,
+          }),
+          animation: {
+            preset: 'custom',
+            tracks: [{ property: 'rotationY', motion: 'spin', amount: 360, speed: 0.25, phase: 0 }],
+          },
+        }),
+      ],
+    }));
+    await waitFor(() => document.querySelector('#image-target-status')?.textContent === 'Image target updated in Cloudflare.');
+
+    document.querySelector<HTMLButtonElement>('[data-select-target-object="text-1"]')?.click();
+    await waitFor(() => document.querySelector<HTMLSelectElement>('#target-animation-preset')?.value === 'custom');
+    document.querySelector<HTMLButtonElement>('[data-select-target-object="chair-1"]')?.click();
+    expect(document.querySelector<HTMLSelectElement>('#target-animation-preset')?.value).toBe('none');
+  });
+
+  it('keeps the complete editor draft when the Worker returns a lossy saved target', async () => {
+    const lossyTarget: CloudImageTarget = {
+      ...structuredClone(savedTarget),
+      objects: [structuredClone(savedTarget.objects[0])],
+    };
+    cloudImageTargetMocks.listImageTargets.mockReset();
+    cloudImageTargetMocks.listImageTargets
+      .mockResolvedValueOnce([savedTarget])
+      .mockResolvedValue([lossyTarget]);
+    cloudImageTargetMocks.updateImageTarget.mockResolvedValue(lossyTarget);
+
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelectorAll('.target-object-row').length === 2);
+
+    document.querySelector<HTMLButtonElement>('#save-image-target')?.click();
+    await waitFor(() => cloudImageTargetMocks.updateImageTarget.mock.calls.length === 1);
+    await waitFor(() => document.querySelector('#image-target-status')?.textContent?.includes('did not preserve') === true);
+
+    expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
+    expect(previewMocks.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      objects: expect.arrayContaining([
+        expect.objectContaining({ id: 'chair-1' }),
+        expect.objectContaining({ kind: 'text', id: 'text-1' }),
+      ]),
+    }));
+    expect(document.querySelector<HTMLButtonElement>('#save-image-target')?.textContent).toBe('Update target');
+  });
+
+  it('keeps the last good saved card when a successful refresh returns lossy target state', async () => {
+    const lossyTarget: CloudImageTarget = {
+      ...structuredClone(savedTarget),
+      objects: [structuredClone(savedTarget.objects[0])],
+    };
+    cloudImageTargetMocks.listImageTargets.mockReset();
+    cloudImageTargetMocks.listImageTargets
+      .mockResolvedValueOnce([savedTarget])
+      .mockResolvedValueOnce([lossyTarget]);
+
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelectorAll('.target-object-row').length === 2);
+
+    document.querySelector<HTMLButtonElement>('#save-image-target')?.click();
+    await waitFor(() => document.querySelector('#image-target-status')?.textContent?.includes('did not preserve object') === true);
+
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelectorAll('.target-object-row').length === 2);
+    expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
+  });
+
+  it('rejects a successful refresh that omits the saved target without clearing the last good card', async () => {
+    cloudImageTargetMocks.listImageTargets.mockReset();
+    cloudImageTargetMocks.listImageTargets
+      .mockResolvedValueOnce([savedTarget])
+      .mockResolvedValueOnce([]);
+
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelectorAll('.target-object-row').length === 2);
+
+    document.querySelector<HTMLButtonElement>('#save-image-target')?.click();
+    await waitFor(() => document.querySelector('#image-target-status')?.textContent?.includes('did not return target target-1') === true);
+
+    expect(document.querySelector('[data-edit-target="target-1"]')).toBeTruthy();
+    expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
+  });
+
+  it('keeps the last good target list and active editor when a manual refresh fails', async () => {
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelectorAll('.target-object-row').length === 2);
+    cloudImageTargetMocks.listImageTargets.mockRejectedValueOnce(new Error('Refresh offline'));
+
+    document.querySelector<HTMLButtonElement>('#refresh-image-targets')?.click();
+    await waitFor(() => document.querySelector('#image-target-status')?.textContent === 'Refresh offline');
+
+    expect(document.querySelector('[data-edit-target="target-1"]')).toBeTruthy();
+    expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
+    expect(document.querySelector<HTMLButtonElement>('#save-image-target')?.textContent).toBe('Update target');
+  });
+
+  it('reports a successful save separately when the following list refresh fails', async () => {
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelectorAll('.target-object-row').length === 2);
+    cloudImageTargetMocks.listImageTargets.mockRejectedValueOnce(new Error('Refresh offline'));
+
+    document.querySelector<HTMLButtonElement>('#save-image-target')?.click();
+    await waitFor(() => cloudImageTargetMocks.updateImageTarget.mock.calls.length === 1);
+    await waitFor(() => {
+      const message = document.querySelector('#image-target-status')?.textContent?.toLowerCase() ?? '';
+      return message.includes('saved') && message.includes('refresh');
+    });
+
+    expect(document.querySelector('[data-edit-target="target-1"]')).toBeTruthy();
+    expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
+    expect(document.querySelector<HTMLButtonElement>('#save-image-target')?.textContent).toBe('Update target');
   });
 
   it('uses one active editor version of a saved target when starting AR', async () => {

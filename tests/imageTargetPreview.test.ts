@@ -1052,8 +1052,8 @@ describe('ImageTargetPreview', () => {
     expect(selectionChanges).toEqual([
       { objectIds: ['chair'] },
       { objectIds: ['chair', 'lamp'] },
-      { objectIds: ['lamp', 'chair'] },
-      { objectIds: ['lamp'] },
+      { objectIds: ['chair'] },
+      { objectIds: [] },
     ]);
 
     internals.pickObjectIdAtPointer = () => undefined;

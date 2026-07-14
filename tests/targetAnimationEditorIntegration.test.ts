@@ -87,6 +87,31 @@ describe('target animation editor integration', () => {
     await waitFor(() => currentPreset() === 'orbit');
     expect(document.querySelectorAll('[data-animation-track]')).toHaveLength(2);
   }, 10000);
+
+  it('collapses a multi-selection before editing one object animation', async () => {
+    await import('../src/main');
+    await waitFor(() => document.querySelectorAll('.target-model-card').length === 2);
+    const modelCards = document.querySelectorAll<HTMLButtonElement>('.target-model-card');
+    modelCards[0].click();
+    await waitFor(() => latestObjects().length === 1);
+    selectPreset('orbit');
+    await waitFor(() => latestObjects()[0]?.animation?.preset === 'orbit');
+
+    modelCards[1].click();
+    await waitFor(() => latestObjects().length === 2);
+    const [firstObject, secondObject] = latestObjects();
+
+    selectObject(firstObject.id, { ctrlKey: true });
+    await waitFor(() => selectedObjectIds().length === 2);
+    selectObject(firstObject.id);
+    await waitFor(() => selectedObjectIds().length === 1);
+
+    expect(selectedObjectIds()).toEqual([firstObject.id]);
+    selectPreset('turntable');
+    await waitFor(() => latestObjects()[0]?.animation?.preset === 'turntable');
+    expect(latestObjects()[1]?.id).toBe(secondObject.id);
+    expect(latestObjects()[1]?.animation?.preset).toBe('none');
+  }, 10000);
 });
 
 function selectPreset(value: string): void {
@@ -101,6 +126,18 @@ function currentPreset(): string | undefined {
 
 function latestObjects(): TargetEditorObject[] {
   return previewUpdates.at(-1)?.objects ?? [];
+}
+
+function selectObject(objectId: string, options: { ctrlKey?: boolean } = {}): void {
+  document.querySelector<HTMLButtonElement>(`[data-select-target-object="${objectId}"]`)?.dispatchEvent(
+    new MouseEvent('click', { bubbles: true, ctrlKey: options.ctrlKey }),
+  );
+}
+
+function selectedObjectIds(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('.target-object-row[aria-selected="true"]'))
+    .map((row) => row.dataset.objectId)
+    .filter((objectId): objectId is string => Boolean(objectId));
 }
 
 async function waitFor(assertion: () => boolean): Promise<void> {

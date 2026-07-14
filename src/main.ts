@@ -88,6 +88,7 @@ import {
   targetPreviewImageUrl,
   type EditingTargetState,
 } from './app/targetEditorSession';
+import { savedTargetAuthoringMismatch } from './app/targetPersistence';
 import {
   imageFileToCapturedImage,
 } from './capture/cameraCapture';
@@ -895,13 +896,9 @@ function selectTargetObject(
     return;
   }
 
-  if (options?.additive) {
-    targetSelection = toggleTargetObjectSelection(targetSelection, object.id);
-  } else if (targetSelection.objectIds.length > 1 && targetSelection.objectIds.includes(object.id)) {
-    targetSelection = { objectIds: [...targetSelection.objectIds.filter((id) => id !== object.id), object.id] };
-  } else {
-    targetSelection = { objectIds: [object.id] };
-  }
+  targetSelection = options?.additive
+    ? toggleTargetObjectSelection(targetSelection, object.id)
+    : { objectIds: [object.id] };
   targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
   syncSelectionToInspector({ activateWhenSelected: targetSelection.objectIds.length > 0 });
   renderTargetObjectList();
@@ -1514,8 +1511,35 @@ async function saveCurrentImageTarget(): Promise<void> {
         groups,
       });
     }
-    await refreshImageTargets({ rethrowOnError: true });
-    await loadSavedImageTarget(cloudImageTargets.find((target) => target.id === savedTarget.id) ?? savedTarget);
+    const directMismatch = savedTargetAuthoringMismatch(objects, groups, savedTarget);
+    if (directMismatch) {
+      throw new Error(`${directMismatch} Your editor changes were kept.`);
+    }
+    let refreshedTargets: CloudImageTarget[];
+    try {
+      refreshedTargets = await refreshImageTargets({ rethrowOnError: true, commit: false }) ?? [];
+    } catch (error) {
+      await loadSavedImageTarget(savedTarget);
+      const savedMessage = wasEditing
+        ? 'Image target update was saved in Cloudflare'
+        : 'Image target was saved in Cloudflare';
+      updateImageTargetStatus(
+        `${savedMessage}, but the saved-target list could not refresh. ${errorMessage(error, 'Refresh failed.')}`,
+        true,
+      );
+      return;
+    }
+    const refreshedTarget = refreshedTargets.find((target) => target.id === savedTarget.id);
+    if (!refreshedTarget) {
+      throw new Error(`The saved-target refresh did not return target ${savedTarget.id}. Your editor changes were kept.`);
+    }
+    const refreshedMismatch = savedTargetAuthoringMismatch(objects, groups, refreshedTarget);
+    if (refreshedMismatch) {
+      throw new Error(`${refreshedMismatch} Your editor changes were kept.`);
+    }
+    cloudImageTargets = refreshedTargets;
+    renderSavedImageTargets();
+    await loadSavedImageTarget(refreshedTarget);
     updateImageTargetStatus(wasEditing ? 'Image target updated in Cloudflare.' : 'Image target saved to Cloudflare.', false);
   } catch (error) {
     updateImageTargetStatus(errorMessage(error, 'Unable to save image target'), true);
@@ -1537,26 +1561,32 @@ function createCurrentDraftTarget(): LocalImageTargetDraft | undefined {
   };
 }
 
-async function refreshImageTargets(options?: { rethrowOnError?: boolean }): Promise<void> {
+async function refreshImageTargets(options?: {
+  rethrowOnError?: boolean;
+  commit?: boolean;
+}): Promise<CloudImageTarget[] | undefined> {
   try {
-    cloudImageTargets = await listImageTargets({
+    const refreshedTargets = await listImageTargets({
       apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
       authToken,
     });
-    renderSavedImageTargets();
-    updateImageTargetStatus(
-      cloudImageTargets.length > 0
-        ? `${cloudImageTargets.length} cloud image target${cloudImageTargets.length === 1 ? '' : 's'} loaded.`
-        : 'No cloud image targets saved yet.',
-      false,
-    );
+    if (options?.commit !== false) {
+      cloudImageTargets = refreshedTargets;
+      renderSavedImageTargets();
+      updateImageTargetStatus(
+        cloudImageTargets.length > 0
+          ? `${cloudImageTargets.length} cloud image target${cloudImageTargets.length === 1 ? '' : 's'} loaded.`
+          : 'No cloud image targets saved yet.',
+        false,
+      );
+    }
+    return refreshedTargets;
   } catch (error) {
-    cloudImageTargets = [];
-    renderSavedImageTargets();
     updateImageTargetStatus(errorMessage(error, 'Unable to load image targets'), true);
     if (options?.rethrowOnError) {
       throw error;
     }
+    return undefined;
   }
 }
 

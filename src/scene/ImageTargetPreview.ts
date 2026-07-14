@@ -982,13 +982,9 @@ export class ImageTargetPreview {
   }
 
   private selectObject(objectId: string, emitChange: boolean, additive = false): void {
-    if (additive) {
-      this.selection = toggleTargetObjectSelection(this.selection, objectId);
-    } else if (this.selection.objectIds.length > 1 && this.selection.objectIds.includes(objectId)) {
-      this.selection = { objectIds: [...this.selection.objectIds.filter((id) => id !== objectId), objectId] };
-    } else {
-      this.selection = { objectIds: [objectId] };
-    }
+    this.selection = additive
+      ? toggleTargetObjectSelection(this.selection, objectId)
+      : { objectIds: [objectId] };
     this.selection = normalizeTargetEditorSelection(this.selection, this.previewObjects, this.groups);
     this.selectedObjectId = this.selection.objectIds.at(-1);
     this.selectionTransformStart = undefined;
