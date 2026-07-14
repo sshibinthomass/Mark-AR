@@ -79,7 +79,7 @@ describe('createCloudflareMarkerObject', () => {
     expect(plantRoot.rotation.z).toBeCloseTo(Math.PI / 4);
   });
 
-  it('applies per-object spin and bob animation in the AR runtime', async () => {
+  it('applies animation tracks relative to the saved AR placement without drift', async () => {
     const loadedModel = new Group();
 
     const markerObject = createCloudflareMarkerObject({
@@ -91,8 +91,23 @@ describe('createCloudflareMarkerObject', () => {
             label: 'Lamp',
             url: 'https://worker.example/models/lamp.glb',
           },
-          placement: { scale: 1, offsetX: 0, offsetY: 0.1, height: 0.2 },
-          animation: { spinAxis: 'y', spinSpeed: 2, bobHeight: 0.1, bobSpeed: Math.PI },
+          placement: {
+            scale: 2,
+            offsetX: 0.2,
+            offsetY: 0.1,
+            height: 0.3,
+            rotationX: 10,
+            rotationY: 20,
+            rotationZ: 30,
+          },
+          animation: {
+            preset: 'custom',
+            tracks: [
+              { property: 'positionX', motion: 'smooth', amount: 0.4, speed: 0.5, phase: 0 },
+              { property: 'rotationZ', motion: 'smooth', amount: 30, speed: 0.5, phase: 0 },
+              { property: 'scale', motion: 'smooth', amount: 0.25, speed: 0.5, phase: 0 },
+            ],
+          },
         },
       ],
       loadModelGroup: async () => loadedModel,
@@ -102,10 +117,19 @@ describe('createCloudflareMarkerObject', () => {
     markerObject.update(0.5);
 
     const modelRoot = markerObject.group.getObjectByName('cloudflare-model-root-animated-object') as Group;
-    expect(modelRoot.rotation.y).toBeCloseTo(1);
-    expect(modelRoot.position.x).toBeCloseTo(0);
+    expect(modelRoot.position.x).toBeCloseTo(0.6);
     expect(modelRoot.position.y).toBeCloseTo(0.1);
     expect(modelRoot.position.z).toBeCloseTo(0.3);
+    expect(modelRoot.rotation.x).toBeCloseTo(Math.PI / 18);
+    expect(modelRoot.rotation.y).toBeCloseTo(Math.PI / 9);
+    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 3);
+    expect(modelRoot.scale.x).toBeCloseTo(2.5);
+
+    markerObject.update(0.5);
+
+    expect(modelRoot.position.x).toBeCloseTo(0.2);
+    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 6);
+    expect(modelRoot.scale.x).toBeCloseTo(2);
   });
 
   it('renders local text objects in AR without loading a GLB', async () => {

@@ -940,7 +940,7 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
-  it('animates loaded objects with per-object spin and bob settings', async () => {
+  it('applies animation tracks relative to the saved placement without drift', async () => {
     const container = document.createElement('div');
     const renderer = {
       domElement: document.createElement('canvas'),
@@ -968,8 +968,23 @@ describe('ImageTargetPreview', () => {
         {
           id: 'animated-object',
           model: { id: 'lamp', label: 'Lamp', url: 'https://example.com/lamp.glb', visibility: 'public' },
-          placement: { scale: 1, offsetX: 0, offsetY: 0.1, height: 0.2 },
-          animation: { spinAxis: 'y', spinSpeed: 2, bobHeight: 0.1, bobSpeed: Math.PI },
+          placement: {
+            scale: 2,
+            offsetX: 0.2,
+            offsetY: 0.1,
+            height: 0.3,
+            rotationX: 10,
+            rotationY: 20,
+            rotationZ: 30,
+          },
+          animation: {
+            preset: 'custom',
+            tracks: [
+              { property: 'positionX', motion: 'smooth', amount: 0.4, speed: 0.5, phase: 0 },
+              { property: 'rotationZ', motion: 'smooth', amount: 30, speed: 0.5, phase: 0 },
+              { property: 'scale', motion: 'smooth', amount: 0.25, speed: 0.5, phase: 0 },
+            ],
+          },
         },
       ],
       selectedObjectId: 'animated-object',
@@ -978,9 +993,19 @@ describe('ImageTargetPreview', () => {
     frameCallback?.(1000);
     frameCallback?.(1500);
 
-    expect(model.group.rotation.y).toBeCloseTo(1);
+    expect(model.group.position.x).toBeCloseTo(0.6);
     expect(model.group.position.y).toBeCloseTo(0.3);
     expect(model.group.position.z).toBeCloseTo(0.1);
+    expect(model.group.rotation.x).toBeCloseTo(Math.PI / 18);
+    expect(model.group.rotation.y).toBeCloseTo(Math.PI / 9);
+    expect(model.group.rotation.z).toBeCloseTo(Math.PI / 3);
+    expect(model.group.scale.x).toBeCloseTo(2.5);
+
+    frameCallback?.(2000);
+
+    expect(model.group.position.x).toBeCloseTo(0.2);
+    expect(model.group.rotation.z).toBeCloseTo(Math.PI / 6);
+    expect(model.group.scale.x).toBeCloseTo(2);
 
     preview.dispose();
   });

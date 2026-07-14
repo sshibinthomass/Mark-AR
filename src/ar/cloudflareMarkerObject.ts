@@ -10,7 +10,7 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
-import { normalizeAnimation } from '../app/imageTargetAnimation';
+import { evaluateAnimationFrame, normalizeAnimation } from '../app/imageTargetAnimation';
 import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
 import {
   isTextTargetObject,
@@ -48,24 +48,23 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
   const animatedRoots = placedObjects.map((object, index) => {
     const modelRoot = new Group();
     modelRoot.name = modelRootName(object, index, placedObjects.length);
-    modelRoot.position.z = 0.04;
-    if (object.placement) {
-      const placement = normalizePlacement(object.placement);
-      modelRoot.position.set(placement.offsetX, placement.offsetY, placement.height);
-      modelRoot.scale.setScalar(placement.scale);
-      modelRoot.rotation.set(
-        degreesToRadians(placement.rotationX),
-        degreesToRadians(placement.rotationY),
-        degreesToRadians(placement.rotationZ),
-      );
-    }
+    const placement = object.placement
+      ? normalizePlacement(object.placement)
+      : normalizePlacement({ height: 0.04 });
+    modelRoot.position.set(placement.offsetX, placement.offsetY, placement.height);
+    modelRoot.scale.setScalar(placement.scale);
+    modelRoot.rotation.set(
+      degreesToRadians(placement.rotationX),
+      degreesToRadians(placement.rotationY),
+      degreesToRadians(placement.rotationZ),
+    );
     group.add(modelRoot);
 
     if (isTextTargetObject(object)) {
       modelRoot.add(createTextObject(object.text));
       return {
         root: modelRoot,
-        baseZ: modelRoot.position.z,
+        placement,
         animation: normalizeAnimation(object.animation),
         elapsedSeconds: 0,
       };
@@ -82,7 +81,7 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
 
     return {
       root: modelRoot,
-      baseZ: modelRoot.position.z,
+      placement,
       animation: normalizeAnimation(object.animation),
       elapsedSeconds: 0,
     };
@@ -93,13 +92,7 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
     update: (deltaSeconds: number) => {
       for (const animatedRoot of animatedRoots) {
         animatedRoot.elapsedSeconds += deltaSeconds;
-        applyAnimation(
-          animatedRoot.root,
-          animatedRoot.animation,
-          animatedRoot.baseZ,
-          deltaSeconds,
-          animatedRoot.elapsedSeconds,
-        );
+        applyAnimation(animatedRoot.root, animatedRoot.animation, animatedRoot.placement, animatedRoot.elapsedSeconds);
       }
     },
   };
@@ -112,14 +105,21 @@ function degreesToRadians(value: number): number {
 function applyAnimation(
   modelRoot: Group,
   animation: ImageTargetAnimation,
-  baseZ: number,
-  deltaSeconds: number,
+  placement: ImageTargetPlacement,
   elapsedSeconds: number,
 ): void {
-  if (animation.spinAxis !== 'none' && animation.spinSpeed !== 0) {
-    modelRoot.rotation[animation.spinAxis] += animation.spinSpeed * deltaSeconds;
-  }
-  modelRoot.position.z = baseZ + Math.sin(elapsedSeconds * animation.bobSpeed) * animation.bobHeight;
+  const frame = evaluateAnimationFrame(animation, elapsedSeconds);
+  modelRoot.position.set(
+    placement.offsetX + frame.position.x,
+    placement.offsetY + frame.position.y,
+    placement.height + frame.position.z,
+  );
+  modelRoot.scale.setScalar(placement.scale * frame.scaleMultiplier);
+  modelRoot.rotation.set(
+    degreesToRadians(placement.rotationX) + frame.rotationRadians.x,
+    degreesToRadians(placement.rotationY) + frame.rotationRadians.y,
+    degreesToRadians(placement.rotationZ) + frame.rotationRadians.z,
+  );
 }
 
 function modelRootName(object: CloudflarePlacedObject, index: number, objectCount: number): string {

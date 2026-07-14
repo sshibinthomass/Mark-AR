@@ -24,7 +24,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
-import { normalizeAnimation } from '../app/imageTargetAnimation';
+import { evaluateAnimationFrame, normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
 import {
@@ -298,7 +298,7 @@ export class ImageTargetPreview {
     }
     const deltaSeconds = this.frameDeltaSeconds(timestamp);
     this.elapsedSeconds += deltaSeconds;
-    this.applyObjectAnimations(deltaSeconds);
+    this.applyObjectAnimations();
     this.renderer.render(this.scene, this.camera);
     this.frameId = this.requestFrame(this.render);
   }
@@ -702,7 +702,7 @@ export class ImageTargetPreview {
     );
   }
 
-  private applyObjectAnimations(deltaSeconds: number): void {
+  private applyObjectAnimations(): void {
     for (const [objectId, loadedModel] of this.loadedModels) {
       const animation = this.animations.get(objectId);
       const placement = this.placements.get(objectId);
@@ -710,11 +710,18 @@ export class ImageTargetPreview {
         continue;
       }
 
-      if (animation.spinAxis !== 'none' && animation.spinSpeed !== 0) {
-        loadedModel.rotation[animation.spinAxis] += animation.spinSpeed * deltaSeconds;
-      }
-      loadedModel.position.y =
-        placement.height + Math.sin(this.elapsedSeconds * animation.bobSpeed) * animation.bobHeight;
+      const frame = evaluateAnimationFrame(animation, this.elapsedSeconds);
+      loadedModel.position.set(
+        placement.offsetX + frame.position.x,
+        placement.height + frame.position.y,
+        placement.offsetY + frame.position.z,
+      );
+      loadedModel.scale.setScalar(placement.scale * frame.scaleMultiplier);
+      loadedModel.rotation.set(
+        degreesToRadians(placement.rotationX) + frame.rotationRadians.x,
+        degreesToRadians(placement.rotationY) + frame.rotationRadians.y,
+        degreesToRadians(placement.rotationZ) + frame.rotationRadians.z,
+      );
     }
   }
 
