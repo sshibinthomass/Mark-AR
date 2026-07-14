@@ -13,26 +13,27 @@ import {
   normalizeLocalPlacement,
   type TargetEditorGroup,
 } from './targetEditorGroups';
+import {
+  isModelTargetObject,
+  isTextTargetObject,
+  normalizeTargetText,
+  type ModelTargetObject,
+  type TargetEditorObject,
+  type TargetTextContent,
+} from './targetEditorObjects';
 
 export type CloudImageTargetGroup = TargetEditorGroup;
 
-export type CloudImageTargetObject = {
-  id: string;
-  model: CloudflareModelOption;
-  placement: ImageTargetPlacement;
-  animation?: ImageTargetAnimation;
-  groupId?: string;
-  localPlacement?: ImageTargetPlacement;
-};
+export type CloudImageTargetObject = ModelTargetObject;
 
 export type CloudImageTarget = {
   id: string;
   label: string;
   imageUrl: string;
   imageObjectKey: string;
-  model: CloudflareModelOption;
-  placement: ImageTargetPlacement;
-  objects: CloudImageTargetObject[];
+  model?: CloudflareModelOption;
+  placement?: ImageTargetPlacement;
+  objects: TargetEditorObject[];
   groups: CloudImageTargetGroup[];
   ownerEmail?: string;
   visibility?: ModelVisibility;
@@ -48,8 +49,24 @@ type WorkerImageTargetModel = {
 };
 
 type WorkerImageTargetObject = {
+  kind?: string;
   id?: string;
   model?: WorkerImageTargetModel;
+  text?: {
+    value?: string;
+    language?: string;
+    font?: string;
+    color?: string;
+    fill_mode?: string;
+    gradient_start?: string;
+    gradient_end?: string;
+    gradient_direction?: string;
+    side_color?: string;
+    depth?: number;
+    bevel?: number;
+    gloss?: number;
+    style_preset?: string;
+  };
   placement?: {
     scale?: number;
     offset_x?: number;
@@ -137,7 +154,7 @@ type CreateImageTargetInput = ClientInput &
     label: string;
     model?: CloudflareModelOption;
     placement?: ImageTargetPlacement;
-    objects?: CloudImageTargetObject[];
+    objects?: TargetEditorObject[];
     groups?: CloudImageTargetGroup[];
   };
 
@@ -146,7 +163,7 @@ type UpdateImageTargetInput = ClientInput & {
   label?: string;
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;
-  objects?: CloudImageTargetObject[];
+  objects?: TargetEditorObject[];
   groups?: CloudImageTargetGroup[];
 } & Partial<ImageTargetImagePayload>;
 
@@ -187,6 +204,7 @@ export async function createImageTarget({
 }: CreateImageTargetInput): Promise<CloudImageTarget> {
   const normalizedGroups = normalizeCloudImageTargetGroups(groups);
   const requestObjects = imageTargetObjectsRequestBody(objects, normalizedGroups, model, placement);
+  const firstModel = requestObjects.find((object) => object.kind === 'model');
   const response = await fetchImpl(imageTargetsUrl(apiUrl), {
     method: 'POST',
     headers: jsonHeaders(authToken),
@@ -194,8 +212,7 @@ export async function createImageTarget({
       label,
       image_base64: imageBase64,
       image_mime_type: imageMimeType,
-      model: requestObjects[0].model,
-      placement: requestObjects[0].placement,
+      ...(firstModel ? { model: firstModel.model, placement: firstModel.placement } : {}),
       objects: requestObjects,
       ...(normalizedGroups.length > 0 ? { groups: normalizedGroups.map(groupRequestBody) } : {}),
     }),
@@ -229,9 +246,15 @@ export async function updateImageTarget({
   if (objects) {
     const normalizedGroups = normalizeCloudImageTargetGroups(groups);
     const requestObjects = imageTargetObjectsRequestBody(objects, normalizedGroups, model, placement);
+    const firstModel = requestObjects.find((object) => object.kind === 'model');
     body.objects = requestObjects;
-    body.model = requestObjects[0].model;
-    body.placement = requestObjects[0].placement;
+    if (firstModel) {
+      body.model = firstModel.model;
+      body.placement = firstModel.placement;
+    } else {
+      delete body.model;
+      delete body.placement;
+    }
     body.groups = normalizedGroups.map(groupRequestBody);
   } else if (groups) {
     body.groups = normalizeCloudImageTargetGroups(groups).map(groupRequestBody);
@@ -273,18 +296,17 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
   }
   const groups = mapImageTargetGroups(entry.groups);
   const objects = mapImageTargetObjects(entry, groups);
-  const firstObject = objects[0];
-  if (!firstObject) {
+  if (objects.length === 0) {
     return null;
   }
+  const firstModel = objects.find(isModelTargetObject);
 
   return {
     id: entry.id,
     label: entry.label,
     imageUrl: entry.image_url,
     imageObjectKey: entry.image_object_key,
-    model: firstObject.model,
-    placement: firstObject.placement,
+    ...(firstModel ? { model: firstModel.model, placement: firstModel.placement } : {}),
     objects,
     groups,
     ...(entry.owner_email ? { ownerEmail: entry.owner_email } : {}),
@@ -297,10 +319,10 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
 function mapImageTargetObjects(
   entry: WorkerImageTargetEntry,
   groups: CloudImageTargetGroup[],
-): CloudImageTargetObject[] {
+): TargetEditorObject[] {
   const objects = (entry.objects ?? [])
     .map((object, index) => mapImageTargetObject(object, index, groups))
-    .filter((object): object is CloudImageTargetObject => Boolean(object));
+    .filter((object): object is TargetEditorObject => Boolean(object));
   if (objects.length > 0) {
     return objects;
   }
@@ -317,11 +339,7 @@ function mapImageTargetObject(
   object: WorkerImageTargetObject,
   index: number,
   groups: CloudImageTargetGroup[],
-): CloudImageTargetObject | null {
-  if (!object.model?.id || !object.model.label || !object.model.url) {
-    return null;
-  }
-
+): TargetEditorObject | null {
   const group = object.group_id ? groups.find((candidate) => candidate.id === object.group_id) : undefined;
   const localPlacement = group && object.local_placement
     ? normalizeLocalPlacement(placementFromWire(object.local_placement))
@@ -329,18 +347,50 @@ function mapImageTargetObject(
   const placement = localPlacement && group
     ? composeGroupPlacement(group.placement, localPlacement)
     : normalizePlacement(placementFromWire(object.placement));
-  return {
+  const shared = {
     id: object.id || `object-${index + 1}`,
+    placement,
+    ...(group && localPlacement ? { groupId: group.id, localPlacement } : {}),
+    ...(object.animation ? { animation: animationFromWire(object.animation) } : {}),
+  };
+  if (object.kind === 'text') {
+    return object.text ? {
+      ...shared,
+      kind: 'text',
+      text: textFromWire(object.text),
+    } : null;
+  }
+  if (!object.model?.id || !object.model.label || !object.model.url) {
+    return null;
+  }
+  return {
+    ...shared,
+    ...(object.kind === 'model' ? { kind: 'model' as const } : {}),
     model: {
       id: object.model.id,
       label: object.model.label,
       url: object.model.url,
       ...(object.model.preview_url ? { previewUrl: object.model.preview_url } : {}),
     },
-    placement,
-    ...(group && localPlacement ? { groupId: group.id, localPlacement } : {}),
-    ...(object.animation ? { animation: animationFromWire(object.animation) } : {}),
   };
+}
+
+function textFromWire(text: NonNullable<WorkerImageTargetObject['text']>): TargetTextContent {
+  return normalizeTargetText({
+    value: text.value,
+    language: text.language as TargetTextContent['language'] | undefined,
+    font: text.font as TargetTextContent['font'] | undefined,
+    color: text.color,
+    fillMode: text.fill_mode as TargetTextContent['fillMode'],
+    gradientStart: text.gradient_start,
+    gradientEnd: text.gradient_end,
+    gradientDirection: text.gradient_direction as TargetTextContent['gradientDirection'],
+    sideColor: text.side_color,
+    depth: text.depth,
+    bevel: text.bevel,
+    gloss: text.gloss,
+    stylePreset: text.style_preset as TargetTextContent['stylePreset'],
+  });
 }
 
 function mapImageTargetGroups(groups: WorkerImageTargetGroup[] | undefined): CloudImageTargetGroup[] {
@@ -406,43 +456,49 @@ function modelRequestBody(model: CloudflareModelOption): Record<string, string> 
 }
 
 function imageTargetObjectsRequestBody(
-  objects: CloudImageTargetObject[] | undefined,
+  objects: TargetEditorObject[] | undefined,
   groups: CloudImageTargetGroup[],
   legacyModel?: CloudflareModelOption,
   legacyPlacement?: ImageTargetPlacement,
 ): Array<{
+  kind: 'model' | 'text';
   id: string;
-  model: Record<string, string>;
+  model?: Record<string, string>;
+  text?: Record<string, string | number | undefined>;
   placement: Record<string, number>;
   animation?: WorkerAnimationRequestBody;
+  group_id?: string;
+  local_placement?: Record<string, number>;
 }> {
-  const requestObjects = objects?.length
+  const requestObjects: TargetEditorObject[] = objects?.length
     ? objects
     : legacyModel
-      ? [{ id: 'object-1', model: legacyModel, placement: normalizePlacement(legacyPlacement) }]
+      ? [{ kind: 'model', id: 'object-1', model: legacyModel, placement: normalizePlacement(legacyPlacement) }]
       : [];
 
   if (requestObjects.length === 0) {
-    throw new Error('Choose at least one Cloudflare model.');
+    throw new Error('Add at least one model or text object.');
   }
 
   const resolvedObjects = resolveGroupedObjectsForSave(requestObjects, groups);
-  return resolvedObjects.map((object, index) => ({
-    id: object.id || `object-${index + 1}`,
-    model: modelRequestBody(object.model),
-    placement: placementRequestBody(object.placement),
-    ...(object.groupId && object.localPlacement ? {
+  return resolvedObjects.map((object, index) => {
+    const id = object.id || `object-${index + 1}`;
+    const placement = placementRequestBody(object.placement);
+    const groupFields = object.groupId && object.localPlacement ? {
       group_id: object.groupId,
       local_placement: localPlacementRequestBody(object.localPlacement),
-    } : {}),
-    ...(object.animation ? { animation: animationRequestBody(object.animation) } : {}),
-  }));
+    } : {};
+    const animationFields = object.animation ? { animation: animationRequestBody(object.animation) } : {};
+    return isTextTargetObject(object)
+      ? { kind: 'text' as const, id, text: textRequestBody(object.text), placement, ...groupFields, ...animationFields }
+      : { kind: 'model' as const, id, model: modelRequestBody(object.model), placement, ...groupFields, ...animationFields };
+  });
 }
 
 export function resolveGroupedObjectsForSave(
-  objects: CloudImageTargetObject[],
+  objects: TargetEditorObject[],
   groups: CloudImageTargetGroup[],
-): CloudImageTargetObject[] {
+): TargetEditorObject[] {
   const normalizedGroups = normalizeCloudImageTargetGroups(groups);
   return objects.map((object) => {
     const group = object.groupId
@@ -460,6 +516,25 @@ export function resolveGroupedObjectsForSave(
       placement: composeGroupPlacement(group.placement, localPlacement),
     };
   });
+}
+
+function textRequestBody(text: TargetTextContent): Record<string, string | number | undefined> {
+  const normalized = normalizeTargetText(text);
+  return {
+    value: normalized.value,
+    language: normalized.language,
+    font: normalized.font,
+    color: normalized.color,
+    fill_mode: normalized.fillMode,
+    gradient_start: normalized.gradientStart,
+    gradient_end: normalized.gradientEnd,
+    gradient_direction: normalized.gradientDirection,
+    side_color: normalized.sideColor,
+    depth: normalized.depth,
+    bevel: normalized.bevel,
+    gloss: normalized.gloss,
+    style_preset: normalized.stylePreset,
+  };
 }
 
 export function normalizeCloudImageTargetGroups(

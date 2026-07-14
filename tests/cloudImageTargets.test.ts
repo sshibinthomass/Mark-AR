@@ -5,6 +5,7 @@ import {
   listImageTargets,
   updateImageTarget,
 } from '../src/app/cloudImageTargets';
+import { createLocalTextObject } from '../src/app/targetEditorObjects';
 
 describe('cloud image target client', () => {
   it('parses editable groups and resolves grouped objects while falling back for missing groups', async () => {
@@ -218,6 +219,79 @@ describe('cloud image target client', () => {
     });
   });
 
+  it('maps complete custom text objects beside cloud model objects', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      targets: [{
+        id: 'target-mixed',
+        label: 'Mixed target',
+        image_url: 'https://worker.example/image-targets/images/target-mixed.jpg',
+        image_object_key: 'image-targets/images/target-mixed.jpg',
+        model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+        placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+        objects: [
+          {
+            kind: 'model',
+            id: 'object-chair',
+            model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+            placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+          },
+          {
+            kind: 'text',
+            id: 'text-greeting',
+            text: {
+              value: 'Hallo AR',
+              language: 'german',
+              font: 'studio-sans-bold',
+              color: '#112233',
+              fill_mode: 'gradient',
+              gradient_start: '#223344',
+              gradient_end: '#334455',
+              gradient_direction: 'diagonal',
+              side_color: '#445566',
+              depth: 0.08,
+              bevel: 0.01,
+              gloss: 0.9,
+              style_preset: 'gold-bevel',
+            },
+            placement: { scale: 1.2, offset_x: 0.2, offset_y: -0.1, height: 0.3, rotation_y: 25 },
+            animation: {
+              preset: 'gentle-float',
+              tracks: [{ property: 'position_y', motion: 'smooth', amount: 0.1, speed: 0.5, phase: 0 }],
+            },
+          },
+        ],
+      }],
+    }), { status: 200 }));
+
+    const [target] = await listImageTargets({
+      apiUrl: 'https://worker.example/generate-3d',
+      authToken: 'token-123',
+      fetchImpl,
+    });
+
+    expect(target.objects[1]).toMatchObject({
+      kind: 'text',
+      id: 'text-greeting',
+      text: {
+        value: 'Hallo AR',
+        language: 'german',
+        font: 'studio-sans-bold',
+        color: '#112233',
+        fillMode: 'gradient',
+        gradientStart: '#223344',
+        gradientEnd: '#334455',
+        gradientDirection: 'diagonal',
+        sideColor: '#445566',
+        depth: 0.08,
+        bevel: 0.01,
+        gloss: 0.9,
+        stylePreset: 'gold-bevel',
+      },
+      placement: { scale: 1.2, offsetX: 0.2, offsetY: -0.1, height: 0.3, rotationY: 25 },
+      animation: { preset: 'gentle-float' },
+    });
+  });
+
   it('maps preset animation tracks from cloud image targets', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       targets: [
@@ -299,6 +373,7 @@ describe('cloud image target client', () => {
         placement: { scale: 1.2, offset_x: 0.1, offset_y: -0.1, height: 0.2, rotation_x: 10, rotation_y: 20, rotation_z: 30 },
         objects: [
           {
+            kind: 'model',
             id: 'object-1',
             model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
             placement: { scale: 1.2, offset_x: 0.1, offset_y: -0.1, height: 0.2, rotation_x: 10, rotation_y: 20, rotation_z: 30 },
@@ -368,11 +443,13 @@ describe('cloud image target client', () => {
         placement: { scale: 1.2, offset_x: 0.1, offset_y: -0.1, height: 0.2, rotation_x: 5, rotation_y: 15, rotation_z: 25 },
         objects: [
           {
+            kind: 'model',
             id: 'object-chair',
             model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
             placement: { scale: 1.2, offset_x: 0.1, offset_y: -0.1, height: 0.2, rotation_x: 5, rotation_y: 15, rotation_z: 25 },
           },
           {
+            kind: 'model',
             id: 'object-plant',
             model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
             placement: { scale: 0.7, offset_x: -0.2, offset_y: 0.2, height: 0.1, rotation_x: -10, rotation_y: 0, rotation_z: 40 },
@@ -439,5 +516,70 @@ describe('cloud image target client', () => {
       method: 'DELETE',
       headers: { Authorization: 'Bearer token-123' },
     });
+  });
+
+  it('updates a text-only target without requiring legacy model aliases', async () => {
+    const textObject = createLocalTextObject({
+      id: 'text-only',
+      text: {
+        value: 'Reusable text',
+        language: 'english',
+        font: 'studio-serif-bold',
+        color: '#123456',
+        fillMode: 'solid',
+        sideColor: '#234567',
+        depth: 0.09,
+        bevel: 0.012,
+        gloss: 0.8,
+      },
+    });
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      id: 'target-text',
+      label: 'Text target',
+      image_url: 'https://worker.example/image-targets/images/target-text.jpg',
+      image_object_key: 'image-targets/images/target-text.jpg',
+      objects: [{
+        kind: 'text',
+        id: textObject.id,
+        text: {
+          value: textObject.text.value,
+          language: textObject.text.language,
+          font: textObject.text.font,
+          color: textObject.text.color,
+          fill_mode: textObject.text.fillMode,
+          gradient_start: textObject.text.gradientStart,
+          gradient_end: textObject.text.gradientEnd,
+          gradient_direction: textObject.text.gradientDirection,
+          side_color: textObject.text.sideColor,
+          depth: textObject.text.depth,
+          bevel: textObject.text.bevel,
+          gloss: textObject.text.gloss,
+          style_preset: textObject.text.stylePreset,
+        },
+        placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+      }],
+      groups: [],
+    }), { status: 200 }));
+
+    const target = await updateImageTarget({
+      apiUrl: 'https://worker.example/generate-3d',
+      authToken: 'token-123',
+      fetchImpl,
+      targetId: 'target-text',
+      label: 'Text target',
+      objects: [textObject],
+      groups: [],
+    });
+
+    const request = JSON.parse((fetchImpl.mock.calls[0][1] as RequestInit).body as string);
+    expect(request).not.toHaveProperty('model');
+    expect(request).not.toHaveProperty('placement');
+    expect(request.objects).toEqual([expect.objectContaining({
+      kind: 'text',
+      id: 'text-only',
+      text: expect.objectContaining({ value: 'Reusable text', font: 'studio-serif-bold' }),
+    })]);
+    expect(target.model).toBeUndefined();
+    expect(target.objects[0]).toMatchObject({ kind: 'text', id: 'text-only' });
   });
 });

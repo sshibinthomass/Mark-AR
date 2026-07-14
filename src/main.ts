@@ -1557,7 +1557,7 @@ function renderSavedImageTargets(): void {
     label.textContent = target.label;
     const modelName = document.createElement('span');
     modelName.textContent = target.objects.length === 1
-      ? target.model.label
+      ? target.model?.label ?? '1 object'
       : `${target.objects.length} objects`;
     meta.append(label, modelName);
 

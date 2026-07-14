@@ -1,4 +1,4 @@
-import type { CloudImageTargetObject } from './cloudImageTargets';
+import type { CloudflareModelOption } from './cloudflareModels';
 import type { TargetEditorGroup } from './targetEditorGroups';
 import {
   DEFAULT_IMAGE_TARGET_ANIMATION,
@@ -192,7 +192,17 @@ export type LocalTextTargetObject = {
   localPlacement?: ImageTargetPlacement;
 };
 
-export type TargetEditorObject = CloudImageTargetObject | LocalTextTargetObject;
+export type ModelTargetObject = {
+  kind?: 'model';
+  id: string;
+  model: CloudflareModelOption;
+  placement: ImageTargetPlacement;
+  animation?: ImageTargetAnimation;
+  groupId?: string;
+  localPlacement?: ImageTargetPlacement;
+};
+
+export type TargetEditorObject = ModelTargetObject | LocalTextTargetObject;
 
 export type LocalImageTargetDraft = {
   id: string;
@@ -285,11 +295,11 @@ export function isTextTargetObject(object: unknown): object is LocalTextTargetOb
   );
 }
 
-export function isModelTargetObject(object: TargetEditorObject): object is CloudImageTargetObject {
+export function isModelTargetObject(object: TargetEditorObject): object is ModelTargetObject {
   return !isTextTargetObject(object);
 }
 
-export function saveableModelObjects(objects: TargetEditorObject[]): CloudImageTargetObject[] {
+export function saveableModelObjects(objects: TargetEditorObject[]): ModelTargetObject[] {
   return objects.filter(isModelTargetObject);
 }
 
