@@ -1644,13 +1644,48 @@ h1 {
 }
 
 .saved-target-row {
-  grid-template-columns: 56px minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
   align-items: center;
-  padding: 8px;
+  overflow: hidden;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.saved-target-row.is-active {
+  border-color: rgba(15, 118, 110, 0.58);
+  background: rgba(240, 253, 250, 0.96);
+  box-shadow: inset 3px 0 0 var(--teal-dark), 0 8px 18px rgba(15, 118, 110, 0.1);
+}
+
+.target-page .saved-target-open {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
+  border: 0;
+  border-radius: 7px 0 0 7px;
+  padding: 8px;
+  color: var(--ink);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.target-page .saved-target-open:hover {
+  background: rgba(204, 251, 241, 0.42);
+  transform: none;
+}
+
+.target-page .saved-target-open:focus-visible {
+  outline: 3px solid rgba(13, 148, 136, 0.42);
+  outline-offset: -3px;
 }
 
 .saved-target-row img {
@@ -1661,7 +1696,8 @@ h1 {
   border: 1px solid var(--line);
 }
 
-.saved-target-row div {
+.saved-target-meta {
+  display: grid;
   gap: 4px;
   min-width: 0;
 }
@@ -2009,8 +2045,9 @@ button:disabled {
     height: clamp(300px, 52svh, 420px);
   }
 
-  .saved-target-row {
-    grid-template-columns: 48px minmax(0, 1fr) auto;
+  .target-page .saved-target-open {
+    grid-template-columns: 48px minmax(0, 1fr);
+    min-height: 64px;
   }
 
   .saved-target-row img {

@@ -49,4 +49,18 @@ describe('target inspector styles', () => {
     expect(icon).toContain('width: 16px');
     expect(icon).toContain('height: 18px');
   });
+
+  it('makes saved target content a full-width edit control with a visible active state', () => {
+    const row = cssRule('.saved-target-row');
+    const open = cssRule('.target-page .saved-target-open');
+    const active = cssRule('.saved-target-row.is-active');
+    const focus = cssRule('.target-page .saved-target-open:focus-visible');
+
+    expect(row).toContain('grid-template-columns: minmax(0, 1fr) auto');
+    expect(open).toContain('display: grid');
+    expect(open).toContain('grid-template-columns: 56px minmax(0, 1fr)');
+    expect(open).toContain('text-align: left');
+    expect(active).toContain('border-color: rgba(15, 118, 110');
+    expect(focus).toContain('outline: 3px solid');
+  });
 });
