@@ -922,7 +922,7 @@ function renderTargetObjectList(): void {
       object,
       index,
       selectedObjectId: selectedTargetObjectId,
-      onSelect: selectTargetObject,
+      onSelect: (objectId) => selectTargetObject(objectId),
       onDelete: removeTargetObjectById,
     }));
   }

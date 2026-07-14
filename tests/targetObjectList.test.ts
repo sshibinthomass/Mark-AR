@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { renderTargetObjectListItem } from '../src/ui/targetObjectList';
+import { renderTargetObjectList, renderTargetObjectListItem } from '../src/ui/targetObjectList';
 
 describe('renderTargetObjectListItem', () => {
   it('renders a text row with a separate delete button next to the text', () => {
@@ -82,9 +82,69 @@ describe('renderTargetObjectListItem', () => {
     expect(icon?.querySelectorAll('path')).toHaveLength(3);
 
     row.querySelector<HTMLButtonElement>('[data-select-target-object="model-1"]')?.click();
-    expect(onSelect).toHaveBeenCalledWith('model-1');
+    expect(onSelect).toHaveBeenCalledWith('model-1', false);
 
     deleteButton?.click();
     expect(onDelete).toHaveBeenCalledWith('model-1');
+  });
+});
+
+describe('renderTargetObjectList', () => {
+  const placement = { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 };
+  const objects = [
+    { id: 'chair', model: { id: 'chair', label: 'Chair', url: 'https://example.com/chair.glb' }, placement, groupId: 'group-1', localPlacement: placement },
+    { id: 'lamp', model: { id: 'lamp', label: 'Lamp', url: 'https://example.com/lamp.glb' }, placement, groupId: 'group-1', localPlacement: placement },
+    { id: 'plant', model: { id: 'plant', label: 'Plant', url: 'https://example.com/plant.glb' }, placement },
+  ];
+  const groups = [{ id: 'group-1', label: 'Group 1', placement, animation: { preset: 'none' as const, tracks: [] } }];
+
+  it('renders collapsible group rows, indented children, and an ungroup action', () => {
+    const onSelectGroup = vi.fn();
+    const onUngroup = vi.fn();
+    const list = renderTargetObjectList({
+      objects,
+      groups,
+      selection: { objectIds: [], groupId: 'group-1' },
+      onSelectObject: vi.fn(),
+      onSelectGroup,
+      onUngroup,
+      onDeleteObject: vi.fn(),
+    });
+
+    const group = list.querySelector<HTMLElement>('[data-target-object-group="group-1"]');
+    expect(group?.getAttribute('aria-selected')).toBe('true');
+    expect(group?.querySelector('[data-select-target-group="group-1"]')?.textContent).toContain('Group 1');
+    expect(group?.querySelector('[data-select-target-group="group-1"]')?.textContent).toContain('2 objects');
+    expect(group?.querySelector('details')?.open).toBe(true);
+    expect(group?.querySelectorAll('.target-object-group-children > .target-object-row')).toHaveLength(2);
+    expect(group?.querySelector('[data-object-id="chair"]')?.getAttribute('aria-selected')).toBe('false');
+
+    group?.querySelector<HTMLButtonElement>('[data-select-target-group="group-1"]')?.click();
+    group?.querySelector<HTMLButtonElement>('[data-ungroup-target-group="group-1"]')?.click();
+    expect(onSelectGroup).toHaveBeenCalledWith('group-1');
+    expect(onUngroup).toHaveBeenCalledWith('group-1');
+    expect(list.querySelector('[data-object-id="plant"]')?.closest('[data-target-object-group]')).toBeNull();
+  });
+
+  it('marks multiple child rows and forwards Ctrl/Command additive selection', () => {
+    const onSelectObject = vi.fn();
+    const list = renderTargetObjectList({
+      objects,
+      groups,
+      selection: { objectIds: ['chair', 'plant'] },
+      onSelectObject,
+      onSelectGroup: vi.fn(),
+      onUngroup: vi.fn(),
+      onDeleteObject: vi.fn(),
+    });
+
+    expect(list.querySelector('[data-object-id="chair"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(list.querySelector('[data-object-id="plant"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(list.querySelector('[data-object-id="lamp"]')?.getAttribute('aria-selected')).toBe('false');
+
+    list.querySelector<HTMLButtonElement>('[data-select-target-object="chair"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+    list.querySelector<HTMLButtonElement>('[data-select-target-object="lamp"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
+    expect(onSelectObject).toHaveBeenNthCalledWith(1, 'chair', true);
+    expect(onSelectObject).toHaveBeenNthCalledWith(2, 'lamp', true);
   });
 });

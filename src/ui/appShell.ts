@@ -186,6 +186,10 @@ export function renderAppShell(): string {
               </section>
 
               <section id="target-inspector-objects" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="objects" aria-labelledby="target-tab-objects" hidden>
+                <div class="target-object-toolbar">
+                  <p>Ctrl/Command-click to select more than one object.</p>
+                  <button id="group-selected-objects" type="button" disabled>Group selected</button>
+                </div>
                 <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
               </section>
 

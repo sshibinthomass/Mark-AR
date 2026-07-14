@@ -75,6 +75,11 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#remove-target-object')).toBeNull();
     expect(container.querySelector('#target-object-list')).toBeTruthy();
     expect(container.querySelector('#target-object-list')?.closest('[data-target-inspector-panel="objects"]')).toBeTruthy();
+    const groupSelected = container.querySelector<HTMLButtonElement>('#group-selected-objects');
+    expect(groupSelected).toBeTruthy();
+    expect(groupSelected?.disabled).toBe(true);
+    expect(groupSelected?.textContent?.trim()).toBe('Group selected');
+    expect(groupSelected?.closest('[data-target-inspector-panel="objects"]')).toBeTruthy();
     expect(container.querySelector('#target-text-value')).toBeTruthy();
     expect(container.querySelector('#target-text-value')?.closest('[data-target-inspector-panel="text"]')).toBeTruthy();
     expect(container.querySelector('.target-text-advanced')?.closest('[data-target-inspector-panel="text"]')).toBeNull();

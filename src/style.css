@@ -1060,6 +1060,98 @@ h1 {
   font-weight: 750;
 }
 
+.target-object-toolbar,
+.target-object-list-content,
+.target-object-group-children {
+  display: grid;
+  gap: 7px;
+}
+
+.target-object-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  margin-bottom: 9px;
+}
+
+.target-object-toolbar p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.target-object-toolbar button {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.target-object-group {
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.48);
+  overflow: hidden;
+}
+
+.target-object-group[aria-selected="true"] {
+  border-color: rgba(15, 118, 110, 0.48);
+  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.16);
+}
+
+.target-object-group-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px;
+  list-style-position: inside;
+  cursor: pointer;
+  background: rgba(9, 73, 76, 0.055);
+}
+
+.target-object-group-summary::marker {
+  color: var(--teal-dark);
+}
+
+.target-object-group-select {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-height: 36px;
+  text-align: left;
+  border-color: transparent;
+  background: transparent;
+}
+
+.target-object-group[aria-selected="true"] .target-object-group-select {
+  border-color: rgba(15, 118, 110, 0.35);
+  background: rgba(94, 234, 212, 0.2);
+}
+
+.target-object-group-select small {
+  align-self: center;
+  color: var(--muted);
+}
+
+.target-object-ungroup {
+  min-height: 34px;
+  padding: 6px 9px;
+  color: var(--teal-dark);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.target-object-group-children {
+  margin: 0 7px 7px 16px;
+  border-left: 2px solid rgba(15, 118, 110, 0.18);
+  padding-left: 8px;
+}
+
+.target-object-select:focus-visible,
+.target-object-group-select:focus-visible,
+.target-object-ungroup:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.28);
+  outline-offset: 2px;
+}
+
 .target-object-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
