@@ -1187,6 +1187,99 @@ h1 {
   width: 100%;
 }
 
+.animation-track-toolbar,
+.animation-track-header,
+.animation-track-footer,
+.animation-track-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.animation-track-toolbar {
+  padding-top: 2px;
+}
+
+.animation-track-toolbar > div {
+  display: grid;
+  gap: 2px;
+}
+
+.animation-track-toolbar strong,
+.animation-track-header strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.animation-track-toolbar span,
+.animation-track-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.animation-track-toolbar button,
+.animation-track-remove,
+.animation-track-footer button {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.animation-track-list {
+  display: grid;
+  gap: 8px;
+}
+
+.animation-track-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(55, 126, 118, 0.22);
+  border-left: 3px solid var(--teal-dark);
+  border-radius: 10px;
+  background: rgba(241, 248, 246, 0.72);
+  padding: 9px;
+}
+
+.animation-track-remove {
+  border-color: rgba(190, 24, 93, 0.24);
+  background: rgba(255, 241, 242, 0.86);
+  color: #9f1239;
+  box-shadow: none;
+}
+
+.animation-track-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.animation-track-grid label {
+  min-width: 0;
+}
+
+.animation-track-grid input[type="range"] {
+  width: 100%;
+}
+
+.animation-track-label output {
+  color: var(--teal-dark);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.animation-track-empty {
+  margin: 0;
+  border: 1px dashed rgba(55, 126, 118, 0.28);
+  border-radius: 9px;
+  padding: 10px;
+  text-align: center;
+}
+
+.animation-track-footer {
+  justify-content: flex-end;
+}
+
 .target-page input[type="range"] {
   accent-color: var(--teal-dark);
 }
@@ -1703,6 +1796,14 @@ button:disabled {
   .target-text-options,
   .target-text-quick-grid,
   .placement-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .animation-track-toolbar {
+    align-items: flex-start;
+  }
+
+  .animation-track-grid {
     grid-template-columns: 1fr;
   }
 

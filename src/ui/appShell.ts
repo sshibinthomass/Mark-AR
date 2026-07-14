@@ -342,18 +342,28 @@ export function renderAppShell(): string {
                     <summary class="transform-control-summary"><span class="eyebrow">Animation</span></summary>
                     <div class="transform-control-body">
                       <label>
-                        <span>Spin axis</span>
-                        <select id="target-spin-axis" value="y">
-                          <option value="none">None</option>
-                          <option value="x">X</option>
-                          <option value="y" selected>Y</option>
-                          <option value="z">Z</option>
+                        <span>Preset</span>
+                        <select id="target-animation-preset">
+                          <option value="none" selected>None</option>
+                          <option value="gentle-float">Gentle float</option>
+                          <option value="turntable">Turntable</option>
+                          <option value="showcase">Showcase</option>
+                          <option value="sway">Sway</option>
+                          <option value="pulse">Pulse</option>
+                          <option value="orbit">Orbit</option>
+                          <option value="bounce">Bounce</option>
+                          <option value="custom">Custom</option>
                         </select>
                       </label>
-                      <div class="placement-grid">
-                        <label><span>Spin speed</span><input id="target-spin-speed" type="range" min="-6" max="6" step="0.05" value="0" /></label>
-                        <label><span>Bob height</span><input id="target-bob-height" type="range" min="0" max="1" step="0.02" value="0" /></label>
-                        <label><span>Bob speed</span><input id="target-bob-speed" type="range" min="0" max="8" step="0.05" value="0" /></label>
+                      <div class="animation-track-toolbar">
+                        <div>
+                          <strong>Fine-tune motion</strong>
+                          <span>Combine position, rotation, and scale.</span>
+                        </div>
+                        <button id="add-target-animation-track" type="button">+ Add motion</button>
+                      </div>
+                      <div id="target-animation-tracks" class="animation-track-list" aria-live="polite"></div>
+                      <div class="animation-track-footer">
                         <button id="reset-target-animation" type="button">Reset animation</button>
                       </div>
                     </div>

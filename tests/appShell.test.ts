@@ -197,16 +197,23 @@ describe('renderAppShell', () => {
       'Top',
     ]);
     expect(cameraPresetButtons.every((button) => button.closest('.target-camera-view-controls'))).toBe(true);
-    expect(container.querySelector('#target-spin-axis')).toBeTruthy();
-    expect(container.querySelector('#target-spin-axis')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
-    expect(container.querySelector('#target-spin-speed')).toBeTruthy();
-    expect(container.querySelector('#target-spin-speed')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
-    expect(container.querySelector('#target-spin-axis option[value="y"]')?.hasAttribute('selected')).toBe(true);
-    expect((container.querySelector('#target-spin-speed') as HTMLInputElement).value).toBe('0');
-    expect(container.querySelector('#target-bob-height')).toBeTruthy();
-    expect(container.querySelector('#target-bob-height')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
-    expect(container.querySelector('#target-bob-speed')).toBeTruthy();
-    expect(container.querySelector('#target-bob-speed')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
+    const animationPreset = container.querySelector<HTMLSelectElement>('#target-animation-preset');
+    expect(animationPreset).toBeTruthy();
+    expect(animationPreset?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
+    expect(Array.from(animationPreset?.options ?? []).map((option) => option.textContent)).toEqual([
+      'None',
+      'Gentle float',
+      'Turntable',
+      'Showcase',
+      'Sway',
+      'Pulse',
+      'Orbit',
+      'Bounce',
+      'Custom',
+    ]);
+    expect(animationPreset?.value).toBe('none');
+    expect(container.querySelector('#target-animation-tracks')).toBeTruthy();
+    expect(container.querySelector('#add-target-animation-track')?.textContent).toContain('Add motion');
     expect(container.querySelector('#reset-target-animation')).toBeTruthy();
     expect(container.querySelector('#reset-target-animation')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
