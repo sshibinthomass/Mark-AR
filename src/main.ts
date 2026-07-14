@@ -10,6 +10,7 @@ import {
   createImageTarget,
   deleteImageTarget,
   listImageTargets,
+  updateImageTarget,
   type CloudImageTarget,
   type CloudImageTargetObject,
 } from './app/cloudImageTargets';
@@ -22,7 +23,6 @@ import {
 } from './app/imageTargetAnimation';
 import {
   DEFAULT_IMAGE_TARGET_PLACEMENT,
-  imageTargetDataUrl,
   normalizePlacement,
   resetPlacementTransform,
   validateTargetImagePayload,
@@ -55,10 +55,10 @@ import {
   isTargetTextColor,
   isTargetTextLanguage,
   isTargetTextStylePreset,
+  isModelTargetObject,
   isTextTargetObject,
   languageOption,
   normalizeTargetText,
-  saveableModelObjects,
   textStylePreset,
   updateTargetTextObject,
   type LocalImageTargetDraft,
@@ -83,6 +83,11 @@ import {
   type TargetEditorGroup,
   type TargetEditorSelection,
 } from './app/targetEditorGroups';
+import {
+  createEditingTargetSession,
+  targetPreviewImageUrl,
+  type EditingTargetState,
+} from './app/targetEditorSession';
 import {
   imageFileToCapturedImage,
 } from './capture/cameraCapture';
@@ -109,7 +114,7 @@ import { renderTargetModelRail } from './ui/modelRail';
 import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
-import { decorateDeleteIconButton } from './ui/deleteIconButton';
+import { renderSavedTargetList } from './ui/savedTargetList';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -171,6 +176,7 @@ const targetAnimationTracks = document.querySelector<HTMLElement>('#target-anima
 const addTargetAnimationTrackButton = document.querySelector<HTMLButtonElement>('#add-target-animation-track');
 const resetTargetAnimationButton = document.querySelector<HTMLButtonElement>('#reset-target-animation');
 const saveImageTargetButton = document.querySelector<HTMLButtonElement>('#save-image-target');
+const newImageTargetButton = document.querySelector<HTMLButtonElement>('#new-image-target');
 const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#refresh-image-targets');
 const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-status');
 const savedImageTargetList = document.querySelector<HTMLElement>('#saved-image-target-list');
@@ -184,6 +190,7 @@ let authFormMode: AuthFormMode = 'login';
 let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
+let editingTarget: EditingTargetState | undefined;
 let targetPlacement: ImageTargetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
 let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
 let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
@@ -514,6 +521,10 @@ targetTextFontSelect?.addEventListener('change', () => {
 
 saveImageTargetButton?.addEventListener('click', async () => {
   await saveCurrentImageTarget();
+});
+
+newImageTargetButton?.addEventListener('click', () => {
+  resetImageTargetEditor();
 });
 
 refreshImageTargetsButton?.addEventListener('click', async () => {
@@ -1417,7 +1428,7 @@ async function updateTargetPreview(): Promise<void> {
     return;
   }
   await preview.update({
-    imageUrl: targetImagePayload ? imageTargetDataUrl(targetImagePayload) : undefined,
+    imageUrl: targetPreviewImageUrl(editingTarget, targetImagePayload),
     objects: targetObjects,
     groups: targetGroups,
     selection: targetSelection,
@@ -1432,19 +1443,21 @@ async function saveCurrentImageTarget(): Promise<void> {
     updateImageTargetStatus('Sign in before saving an image target.', true);
     return;
   }
-  if (!targetImagePayload) {
+  if (!editingTarget && !targetImagePayload) {
     updateImageTargetStatus('Choose a target image.', true);
     return;
   }
 
-  const validationError = validateTargetImagePayload(targetImagePayload);
-  if (validationError) {
-    updateImageTargetStatus(validationError, true);
-    return;
+  if (targetImagePayload) {
+    const validationError = validateTargetImagePayload(targetImagePayload);
+    if (validationError) {
+      updateImageTargetStatus(validationError, true);
+      return;
+    }
   }
 
   updateSelectedTargetObjectPlacement(readTargetPlacement());
-  let objectsToSave = saveableModelObjects(targetObjects);
+  let objectsToSave = targetObjects;
   if (objectsToSave.length === 0) {
     const model = getSelectedTargetModel();
     if (model) {
@@ -1457,14 +1470,14 @@ async function saveCurrentImageTarget(): Promise<void> {
   }
 
   if (objectsToSave.length === 0) {
-    updateImageTargetStatus('Add at least one Cloudflare model before saving. Text is local-only for now.', true);
+    updateImageTargetStatus('Add at least one model or text object before saving.', true);
     return;
   }
 
   const objects = objectsToSave.map((object) => ({
     ...object,
     placement: normalizePlacement(object.placement),
-    animation: normalizeAnimation(object.animation),
+    animation: normalizeAnimation(object.animation ?? DEFAULT_IMAGE_TARGET_ANIMATION),
   }));
   const saveableObjectIds = new Set(objects.map((object) => object.id));
   const groups = targetGroups.filter((group) => targetObjects.some((object) => (
@@ -1473,38 +1486,52 @@ async function saveCurrentImageTarget(): Promise<void> {
   updateImageTargetStatus('Saving image target...', false);
 
   try {
-    await createImageTarget({
-      apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
-      authToken,
-      label: targetLabelInput?.value.trim() || 'Image target',
-      imageBase64: targetImagePayload.imageBase64,
-      imageMimeType: targetImagePayload.imageMimeType,
-      model: objects[0].model,
-      placement: objects[0].placement,
-      objects,
-      groups,
-    });
+    const wasEditing = Boolean(editingTarget);
+    const label = targetLabelInput?.value.trim() || 'Image target';
+    let savedTarget: CloudImageTarget;
+    if (editingTarget) {
+      savedTarget = await updateImageTarget({
+        apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
+        authToken,
+        targetId: editingTarget.targetId,
+        label,
+        objects,
+        groups,
+        ...(targetImagePayload ?? {}),
+      });
+    } else {
+      const imagePayload = targetImagePayload;
+      if (!imagePayload) {
+        return;
+      }
+      savedTarget = await createImageTarget({
+        apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
+        authToken,
+        label,
+        imageBase64: imagePayload.imageBase64,
+        imageMimeType: imagePayload.imageMimeType,
+        objects,
+        groups,
+      });
+    }
     await refreshImageTargets({ rethrowOnError: true });
-    updateImageTargetStatus(
-      targetObjects.some(isTextTargetObject)
-        ? 'Image target saved to Cloudflare. Text objects stayed local.'
-        : 'Image target saved to Cloudflare.',
-      false,
-    );
+    await loadSavedImageTarget(cloudImageTargets.find((target) => target.id === savedTarget.id) ?? savedTarget);
+    updateImageTargetStatus(wasEditing ? 'Image target updated in Cloudflare.' : 'Image target saved to Cloudflare.', false);
   } catch (error) {
     updateImageTargetStatus(errorMessage(error, 'Unable to save image target'), true);
   }
 }
 
 function createCurrentDraftTarget(): LocalImageTargetDraft | undefined {
-  if (!targetImagePayload || targetObjects.length === 0) {
+  const imageUrl = targetPreviewImageUrl(editingTarget, targetImagePayload);
+  if (!imageUrl || targetObjects.length === 0) {
     return undefined;
   }
 
   return {
     id: 'current-target',
     label: targetLabelInput?.value.trim() || 'Current target',
-    imageUrl: imageTargetDataUrl(targetImagePayload),
+    imageUrl,
     objects: targetObjects,
     groups: targetGroups,
   };
@@ -1538,45 +1565,89 @@ function renderSavedImageTargets(): void {
     return;
   }
 
-  savedImageTargetList.innerHTML = '';
-  if (cloudImageTargets.length === 0) {
-    savedImageTargetList.textContent = 'No cloud image targets saved yet.';
-    return;
+  renderSavedTargetList(savedImageTargetList, {
+    targets: cloudImageTargets,
+    activeTargetId: editingTarget?.targetId,
+    onEdit: (target) => {
+      void loadSavedImageTarget(target);
+    },
+    onDelete: async (target) => {
+      try {
+        await deleteImageTarget({
+          apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
+          authToken,
+          targetId: target.id,
+        });
+        if (editingTarget?.targetId === target.id) {
+          resetImageTargetEditor();
+        }
+        await refreshImageTargets();
+      } catch (error) {
+        updateImageTargetStatus(errorMessage(error, 'Unable to delete image target'), true);
+      }
+    },
+  });
+}
+
+async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
+  const session = createEditingTargetSession(target);
+  editingTarget = { targetId: session.targetId, imageUrl: session.imageUrl };
+  targetImagePayload = undefined;
+  if (targetImageFile) {
+    targetImageFile.value = '';
   }
+  if (targetLabelInput) {
+    targetLabelInput.value = session.label;
+  }
+  targetObjects = session.objects;
+  targetGroups = session.groups;
+  targetSelection = session.selection;
 
-  for (const target of cloudImageTargets) {
-    const row = document.createElement('article');
-    row.className = 'saved-target-row';
+  const firstModel = targetObjects.find(isModelTargetObject);
+  if (targetModelSelect) {
+    targetModelSelect.value = firstModel?.model.id ?? '';
+  }
+  syncSelectionToInspector();
+  renderTargetObjectList();
+  syncTargetSaveMode();
+  renderSavedImageTargets();
+  updateImageTargetStatus(`Editing ${target.label}.`, false);
+  await updateTargetPreview();
+}
 
-    const previewImage = document.createElement('img');
-    previewImage.src = target.imageUrl;
-    previewImage.alt = target.label;
+function resetImageTargetEditor(): void {
+  editingTarget = undefined;
+  targetImagePayload = undefined;
+  targetObjects = [];
+  targetGroups = [];
+  targetSelection = { objectIds: [] };
+  targetPlacement = { ...DEFAULT_IMAGE_TARGET_PLACEMENT };
+  targetAnimation = normalizeAnimation(DEFAULT_IMAGE_TARGET_ANIMATION);
+  targetAnimationMixed = false;
+  if (targetImageFile) {
+    targetImageFile.value = '';
+  }
+  if (targetLabelInput) {
+    targetLabelInput.value = '';
+  }
+  if (targetModelSelect) {
+    targetModelSelect.value = '';
+  }
+  syncTargetTextInputs(DEFAULT_TARGET_TEXT);
+  syncSelectionToInspector();
+  renderTargetObjectList();
+  syncTargetSaveMode();
+  renderSavedImageTargets();
+  updateImageTargetStatus('New image target ready.', false);
+  void updateTargetPreview();
+}
 
-    const meta = document.createElement('div');
-    const label = document.createElement('strong');
-    label.textContent = target.label;
-    const modelName = document.createElement('span');
-    modelName.textContent = target.objects.length === 1
-      ? target.model?.label ?? '1 object'
-      : `${target.objects.length} objects`;
-    meta.append(label, modelName);
-
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'saved-target-delete';
-    deleteButton.dataset.deleteTarget = target.id;
-    decorateDeleteIconButton(deleteButton, `Delete target ${target.label}`);
-    deleteButton.addEventListener('click', async () => {
-      await deleteImageTarget({
-        apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
-        authToken,
-        targetId: target.id,
-      });
-      await refreshImageTargets();
-    });
-
-    row.append(previewImage, meta, deleteButton);
-    savedImageTargetList.append(row);
+function syncTargetSaveMode(): void {
+  if (saveImageTargetButton) {
+    saveImageTargetButton.textContent = editingTarget ? 'Update target' : 'Save target';
+  }
+  if (newImageTargetButton) {
+    newImageTargetButton.hidden = !editingTarget;
   }
 }
 

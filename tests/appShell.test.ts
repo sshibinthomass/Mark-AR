@@ -224,6 +224,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#reset-target-animation')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
     expect(container.querySelector('#save-image-target')).toBeTruthy();
+    expect(container.querySelector('#new-image-target')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')?.closest('[data-target-inspector-panel="target"]')).toBeTruthy();
     expect(html).toContain('Marker AR studio');

@@ -174,6 +174,7 @@ export function renderAppShell(): string {
                 </div>
                 <div class="button-row target-save-strip">
                   <button id="save-image-target" class="primary" type="button">Save target</button>
+                  <button id="new-image-target" type="button" hidden>New target</button>
                   <button id="refresh-image-targets" type="button">Refresh targets</button>
                 </div>
                 <div class="saved-target-compact">
