@@ -116,8 +116,57 @@ describe('cloud image target client', () => {
           id: 'object-plant',
           model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
           placement: { scale: 0.8, offsetX: -0.2, offsetY: 0.15, height: 0.08, rotationX: -15, rotationY: 0, rotationZ: 30 },
-          animation: { spinAxis: 'y', spinSpeed: 1.5, bobHeight: 0.08, bobSpeed: 2 },
+          animation: {
+            preset: 'custom',
+            tracks: [
+              { property: 'rotationY', motion: 'spin', amount: 360, speed: 1.5 / (2 * Math.PI), phase: 0 },
+              { property: 'positionY', motion: 'smooth', amount: 0.08, speed: 2 / (2 * Math.PI), phase: 0 },
+            ],
+          },
         },
+      ],
+    });
+  });
+
+  it('maps preset animation tracks from cloud image targets', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      targets: [
+        {
+          id: 'target-1',
+          label: 'Orbiting product',
+          image_url: 'https://worker.example/image-targets/images/target-1.jpg',
+          image_object_key: 'image-targets/images/target-1.jpg',
+          model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+          placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+          objects: [
+            {
+              id: 'object-chair',
+              model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+              placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+              animation: {
+                preset: 'orbit',
+                tracks: [
+                  { property: 'position_x', motion: 'smooth', amount: 0.18, speed: 0.3, phase: 0 },
+                  { property: 'position_z', motion: 'smooth', amount: 0.18, speed: 0.3, phase: 90 },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }), { status: 200 }));
+
+    const targets = await listImageTargets({
+      apiUrl: 'https://worker.example/generate-3d',
+      authToken: 'token-123',
+      fetchImpl,
+    });
+
+    expect(targets[0].objects[0].animation).toEqual({
+      preset: 'orbit',
+      tracks: [
+        { property: 'positionX', motion: 'smooth', amount: 0.18, speed: 0.3, phase: 0 },
+        { property: 'positionZ', motion: 'smooth', amount: 0.18, speed: 0.3, phase: 90 },
       ],
     });
   });
@@ -209,7 +258,13 @@ describe('cloud image target client', () => {
           id: 'object-plant',
           model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
           placement: { scale: 0.7, offsetX: -0.2, offsetY: 0.2, height: 0.1, rotationX: -10, rotationY: 0, rotationZ: 40 },
-          animation: { spinAxis: 'x', spinSpeed: 2, bobHeight: 0.05, bobSpeed: 3 },
+          animation: {
+            preset: 'custom',
+            tracks: [
+              { property: 'rotationX', motion: 'spin', amount: 360, speed: 0.5, phase: 0 },
+              { property: 'positionY', motion: 'smooth', amount: 0.05, speed: 0.5, phase: 0 },
+            ],
+          },
         },
       ],
     });
@@ -231,7 +286,17 @@ describe('cloud image target client', () => {
             id: 'object-plant',
             model: { id: 'generated-plant', label: 'Plant', url: 'https://worker.example/plant.glb' },
             placement: { scale: 0.7, offset_x: -0.2, offset_y: 0.2, height: 0.1, rotation_x: -10, rotation_y: 0, rotation_z: 40 },
-            animation: { spin_axis: 'x', spin_speed: 2, bob_height: 0.05, bob_speed: 3 },
+            animation: {
+              preset: 'custom',
+              tracks: [
+                { property: 'rotation_x', motion: 'spin', amount: 360, speed: 0.5, phase: 0 },
+                { property: 'position_y', motion: 'smooth', amount: 0.05, speed: 0.5, phase: 0 },
+              ],
+              spin_axis: 'x',
+              spin_speed: Math.PI,
+              bob_height: 0.05,
+              bob_speed: Math.PI,
+            },
           },
         ],
       }),

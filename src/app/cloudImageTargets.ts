@@ -1,5 +1,10 @@
 import type { CloudflareModelOption, ModelVisibility } from './cloudflareModels';
-import type { ImageTargetAnimation, ImageTargetSpinAxis } from './imageTargetAnimation';
+import type {
+  ImageTargetAnimation,
+  ImageTargetAnimationMotion,
+  ImageTargetAnimationPreset,
+  ImageTargetAnimationProperty,
+} from './imageTargetAnimation';
 import { normalizeAnimation } from './imageTargetAnimation';
 import type { ImageTargetImagePayload, ImageTargetPlacement } from './imageTargetPayload';
 import { normalizePlacement } from './imageTargetPayload';
@@ -45,6 +50,14 @@ type WorkerImageTargetObject = {
     rotation_z?: number;
   };
   animation?: {
+    preset?: string;
+    tracks?: Array<{
+      property?: string;
+      motion?: string;
+      amount?: number;
+      speed?: number;
+      phase?: number;
+    }>;
     spin_axis?: string;
     spin_speed?: number;
     bob_height?: number;
@@ -279,7 +292,15 @@ function mapImageTargetObject(object: WorkerImageTargetObject, index: number): C
     }),
     ...(object.animation ? {
       animation: normalizeAnimation({
-        spinAxis: object.animation.spin_axis as ImageTargetSpinAxis | undefined,
+        preset: object.animation.preset as ImageTargetAnimationPreset | undefined,
+        tracks: object.animation.tracks?.map((track) => ({
+          property: animationPropertyFromWire(track.property),
+          motion: track.motion as ImageTargetAnimationMotion | undefined,
+          amount: track.amount,
+          speed: track.speed,
+          phase: track.phase,
+        })) as ImageTargetAnimation['tracks'] | undefined,
+        spinAxis: object.animation.spin_axis as 'none' | 'x' | 'y' | 'z' | undefined,
         spinSpeed: object.animation.spin_speed,
         bobHeight: object.animation.bob_height,
         bobSpeed: object.animation.bob_speed,
@@ -325,7 +346,7 @@ function imageTargetObjectsRequestBody(
   id: string;
   model: Record<string, string>;
   placement: Record<string, number>;
-  animation?: Record<string, number | string>;
+  animation?: WorkerAnimationRequestBody;
 }> {
   const requestObjects = objects?.length
     ? objects
@@ -345,14 +366,68 @@ function imageTargetObjectsRequestBody(
   }));
 }
 
-function animationRequestBody(animation: ImageTargetAnimation): Record<string, number | string> {
+type WorkerAnimationRequestBody = {
+  preset: ImageTargetAnimationPreset;
+  tracks: Array<{
+    property: string;
+    motion: ImageTargetAnimationMotion;
+    amount: number;
+    speed: number;
+    phase: number;
+  }>;
+  spin_axis?: 'none' | 'x' | 'y' | 'z';
+  spin_speed?: number;
+  bob_height?: number;
+  bob_speed?: number;
+};
+
+function animationRequestBody(animation: ImageTargetAnimation): WorkerAnimationRequestBody {
   const normalized = normalizeAnimation(animation);
-  return {
-    spin_axis: normalized.spinAxis,
-    spin_speed: normalized.spinSpeed,
-    bob_height: normalized.bobHeight,
-    bob_speed: normalized.bobSpeed,
+  const body: WorkerAnimationRequestBody = {
+    preset: normalized.preset,
+    tracks: normalized.tracks.map((track) => ({
+      ...track,
+      property: animationPropertyToWire(track.property),
+    })),
   };
+
+  const legacySpin = normalized.tracks.find((track) =>
+    track.property.startsWith('rotation') && track.motion === 'spin' && track.phase === 0,
+  );
+  if (legacySpin) {
+    body.spin_axis = legacySpin.property.at(-1)?.toLowerCase() as 'x' | 'y' | 'z';
+    body.spin_speed = degreesToRadians(legacySpin.amount * legacySpin.speed);
+  }
+
+  const legacyBob = normalized.tracks.find((track) =>
+    track.property === 'positionY' && track.motion === 'smooth' && track.phase === 0 && track.amount >= 0,
+  );
+  if (legacyBob) {
+    body.bob_height = legacyBob.amount;
+    body.bob_speed = legacyBob.speed * 2 * Math.PI;
+  }
+  return body;
+}
+
+function animationPropertyFromWire(value: unknown): ImageTargetAnimationProperty | undefined {
+  const properties: Record<string, ImageTargetAnimationProperty> = {
+    position_x: 'positionX',
+    position_y: 'positionY',
+    position_z: 'positionZ',
+    rotation_x: 'rotationX',
+    rotation_y: 'rotationY',
+    rotation_z: 'rotationZ',
+    scale: 'scale',
+  };
+  return typeof value === 'string' ? properties[value] : undefined;
+}
+
+function animationPropertyToWire(property: ImageTargetAnimationProperty): string {
+  return property.replace(/([A-Z])/g, '_$1').toLowerCase();
+}
+
+function degreesToRadians(value: number): number {
+  return (value * Math.PI) / 180;
 }
 
 function placementRequestBody(placement: ImageTargetPlacement): Record<string, number> {
