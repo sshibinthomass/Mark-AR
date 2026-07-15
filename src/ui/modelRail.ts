@@ -3,12 +3,13 @@ import type { CloudflareModelOption } from '../app/cloudflareModels';
 type RenderTargetModelRailInput = {
   models: CloudflareModelOption[];
   selectedModelId?: string;
+  loadingModelId?: string;
   onSelect: (model: CloudflareModelOption) => void;
 };
 
 export function renderTargetModelRail(
   container: HTMLElement,
-  { models, selectedModelId, onSelect }: RenderTargetModelRailInput,
+  { models, selectedModelId, loadingModelId, onSelect }: RenderTargetModelRailInput,
 ): void {
   container.replaceChildren();
 
@@ -27,6 +28,9 @@ export function renderTargetModelRail(
     option.dataset.modelId = model.id;
     option.setAttribute('role', 'option');
     option.setAttribute('aria-selected', String(model.id === selectedModelId));
+    const isLoading = model.id === loadingModelId;
+    option.disabled = isLoading;
+    option.setAttribute('aria-busy', String(isLoading));
     option.setAttribute('aria-label', model.label);
     option.title = model.label;
     option.addEventListener('click', () => onSelect(model));
@@ -53,6 +57,13 @@ export function renderTargetModelRail(
     label.textContent = model.label;
 
     option.append(thumb, label);
+    if (isLoading) {
+      const loader = document.createElement('span');
+      loader.className = 'target-model-card-loader';
+      loader.setAttribute('role', 'status');
+      loader.textContent = `Loading ${model.label}…`;
+      option.append(loader);
+    }
     container.append(option);
   }
 }

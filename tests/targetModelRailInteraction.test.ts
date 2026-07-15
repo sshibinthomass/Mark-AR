@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CloudflareModelOption } from '../src/app/cloudflareModels';
 
+const previewMock = vi.hoisted(() => ({
+  pendingModelLoad: undefined as undefined | { promise: Promise<void>; resolve: () => void },
+}));
+
 const models: CloudflareModelOption[] = [
   {
     id: 'generated-chair',
@@ -45,7 +49,11 @@ vi.mock('../src/ar/mindarRuntime', () => ({
 
 vi.mock('../src/scene/ImageTargetPreview', () => ({
   ImageTargetPreview: class {
-    update = vi.fn(async () => undefined);
+    update = vi.fn(async (state: { objects?: CloudflareModelOption[] }) => {
+      if (state.objects?.length && previewMock.pendingModelLoad) {
+        await previewMock.pendingModelLoad.promise;
+      }
+    });
     dispose = vi.fn();
   },
 }));
@@ -55,6 +63,7 @@ describe('target model rail interaction', () => {
     vi.resetModules();
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
+    previewMock.pendingModelLoad = undefined;
   });
 
   it('adds a model object to the preview every time a rail card is clicked', async () => {
@@ -74,6 +83,26 @@ describe('target model rail interaction', () => {
       expect.stringContaining('Sofa'),
     ]);
     expect(document.querySelector('#image-target-status')?.textContent).toBe('Sofa added to the target.');
+  }, 10000);
+
+  it('shows a loader until the selected model finishes loading in the preview', async () => {
+    let resolveModelLoad = () => undefined;
+    const promise = new Promise<void>((resolve) => {
+      resolveModelLoad = resolve;
+    });
+    previewMock.pendingModelLoad = { promise, resolve: resolveModelLoad };
+
+    await import('../src/main');
+    await waitFor(() => document.querySelectorAll<HTMLButtonElement>('.target-model-card').length === 2);
+
+    document.querySelectorAll<HTMLButtonElement>('.target-model-card')[0].click();
+    await waitFor(() => document.querySelector('.target-preview-loader') !== null);
+
+    expect(document.querySelector('.target-preview-loader')?.textContent).toContain('Loading Chair…');
+    expect(document.querySelector<HTMLButtonElement>('[data-model-id="generated-chair"]')?.disabled).toBe(true);
+
+    resolveModelLoad();
+    await waitFor(() => document.querySelector('.target-preview-loader') === null);
   }, 10000);
 });
 

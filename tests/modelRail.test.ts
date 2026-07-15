@@ -38,4 +38,25 @@ describe('renderTargetModelRail', () => {
 
     expect(selectedIds).toEqual(['static-lamp']);
   });
+
+  it('marks the downloading model card busy and exposes loading status', () => {
+    const model: CloudflareModelOption = {
+      id: 'generated-chair',
+      label: 'Chair',
+      url: 'https://worker.example/models/chair.glb',
+      previewUrl: 'https://worker.example/previews/chair.png',
+    };
+    const container = document.createElement('div');
+
+    renderTargetModelRail(container, {
+      models: [model],
+      loadingModelId: model.id,
+      onSelect: () => undefined,
+    });
+
+    const card = container.querySelector<HTMLButtonElement>('.target-model-card');
+    expect(card?.disabled).toBe(true);
+    expect(card?.getAttribute('aria-busy')).toBe('true');
+    expect(card?.querySelector('[role="status"]')?.textContent).toBe('Loading Chair…');
+  });
 });

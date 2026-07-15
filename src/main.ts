@@ -211,6 +211,8 @@ const targetAnimationPresetSelect = document.querySelector<HTMLSelectElement>('#
 const targetAnimationTracks = document.querySelector<HTMLElement>('#target-animation-tracks');
 const addTargetAnimationTrackButton = document.querySelector<HTMLButtonElement>('#add-target-animation-track');
 const resetTargetAnimationButton = document.querySelector<HTMLButtonElement>('#reset-target-animation');
+let loadingTargetModelId: string | undefined;
+let targetPreviewUpdateToken = 0;
 const saveImageTargetButton = document.querySelector<HTMLButtonElement>('#save-image-target');
 const newImageTargetButton = document.querySelector<HTMLButtonElement>('#new-image-target');
 const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#refresh-image-targets');
@@ -1317,6 +1319,7 @@ function renderTargetModelRailOptions(models: CloudflareModelOption[]): void {
   renderTargetModelRail(targetModelRail, {
     models,
     selectedModelId: targetModelSelect?.value,
+    loadingModelId: loadingTargetModelId,
     onSelect: addTargetObjectForModel,
   });
 }
@@ -1368,7 +1371,7 @@ function addTargetObjectForModel(model: CloudflareModelOption): void {
   selectTargetObject(object.id, { refreshPreview: false });
   renderTargetObjectList();
   updateImageTargetStatus(`${model.label} added to the target.`, false);
-  void updateTargetPreview();
+  void updateTargetPreview(model);
 }
 
 function addTargetTextFromInput(): void {
@@ -1966,20 +1969,55 @@ function isPlacementTransformResetAxis(value: string | undefined): value is Plac
   return value === 'all' || value === 'x' || value === 'y' || value === 'z';
 }
 
-async function updateTargetPreview(): Promise<void> {
+async function updateTargetPreview(loadingModel?: CloudflareModelOption): Promise<void> {
   const preview = ensureImageTargetPreview();
   if (!preview) {
     return;
   }
-  await preview.update({
-    imageUrl: targetPreviewImageUrl(editingTarget, targetImagePayload),
-    objects: targetObjects,
-    groups: targetGroups,
-    selection: targetSelection,
-    selectedObjectId: targetSelection.objectIds.at(-1),
-    camera: targetCameraView,
-    transformMode: targetTransformMode,
-  });
+  const updateToken = ++targetPreviewUpdateToken;
+  if (loadingModel) {
+    loadingTargetModelId = loadingModel.id;
+    renderTargetModelRailOptions(cloudflareModels);
+    renderTargetPreviewLoader(loadingModel.label);
+  }
+  try {
+    await preview.update({
+      imageUrl: targetPreviewImageUrl(editingTarget, targetImagePayload),
+      objects: targetObjects,
+      groups: targetGroups,
+      selection: targetSelection,
+      selectedObjectId: targetSelection.objectIds.at(-1),
+      camera: targetCameraView,
+      transformMode: targetTransformMode,
+    });
+  } finally {
+    if (updateToken === targetPreviewUpdateToken && loadingTargetModelId) {
+      loadingTargetModelId = undefined;
+      renderTargetModelRailOptions(cloudflareModels);
+      renderTargetPreviewLoader();
+    }
+  }
+}
+
+function renderTargetPreviewLoader(modelLabel?: string): void {
+  targetPreviewStage?.querySelector('.target-preview-loader')?.remove();
+  if (!targetPreviewStage || !modelLabel) {
+    targetPreviewStage?.removeAttribute('aria-busy');
+    return;
+  }
+
+  targetPreviewStage.setAttribute('aria-busy', 'true');
+  const loader = document.createElement('div');
+  loader.className = 'target-preview-loader';
+  loader.setAttribute('role', 'status');
+  loader.setAttribute('aria-live', 'polite');
+  const spinner = document.createElement('span');
+  spinner.className = 'target-preview-loader-spinner';
+  spinner.setAttribute('aria-hidden', 'true');
+  const message = document.createElement('strong');
+  message.textContent = `Loading ${modelLabel}…`;
+  loader.append(spinner, message);
+  targetPreviewStage.append(loader);
 }
 
 async function saveCurrentImageTarget(): Promise<void> {
