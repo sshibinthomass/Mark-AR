@@ -13,6 +13,7 @@ import type { MarkerObjectSpec } from './markerCatalog';
 export type MarkerObject = {
   group: Group;
   update: (deltaSeconds: number) => void;
+  dispose?: () => void;
 };
 
 export function createMarkerObject(spec: MarkerObjectSpec): MarkerObject {

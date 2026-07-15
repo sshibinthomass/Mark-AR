@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { Euler, Group, Matrix4, Mesh, Quaternion, Vector3 } from 'three';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  Euler,
+  Group,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  Quaternion,
+  Vector3,
+} from 'three';
 import { createCloudflareMarkerObject } from '../src/ar/cloudflareMarkerObject';
 
 describe('createCloudflareMarkerObject', () => {
@@ -404,5 +413,29 @@ describe('createCloudflareMarkerObject', () => {
     expect(textRoot.position.y).toBeCloseTo(0.22);
     expect(textRoot.position.z).toBeCloseTo(-0.1);
     expect(textRoot.rotation.y).toBeCloseTo(Math.PI / 12);
+  });
+
+  it('delegates disposal to the shared target scene exactly once', async () => {
+    const geometry = new PlaneGeometry(1, 1);
+    const material = new MeshBasicMaterial();
+    const geometryDispose = vi.spyOn(geometry, 'dispose');
+    const materialDispose = vi.spyOn(material, 'dispose');
+    const loadedModel = new Group().add(new Mesh(geometry, material));
+    const markerObject = createCloudflareMarkerObject({
+      model: {
+        id: 'generated-chair',
+        label: 'Chair',
+        url: 'https://worker.example/models/chair.glb',
+      },
+      loadModelGroup: async () => loadedModel,
+    });
+
+    await Promise.resolve();
+    markerObject.dispose?.();
+    markerObject.dispose?.();
+
+    expect(geometryDispose).toHaveBeenCalledTimes(1);
+    expect(materialDispose).toHaveBeenCalledTimes(1);
+    expect(markerObject.group.getObjectByName('cloudflare-preview-space')?.children).toHaveLength(0);
   });
 });

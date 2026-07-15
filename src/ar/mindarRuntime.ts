@@ -9,6 +9,7 @@ import {
 } from './markerTargets';
 import {
   compileMarkerTargets,
+  type CompiledMarkerTargets,
   type MindARCompilerConstructor,
 } from './targetCompiler';
 
@@ -51,6 +52,7 @@ export type StartMarkerARHooks = {
   onCompileProgress?: (percent: number) => void;
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void;
   onReady?: () => void;
+  signal?: AbortSignal;
 };
 
 type MindARModules = {
@@ -93,30 +95,71 @@ export async function startMarkerAR(
   container: HTMLElement,
   hooks: StartMarkerARHooks = {},
 ): Promise<MarkerARSession> {
+  let compiledTargets: CompiledMarkerTargets | undefined;
+  let mindarThree: MindARThreeInstance | undefined;
+  let markerObjects: MarkerObject[] = [];
+  let active = true;
+  let frameId: number | undefined;
+  let mindarStartAttempted = false;
+  let stopped = false;
+
+  const stop = () => {
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    active = false;
+    if (frameId !== undefined) {
+      cancelAnimationFrame(frameId);
+    }
+    if (mindarStartAttempted) {
+      try {
+        mindarThree?.stop?.();
+      } catch {
+        // A rejected MindAR start can leave its camera/controller only partially initialized.
+      }
+    }
+    for (const markerObject of markerObjects) {
+      markerObject.dispose?.();
+    }
+    compiledTargets?.dispose();
+  };
+
+  const throwIfAborted = () => {
+    if (!hooks.signal?.aborted) {
+      return;
+    }
+    stop();
+    throw new DOMException('Marker AR start aborted', 'AbortError');
+  };
+
   const { Compiler, MindARThree } = await loadMindARModules();
+  throwIfAborted();
   const targets = hooks.targets ?? createRuntimeMarkerTargets();
-  const compiledTargets = await compileMarkerTargets(
+  const compiled = await compileMarkerTargets(
     targets.map((target) => target.marker),
     {
       Compiler,
       onProgress: hooks.onCompileProgress,
     },
   );
+  compiledTargets = compiled;
+  throwIfAborted();
 
-  const mindarThree = new MindARThree({
+  const instance = new MindARThree({
     container,
-    imageTargetSrc: compiledTargets.imageTargetSrc,
+    imageTargetSrc: compiled.imageTargetSrc,
     filterMinCF: 0.001,
     filterBeta: 0.01,
   });
-  const markerObjects = setupScene(
-    mindarThree,
+  mindarThree = instance;
+  markerObjects = setupScene(
+    instance,
     targets,
     hooks.onMarkerVisibility,
   );
+  throwIfAborted();
 
-  let active = true;
-  let frameId = 0;
   const clock = new Clock();
   const render = () => {
     if (!active) {
@@ -128,23 +171,27 @@ export async function startMarkerAR(
       markerObject.update(delta);
     }
 
-    mindarThree.renderer.render(mindarThree.scene, mindarThree.camera);
+    instance.renderer.render(instance.scene, instance.camera);
     frameId = requestAnimationFrame(render);
   };
 
-  await mindarThree.start();
+  mindarStartAttempted = true;
+  try {
+    await instance.start();
+  } catch (error) {
+    stop();
+    if (hooks.signal?.aborted) {
+      throw new DOMException('Marker AR start aborted', 'AbortError');
+    }
+    throw error;
+  }
+  throwIfAborted();
   normalizeMindARCameraLayers(container);
   hooks.onReady?.();
+  throwIfAborted();
   frameId = requestAnimationFrame(render);
 
-  return {
-    stop: () => {
-      active = false;
-      cancelAnimationFrame(frameId);
-      mindarThree.stop?.();
-      compiledTargets.dispose();
-    },
-  };
+  return { stop };
 }
 
 function setupScene(
