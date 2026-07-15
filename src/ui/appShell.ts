@@ -98,12 +98,30 @@ export function renderAppShell(): string {
               <span>Scan target</span>
             </div>
           </div>
+          <div id="floor-ar-stage" class="ar-stage floor-ar-stage" hidden aria-label="Floor AR camera stage"></div>
+          <div id="floor-ar-overlay" class="floor-ar-overlay" hidden>
+            <div id="floor-ar-gesture-surface" class="floor-ar-gesture-surface" aria-label="Move and scale the placed scene"></div>
+            <div class="floor-ar-controls">
+              <p id="floor-ar-status" role="status">Preparing floor placement...</p>
+              <button id="floor-ar-place" type="button" disabled>Place</button>
+              <label class="floor-ar-rotation-control">
+                <span>Rotate</span>
+                <input id="floor-ar-rotation" type="range" min="-180" max="180" step="1" value="0">
+              </label>
+              <button id="floor-ar-reset" type="button">Reset</button>
+              <button id="floor-ar-restart" type="button" hidden>Restart floor AR</button>
+            </div>
+          </div>
           <div class="scanner-controls" aria-live="polite">
             <div>
               <span class="status-label">Status</span>
               <p id="ar-status">Camera waiting</p>
+              <p id="floor-ar-message"></p>
             </div>
-            <button id="start-ar" type="button">Start AR</button>
+            <div class="scanner-actions">
+              <button id="start-ar" type="button">Start AR</button>
+              <button id="floor-ar-toggle" type="button" hidden>Place on floor</button>
+            </div>
           </div>
         </div>
       </section>
