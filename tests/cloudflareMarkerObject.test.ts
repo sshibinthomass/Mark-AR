@@ -51,8 +51,10 @@ describe('createCloudflareMarkerObject', () => {
     expect(orphanRoot.position.x).toBeCloseTo(-0.4);
 
     markerObject.update(0.5);
-    expect(groupRoot.position.y).toBeCloseTo(0);
-    expect(chairRoot.rotation.z).toBeCloseTo(Math.PI / 6);
+    expect(groupRoot.position.y).toBeCloseTo(-0.1);
+    expect(groupRoot.position.z).toBeCloseTo(0.4);
+    expect(chairRoot.rotation.y).toBeCloseTo(-Math.PI / 6);
+    expect(chairRoot.rotation.z).toBeCloseTo(0);
     expect(lampRoot.rotation.z).toBeCloseTo(0);
   });
 
@@ -174,15 +176,59 @@ describe('createCloudflareMarkerObject', () => {
     expect(modelRoot.position.y).toBeCloseTo(0.1);
     expect(modelRoot.position.z).toBeCloseTo(0.3);
     expect(modelRoot.rotation.x).toBeCloseTo(Math.PI / 18);
-    expect(modelRoot.rotation.y).toBeCloseTo(Math.PI / 9);
-    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 3);
+    expect(modelRoot.rotation.y).toBeCloseTo(-Math.PI / 18);
+    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 6);
     expect(modelRoot.scale.x).toBeCloseTo(2.5);
 
     markerObject.update(0.5);
 
     expect(modelRoot.position.x).toBeCloseTo(0.2);
+    expect(modelRoot.rotation.y).toBeCloseTo(Math.PI / 9);
     expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 6);
     expect(modelRoot.scale.x).toBeCloseTo(2);
+  });
+
+  it('maps preview Y-up animation to the MindAR Z-up axis', async () => {
+    const markerObject = createCloudflareMarkerObject({
+      objects: [
+        {
+          id: 'turntable-object',
+          model: {
+            id: 'chair',
+            label: 'Chair',
+            url: 'https://worker.example/models/chair.glb',
+          },
+          placement: {
+            scale: 1,
+            offsetX: 0,
+            offsetY: 0,
+            height: 0,
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0,
+          },
+          animation: {
+            preset: 'custom',
+            tracks: [
+              { property: 'positionY', motion: 'smooth', amount: 0.4, speed: 0.5, phase: 0 },
+              { property: 'positionZ', motion: 'smooth', amount: 0.2, speed: 0.5, phase: 0 },
+              { property: 'rotationY', motion: 'spin', amount: 360, speed: 0.5, phase: 0 },
+              { property: 'rotationZ', motion: 'smooth', amount: 30, speed: 0.5, phase: 0 },
+            ],
+          },
+        },
+      ],
+      loadModelGroup: async () => new Group(),
+    });
+
+    await Promise.resolve();
+    markerObject.update(0.5);
+
+    const modelRoot = markerObject.group.getObjectByName('cloudflare-model-root-turntable-object') as Group;
+    expect(modelRoot.position.y).toBeCloseTo(-0.2);
+    expect(modelRoot.position.z).toBeCloseTo(0.4);
+    expect(modelRoot.rotation.y).toBeCloseTo(-Math.PI / 6);
+    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 2);
   });
 
   it('renders local text objects in AR without loading a GLB', async () => {

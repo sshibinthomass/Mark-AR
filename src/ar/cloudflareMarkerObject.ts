@@ -154,16 +154,18 @@ function applyAnimation(
   elapsedSeconds: number,
 ): void {
   const frame = evaluateAnimationFrame(animation, elapsedSeconds);
+  // The editor preview is Y-up while MindAR target anchors are Z-up.
+  // Rotate animation offsets and axes +90 degrees around X: (x, y, z) -> (x, -z, y).
   modelRoot.position.set(
     placement.offsetX + frame.position.x,
-    placement.offsetY + frame.position.y,
-    placement.height + frame.position.z,
+    placement.offsetY - frame.position.z,
+    placement.height + frame.position.y,
   );
   modelRoot.scale.setScalar(placement.scale * frame.scaleMultiplier);
   modelRoot.rotation.set(
     degreesToRadians(placement.rotationX) + frame.rotationRadians.x,
-    degreesToRadians(placement.rotationY) + frame.rotationRadians.y,
-    degreesToRadians(placement.rotationZ) + frame.rotationRadians.z,
+    degreesToRadians(placement.rotationY) - frame.rotationRadians.z,
+    degreesToRadians(placement.rotationZ) + frame.rotationRadians.y,
   );
 }
 
