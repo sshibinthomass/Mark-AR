@@ -1,6 +1,5 @@
 import {
   AmbientLight,
-  Box3,
   Color,
   DirectionalLight,
   GridHelper,
@@ -17,7 +16,6 @@ import {
   Texture,
   TextureLoader,
   Vector2,
-  Vector3,
   WebGLRenderer,
 } from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -52,6 +50,7 @@ import {
   type PreviewCameraView,
 } from './previewCamera';
 import { createTextObject3D } from './textObject3d';
+import { createNormalizedTargetModelGroup } from './targetModelNormalization';
 import { applyTargetAnimation, applyTargetPlacement } from './targetObjectTransform';
 
 export { DEFAULT_PREVIEW_CAMERA_VIEW, type PreviewCameraView } from './previewCamera';
@@ -1265,25 +1264,7 @@ function defaultLoadTexture(url: string): Promise<Texture> {
 
 async function defaultLoadModel(url: string): Promise<Group> {
   const gltf = await new GLTFLoader().loadAsync(url);
-  return createNormalizedModelGroup(gltf.scene);
-}
-
-function createNormalizedModelGroup(scene: Group): Group {
-  const wrapper = new Group();
-  wrapper.name = 'image-target-preview-model';
-
-  const bounds = new Box3().setFromObject(scene);
-  const size = bounds.getSize(new Vector3());
-  const largestDimension = Math.max(size.x, size.y, size.z);
-  if (Number.isFinite(largestDimension) && largestDimension > 0) {
-    scene.scale.setScalar(0.36 / largestDimension);
-  }
-
-  const scaledBounds = new Box3().setFromObject(scene);
-  const center = scaledBounds.getCenter(new Vector3());
-  scene.position.set(-center.x, -scaledBounds.min.y, -center.z);
-  wrapper.add(scene);
-  return wrapper;
+  return createNormalizedTargetModelGroup(gltf.scene, 'image-target-preview-model');
 }
 
 function createTargetMidpointMarker(): Group {

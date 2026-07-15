@@ -1,11 +1,9 @@
 import {
-  Box3,
   DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
-  Vector3,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
@@ -18,6 +16,7 @@ import {
   type LocalTextTargetObject,
 } from '../app/targetEditorObjects';
 import { createTextObject3D } from '../scene/textObject3d';
+import { createNormalizedTargetModelGroup } from '../scene/targetModelNormalization';
 import type { MarkerObject } from './arObjects';
 
 export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
@@ -192,26 +191,7 @@ function createPlacedObjects(asset: CloudflarePlacedAsset): CloudflarePlacedObje
 async function loadGltfModelGroup(modelUrl: string): Promise<Group> {
   const loader = new GLTFLoader();
   const gltf = await loader.loadAsync(modelUrl);
-  const wrapper = new Group();
-  wrapper.name = 'cloudflare-loaded-model';
-  wrapper.rotation.x = Math.PI / 2;
-  wrapper.add(normalizeGltfScene(gltf.scene));
-  return wrapper;
-}
-
-function normalizeGltfScene(scene: Group): Group {
-  const box = new Box3().setFromObject(scene);
-  const size = box.getSize(new Vector3());
-  const largestDimension = Math.max(size.x, size.y, size.z);
-
-  if (largestDimension > 0) {
-    scene.scale.setScalar(0.72 / largestDimension);
-  }
-
-  const scaledBox = new Box3().setFromObject(scene);
-  const center = scaledBox.getCenter(new Vector3());
-  scene.position.set(-center.x, -scaledBox.min.y, -center.z);
-  return scene;
+  return createNormalizedTargetModelGroup(gltf.scene, 'cloudflare-loaded-model');
 }
 
 function createModelLoadFallback(): Group {
