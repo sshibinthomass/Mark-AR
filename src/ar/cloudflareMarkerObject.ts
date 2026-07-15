@@ -182,7 +182,8 @@ function createModelLoadFallback(): Group {
     }),
   );
   base.name = 'model-load-fallback-plane';
-  base.position.z = 0.08;
+  base.position.y = 0.08;
+  base.rotation.x = -Math.PI / 2;
   fallback.add(base);
   return fallback;
 }

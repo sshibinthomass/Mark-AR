@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Euler, Group, Matrix4, Quaternion, Vector3 } from 'three';
+import { Euler, Group, Matrix4, Mesh, Quaternion, Vector3 } from 'three';
 import { createCloudflareMarkerObject } from '../src/ar/cloudflareMarkerObject';
 
 describe('createCloudflareMarkerObject', () => {
@@ -192,6 +192,37 @@ describe('createCloudflareMarkerObject', () => {
     expect(modelRoot.parent?.name).toBe('cloudflare-preview-space');
     expect(modelRoot.position.y).toBeGreaterThan(0);
     expect(modelRoot.position.z).toBeCloseTo(0);
+  });
+
+  it('keeps the model-load fallback facing out of the target at its original clearance', async () => {
+    const markerObject = createCloudflareMarkerObject({
+      model: {
+        id: 'missing-model',
+        label: 'Missing model',
+        url: 'https://worker.example/models/missing.glb',
+      },
+      loadModelGroup: async () => {
+        throw new Error('model unavailable');
+      },
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    markerObject.group.updateMatrixWorld(true);
+
+    const fallbackPlane = markerObject.group.getObjectByName('model-load-fallback-plane') as Mesh;
+    const worldPosition = fallbackPlane.getWorldPosition(new Vector3());
+    const worldNormal = new Vector3(0, 0, 1).applyQuaternion(
+      fallbackPlane.getWorldQuaternion(new Quaternion()),
+    );
+
+    expect(worldPosition.x).toBeCloseTo(0);
+    expect(worldPosition.y).toBeCloseTo(0);
+    expect(worldPosition.z).toBeCloseTo(0.12);
+    expect(worldNormal.x).toBeCloseTo(0);
+    expect(worldNormal.y).toBeCloseTo(0);
+    expect(worldNormal.z).toBeCloseTo(1);
   });
 
   it('loads multiple placed Cloudflare models', async () => {
