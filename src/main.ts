@@ -15,6 +15,14 @@ import {
   type CloudImageTargetObject,
 } from './app/cloudImageTargets';
 import {
+  DEFAULT_IMAGE_TARGET_ACCESS,
+  isImageTargetAccessMode,
+  normalizeImageTargetAccess,
+  parseAllowedEmails,
+  validateImageTargetAccess,
+  type ImageTargetAccess,
+} from './app/imageTargetAccess';
+import {
   DEFAULT_IMAGE_TARGET_ANIMATION,
   animationForPreset,
   normalizeAnimation,
@@ -138,6 +146,9 @@ const workerLogoutButton = queryRequired<HTMLButtonElement>('#worker-logout');
 const authModeButtons = shell.querySelectorAll<HTMLButtonElement>('[data-auth-mode]');
 const targetImageFile = document.querySelector<HTMLInputElement>('#target-image-file');
 const targetLabelInput = document.querySelector<HTMLInputElement>('#target-label');
+const targetAccessModeSelect = document.querySelector<HTMLSelectElement>('#target-access-mode');
+const targetAccessEmailsField = document.querySelector<HTMLElement>('#target-access-emails-field');
+const targetAccessEmailsInput = document.querySelector<HTMLTextAreaElement>('#target-access-emails');
 const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-model-select');
 const targetPreviewStage = document.querySelector<HTMLElement>('#target-preview-stage');
 const targetModelRail = document.querySelector<HTMLElement>('#target-model-rail');
@@ -192,6 +203,8 @@ let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
 let editingTarget: EditingTargetState | undefined;
+let editingTargetScanId: string | undefined;
+let targetAccess: ImageTargetAccess = { ...DEFAULT_IMAGE_TARGET_ACCESS };
 let targetPlacement: ImageTargetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
 let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
 let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
@@ -392,6 +405,24 @@ targetImageFile?.addEventListener('change', async () => {
   await updateTargetPreview();
 });
 
+targetAccessModeSelect?.addEventListener('change', () => {
+  if (!isImageTargetAccessMode(targetAccessModeSelect.value)) {
+    return;
+  }
+  targetAccess = normalizeImageTargetAccess({
+    accessMode: targetAccessModeSelect.value,
+    allowedEmails: parseAllowedEmails(targetAccessEmailsInput?.value ?? ''),
+  });
+  syncTargetAccessInputs();
+});
+
+targetAccessEmailsInput?.addEventListener('input', () => {
+  targetAccess = normalizeImageTargetAccess({
+    accessMode: targetAccess.accessMode,
+    allowedEmails: parseAllowedEmails(targetAccessEmailsInput.value),
+  });
+});
+
 [targetScaleInput, targetOffsetXInput, targetOffsetYInput, targetHeightInput, targetRotationXInput, targetRotationYInput, targetRotationZInput].forEach((input) => {
   input?.addEventListener('input', () => {
     updateSelectedTargetObjectPlacement(readTargetPlacement());
@@ -533,6 +564,7 @@ refreshImageTargetsButton?.addEventListener('click', async () => {
 });
 
 renderTargetObjectList();
+syncTargetAccessInputs();
 syncTargetCameraInputs(targetCameraView);
 syncTargetTransformModeButtons(targetTransformMode);
 syncTargetAnimationInputs(targetAnimation);
@@ -1480,6 +1512,20 @@ async function saveCurrentImageTarget(): Promise<void> {
   const groups = targetGroups.filter((group) => targetObjects.some((object) => (
     object.groupId === group.id && saveableObjectIds.has(object.id)
   )));
+  const access = readTargetAccess();
+  const ownerEmail = authUiState.status === 'signed-in' ? authUiState.email : undefined;
+  const accessError = validateImageTargetAccess(access, ownerEmail);
+  if (accessError) {
+    updateImageTargetStatus(accessError, true);
+    return;
+  }
+  const normalizedOwnerEmail = ownerEmail?.trim().toLowerCase();
+  const accessToSave = normalizeImageTargetAccess({
+    ...access,
+    allowedEmails: access.allowedEmails.filter((email) => email !== normalizedOwnerEmail),
+  });
+  targetAccess = accessToSave;
+  syncTargetAccessInputs();
   updateImageTargetStatus('Saving image target...', false);
 
   try {
@@ -1494,6 +1540,7 @@ async function saveCurrentImageTarget(): Promise<void> {
         label,
         objects,
         groups,
+        access: accessToSave,
         ...(targetImagePayload ?? {}),
       });
     } else {
@@ -1509,9 +1556,11 @@ async function saveCurrentImageTarget(): Promise<void> {
         imageMimeType: imagePayload.imageMimeType,
         objects,
         groups,
+        access: accessToSave,
       });
     }
-    const directMismatch = savedTargetAuthoringMismatch(objects, groups, savedTarget);
+    const expectedAccess = { ...accessToSave, ...(editingTargetScanId ? { scanId: editingTargetScanId } : {}) };
+    const directMismatch = savedTargetAuthoringMismatch(objects, groups, savedTarget, expectedAccess);
     if (directMismatch) {
       throw new Error(`${directMismatch} Your editor changes were kept.`);
     }
@@ -1533,7 +1582,10 @@ async function saveCurrentImageTarget(): Promise<void> {
     if (!refreshedTarget) {
       throw new Error(`The saved-target refresh did not return target ${savedTarget.id}. Your editor changes were kept.`);
     }
-    const refreshedMismatch = savedTargetAuthoringMismatch(objects, groups, refreshedTarget);
+    const refreshedMismatch = savedTargetAuthoringMismatch(objects, groups, refreshedTarget, {
+      ...accessToSave,
+      scanId: savedTarget.scanId,
+    });
     if (refreshedMismatch) {
       throw new Error(`${refreshedMismatch} Your editor changes were kept.`);
     }
@@ -1598,6 +1650,18 @@ function renderSavedImageTargets(): void {
   renderSavedTargetList(savedImageTargetList, {
     targets: cloudImageTargets,
     activeTargetId: editingTarget?.targetId,
+    currentUrl: window.location.href,
+    onCopyLink: async (_target, scanUrl) => {
+      try {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error('Clipboard access is unavailable in this browser.');
+        }
+        await navigator.clipboard.writeText(scanUrl);
+        updateImageTargetStatus('Scan link copied.', false);
+      } catch (error) {
+        updateImageTargetStatus(errorMessage(error, 'Unable to copy scan link'), true);
+      }
+    },
     onEdit: (target) => {
       void loadSavedImageTarget(target);
     },
@@ -1622,6 +1686,11 @@ function renderSavedImageTargets(): void {
 async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
   const session = createEditingTargetSession(target);
   editingTarget = { targetId: session.targetId, imageUrl: session.imageUrl };
+  editingTargetScanId = target.scanId;
+  targetAccess = normalizeImageTargetAccess({
+    accessMode: target.accessMode,
+    allowedEmails: target.allowedEmails,
+  }, target.visibility);
   targetImagePayload = undefined;
   if (targetImageFile) {
     targetImageFile.value = '';
@@ -1632,6 +1701,7 @@ async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
   targetObjects = session.objects;
   targetGroups = session.groups;
   targetSelection = session.selection;
+  syncTargetAccessInputs();
 
   const firstModel = targetObjects.find(isModelTargetObject);
   if (targetModelSelect) {
@@ -1647,6 +1717,8 @@ async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
 
 function resetImageTargetEditor(): void {
   editingTarget = undefined;
+  editingTargetScanId = undefined;
+  targetAccess = { ...DEFAULT_IMAGE_TARGET_ACCESS };
   targetImagePayload = undefined;
   targetObjects = [];
   targetGroups = [];
@@ -1664,6 +1736,7 @@ function resetImageTargetEditor(): void {
     targetModelSelect.value = '';
   }
   syncTargetTextInputs(DEFAULT_TARGET_TEXT);
+  syncTargetAccessInputs();
   syncSelectionToInspector();
   renderTargetObjectList();
   syncTargetSaveMode();
@@ -1678,6 +1751,28 @@ function syncTargetSaveMode(): void {
   }
   if (newImageTargetButton) {
     newImageTargetButton.hidden = !editingTarget;
+  }
+}
+
+function readTargetAccess(): ImageTargetAccess {
+  const accessMode = targetAccessModeSelect && isImageTargetAccessMode(targetAccessModeSelect.value)
+    ? targetAccessModeSelect.value
+    : targetAccess.accessMode;
+  return normalizeImageTargetAccess({
+    accessMode,
+    allowedEmails: parseAllowedEmails(targetAccessEmailsInput?.value ?? ''),
+  });
+}
+
+function syncTargetAccessInputs(): void {
+  if (targetAccessModeSelect) {
+    targetAccessModeSelect.value = targetAccess.accessMode;
+  }
+  if (targetAccessEmailsInput) {
+    targetAccessEmailsInput.value = targetAccess.allowedEmails.join('\n');
+  }
+  if (targetAccessEmailsField) {
+    targetAccessEmailsField.hidden = targetAccess.accessMode !== 'specific_accounts';
   }
 }
 

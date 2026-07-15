@@ -172,6 +172,27 @@ export function renderAppShell(): string {
                     </select>
                   </label>
                 </div>
+                <div class="target-access-card">
+                  <div class="target-access-heading">
+                    <span class="eyebrow">Scan access</span>
+                    <small>Choose who can use this target's camera link.</small>
+                  </div>
+                  <label>
+                    <span>Permission</span>
+                    <select id="target-access-mode">
+                      <option value="owner_only" selected>Only me</option>
+                      <option value="any_signed_in">Any signed-in user</option>
+                      <option value="anyone_with_link">Anyone with the link</option>
+                      <option value="specific_accounts">Specific accounts</option>
+                    </select>
+                  </label>
+                  <label id="target-access-emails-field" hidden>
+                    <span>Account emails</span>
+                    <textarea id="target-access-emails" rows="3" placeholder="friend@example.com, team@example.com"></textarea>
+                    <small>Separate multiple account emails with commas or new lines.</small>
+                  </label>
+                  <p class="target-access-note">Shared accounts can scan this target. Only you can edit it.</p>
+                </div>
                 <div class="button-row target-save-strip">
                   <button id="save-image-target" class="primary" type="button">Save target</button>
                   <button id="new-image-target" type="button" hidden>New target</button>

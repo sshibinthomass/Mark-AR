@@ -7,11 +7,17 @@ import {
   normalizeTargetText,
   type TargetEditorObject,
 } from './targetEditorObjects';
+import { normalizeImageTargetAccess, type ImageTargetAccess } from './imageTargetAccess';
+
+type ExpectedTargetAccess = ImageTargetAccess & {
+  scanId?: string;
+};
 
 export function savedTargetAuthoringMismatch(
   expectedObjects: TargetEditorObject[],
   expectedGroups: TargetEditorGroup[],
   savedTarget: CloudImageTarget,
+  expectedAccess?: ExpectedTargetAccess,
 ): string | undefined {
   const objectMismatch = compareById(
     expectedObjects,
@@ -25,12 +31,36 @@ export function savedTargetAuthoringMismatch(
 
   const usedGroupIds = new Set(expectedObjects.flatMap((object) => object.groupId ? [object.groupId] : []));
   const usedExpectedGroups = expectedGroups.filter((group) => usedGroupIds.has(group.id));
-  return compareById(
+  const groupMismatch = compareById(
     usedExpectedGroups,
     savedTarget.groups,
     canonicalGroup,
     'group',
   );
+  if (groupMismatch) {
+    return groupMismatch;
+  }
+  if (!expectedAccess) {
+    return undefined;
+  }
+  if (!savedTarget.scanId) {
+    return 'The saved target did not return a scan link.';
+  }
+  if (expectedAccess.scanId && savedTarget.scanId !== expectedAccess.scanId) {
+    return 'The saved target changed the scan link.';
+  }
+  const expected = normalizeImageTargetAccess(expectedAccess);
+  const saved = normalizeImageTargetAccess({
+    accessMode: savedTarget.accessMode,
+    allowedEmails: savedTarget.allowedEmails,
+  }, savedTarget.visibility);
+  if (saved.accessMode !== expected.accessMode) {
+    return 'The saved target changed the access mode.';
+  }
+  if (JSON.stringify([...saved.allowedEmails].sort()) !== JSON.stringify([...expected.allowedEmails].sort())) {
+    return 'The saved target changed the account access list.';
+  }
+  return undefined;
 }
 
 function compareById<T extends { id: string }>(

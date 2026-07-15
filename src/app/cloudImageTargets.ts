@@ -489,9 +489,12 @@ async function parseImageTargetResponse(response: Response, fallback: string): P
 }
 
 export class ImageTargetRequestError extends Error {
-  constructor(message: string, readonly status: number) {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
     super(message);
     this.name = 'ImageTargetRequestError';
+    this.status = status;
   }
 }
 

@@ -24,6 +24,9 @@ const modelTarget: CloudImageTarget = {
     { kind: 'text', id: 'text-1', text: { value: 'Sale', language: 'english', font: 'studio-sans' }, placement },
   ],
   groups: [],
+  scanId: 'scan-target-model',
+  accessMode: 'owner_only',
+  allowedEmails: [],
 };
 
 const textTarget: CloudImageTarget = {
@@ -77,6 +80,32 @@ describe('saved target list', () => {
     });
 
     expect(container.querySelector('[data-edit-target="target-text"]')?.textContent).toContain('Hallo AR');
+  });
+
+  it('renders and copies the stable URL for exactly one saved target', () => {
+    const container = document.createElement('div');
+    const onCopyLink = vi.fn();
+
+    renderSavedTargetList(container, {
+      targets: [modelTarget, textTarget],
+      currentUrl: 'https://example.com/Mark-AR/#/targets',
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      onCopyLink,
+    });
+
+    const openScan = container.querySelector<HTMLAnchorElement>('[data-open-target-scan="target-model"]');
+    const copyLink = container.querySelector<HTMLButtonElement>('[data-copy-target-link="target-model"]');
+    expect(openScan?.getAttribute('href')).toBe('#/scan/scan-target-model');
+    expect(openScan?.textContent).toBe('Open scanner');
+    expect(copyLink?.textContent).toBe('Copy link');
+    expect(container.querySelector('[data-open-target-scan="target-text"]')).toBeNull();
+
+    copyLink?.click();
+    expect(onCopyLink).toHaveBeenCalledWith(
+      modelTarget,
+      'https://example.com/Mark-AR/#/scan/scan-target-model',
+    );
   });
 
   it('renders a directional empty state', () => {
