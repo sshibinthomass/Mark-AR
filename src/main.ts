@@ -315,6 +315,7 @@ async function startCurrentArSession(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to start AR';
     status.textContent = message;
+    startButton.textContent = 'Start camera';
   } finally {
     startButton.disabled = false;
   }
@@ -675,12 +676,18 @@ function activateRequestedRoute(requestedRoute: AppRoute): void {
 }
 
 function activateRequestedLocation(location: AppLocation): void {
+  const leavingScan = shell.dataset.activePage === 'scan' && location.route !== 'scan';
   activateRequestedRoute(location.route);
   if (location.route === 'scan' && location.scanId) {
     void openTargetSpecificScan(location.scanId);
     return;
   }
+  const hadTargetSpecificScan = Boolean(activeScanId);
   clearTargetSpecificScan();
+  if (leavingScan && !hadTargetSpecificScan) {
+    stopActiveArSession();
+    resetScanControls();
+  }
 }
 
 async function openTargetSpecificScan(scanId: string): Promise<void> {
@@ -716,6 +723,7 @@ async function openTargetSpecificScan(scanId: string): Promise<void> {
     if (error instanceof ImageTargetRequestError && error.status === 401) {
       authNavigation.rememberHref(hrefForTargetScan(scanId));
       status.textContent = 'Sign in to open this target.';
+      setAuthUiState({ ...authUiState, message: 'Sign in to open this target.' });
       if (window.location.hash !== hrefForRoute('account')) {
         window.location.hash = hrefForRoute('account');
       }
@@ -740,9 +748,17 @@ function clearTargetSpecificScan(): void {
   scanRequestVersion += 1;
   activeScanId = undefined;
   focusedScanTarget = undefined;
+  stopActiveArSession();
+  resetScanControls();
+}
+
+function stopActiveArSession(): void {
   session?.stop();
   session = undefined;
   stage.replaceChildren();
+}
+
+function resetScanControls(): void {
   startButton.textContent = 'Start camera';
   startButton.disabled = false;
   status.textContent = 'Camera access starts only after you choose Start camera.';

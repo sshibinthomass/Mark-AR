@@ -107,6 +107,19 @@ describe('target-specific scan route integration', () => {
     markerArMocks.startMarkerAR.mockResolvedValue({ stop: markerArMocks.sessionStop });
   });
 
+  it('stops a generic scanner session when navigating away from Scan', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    document.querySelector<HTMLButtonElement>('#start-ar')?.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+
+    window.location.hash = '#/';
+    await waitFor(() => markerArMocks.sessionStop.mock.calls.length === 1);
+
+    expect(document.querySelector('[data-app-shell]')?.getAttribute('data-active-page')).toBe('home');
+  });
+
   it('opens the camera with exactly the target assigned to the URL', async () => {
     cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
 
@@ -152,6 +165,19 @@ describe('target-specific scan route integration', () => {
     expect(document.querySelector<HTMLButtonElement>('#start-ar')?.disabled).toBe(true);
   });
 
+  it('leaves a manual Start camera retry when automatic startup is blocked', async () => {
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+    markerArMocks.startMarkerAR.mockRejectedValue(new Error('Camera permission was blocked'));
+
+    await import('../src/main');
+    await waitFor(() => document.querySelector('#ar-status')?.textContent === 'Camera permission was blocked');
+
+    expect(document.querySelector<HTMLButtonElement>('#start-ar')).toMatchObject({
+      disabled: false,
+      textContent: 'Start camera',
+    });
+  });
+
   it('remembers the exact scan URL across sign-in after a 401 response', async () => {
     cloudImageTargetMocks.getImageTargetForScan
       .mockRejectedValueOnce(new cloudImageTargetMocks.ImageTargetRequestError('Login required', 401))
@@ -167,6 +193,7 @@ describe('target-specific scan route integration', () => {
 
     await import('../src/main');
     await waitFor(() => window.location.hash === '#/account');
+    expect(document.querySelector('#worker-status')?.textContent).toBe('Sign in to open this target.');
 
     const email = document.querySelector<HTMLInputElement>('#worker-email');
     const password = document.querySelector<HTMLInputElement>('#worker-password');
