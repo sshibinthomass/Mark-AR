@@ -3,9 +3,16 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/style.css', 'utf8');
 
-function cssRule(selector: string): string {
+function cssRule(selector: string, source = css): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(css)?.groups?.body ?? '';
+  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+}
+
+function mediaSection(query: string): string {
+  const start = css.indexOf(`@media ${query}`);
+  if (start < 0) return '';
+  const nextMedia = css.indexOf('@media ', start + 1);
+  return css.slice(start, nextMedia < 0 ? css.length : nextMedia);
 }
 
 describe('floor placement styles', () => {
@@ -26,13 +33,17 @@ describe('floor placement styles', () => {
   });
 
   it('routes pointers through the overlay only to gestures and controls', () => {
+    const stageStack = cssRule('.scanner-stage-stack');
     const overlay = cssRule('.floor-ar-overlay');
     const gestureSurface = cssRule('.floor-ar-gesture-surface');
     const controls = cssRule('.floor-ar-controls');
     const scannerControls = cssRule('.scanner-controls');
 
+    expect(stageStack).toContain('position: relative');
+    expect(stageStack).not.toContain('position: absolute');
     expect(overlay).toContain('position: absolute');
-    expect(overlay).toContain('inset: 0 0 72px');
+    expect(overlay).toMatch(/(?:^|\n)\s*inset:\s*0\s*;/);
+    expect(overlay).not.toContain('72px');
     expect(overlay).toContain('z-index: 4');
     expect(overlay).toContain('pointer-events: none');
     expect(gestureSurface).toContain('position: absolute');
@@ -42,6 +53,17 @@ describe('floor placement styles', () => {
     expect(controls).toContain('pointer-events: auto');
     expect(scannerControls).toContain('position: relative');
     expect(scannerControls).toContain('z-index: 5');
+  });
+
+  it('keeps the taller mobile scanner controls outside the overlay containing block', () => {
+    const stageStack = cssRule('.scanner-stage-stack');
+    const overlay = cssRule('.floor-ar-overlay');
+    const mobileScannerControls = cssRule('.scanner-controls', mediaSection('(max-width: 620px)'));
+
+    expect(stageStack).toContain('position: relative');
+    expect(overlay).toMatch(/(?:^|\n)\s*inset:\s*0\s*;/);
+    expect(mobileScannerControls).toContain('flex-direction: column');
+    expect(mobileScannerControls).not.toContain('position: absolute');
   });
 
   it('keeps the control tray safe-area aware and responsive', () => {

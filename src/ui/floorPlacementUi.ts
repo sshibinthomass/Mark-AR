@@ -54,8 +54,8 @@ export function applyFloorPlacementUi(
   restart.hidden = !restartVisible;
   restart.disabled = !restartVisible;
 
-  message.textContent = statusMessage;
-  floorStatus.textContent = statusMessage;
+  message.textContent = floorVisible ? '' : statusMessage;
+  floorStatus.textContent = floorVisible ? statusMessage : '';
   root.dataset.arMode = floorVisible ? 'floor' : 'marker';
   root.setAttribute('aria-busy', String(state.state === 'preparing'));
 }

@@ -436,9 +436,13 @@ h1 {
   overflow: hidden;
 }
 
+.scanner-stage-stack {
+  position: relative;
+}
+
 .floor-ar-overlay {
   position: absolute;
-  inset: 0 0 72px;
+  inset: 0;
   z-index: 4;
   pointer-events: none;
 }

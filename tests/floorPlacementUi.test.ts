@@ -85,8 +85,8 @@ describe('applyFloorPlacementUi', () => {
     expect(rotation.disabled).toBe(!placed);
     expect(restart.hidden).toBe(!restartVisible);
     expect(restart.disabled).toBe(!restartVisible);
-    expect(floorMessage.textContent).toBe(message);
-    expect(floorStatus.textContent).toBe(message);
+    expect(floorMessage.textContent).toBe(floorVisible ? '' : message);
+    expect(floorStatus.textContent).toBe(floorVisible ? message : '');
     expect(markerStatus.textContent).toBe('Camera waiting');
     expect(root.dataset.arMode).toBe(floorVisible ? 'floor' : 'marker');
     expect(root.getAttribute('aria-busy')).toBe(String(state.state === 'preparing'));
