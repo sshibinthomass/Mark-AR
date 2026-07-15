@@ -2,12 +2,61 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createImageTarget,
   deleteImageTarget,
+  getImageTargetForScan,
   listImageTargets,
   updateImageTarget,
 } from '../src/app/cloudImageTargets';
 import { createLocalTextObject } from '../src/app/targetEditorObjects';
 
 describe('cloud image target client', () => {
+  it('loads exactly one scan target without auth and maps its access fields', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      id: 'target-1',
+      label: 'Product box',
+      image_url: 'https://worker.example/image-targets/images/target-1.jpg',
+      image_object_key: 'image-targets/images/target-1.jpg',
+      model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+      placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+      scan_id: 'scan-abc',
+      access_mode: 'anyone_with_link',
+      allowed_emails: [],
+    }), { status: 200 }));
+
+    const target = await getImageTargetForScan({
+      apiUrl: 'https://worker.example/generate-3d',
+      scanId: 'scan-abc',
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://worker.example/generate-3d/image-targets/scan/scan-abc',
+      { headers: {} },
+    );
+    expect(target).toMatchObject({
+      id: 'target-1',
+      scanId: 'scan-abc',
+      accessMode: 'anyone_with_link',
+      allowedEmails: [],
+    });
+  });
+
+  it('sends optional auth for focused scans and preserves response status on errors', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: 'Login required.' }), { status: 401 }));
+
+    const request = getImageTargetForScan({
+      apiUrl: 'https://worker.example/generate-3d',
+      scanId: 'scan owner',
+      authToken: 'token-123',
+      fetchImpl,
+    });
+
+    await expect(request).rejects.toMatchObject({ message: 'Login required.', status: 401 });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://worker.example/generate-3d/image-targets/scan/scan%20owner',
+      { headers: { Authorization: 'Bearer token-123' } },
+    );
+  });
+
   it('parses editable groups and resolves grouped objects while falling back for missing groups', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       targets: [{
@@ -357,6 +406,7 @@ describe('cloud image target client', () => {
       imageMimeType: 'image/jpeg',
       model: { id: 'generated-chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
       placement: { scale: 1.2, offsetX: 0.1, offsetY: -0.1, height: 0.2, rotationX: 10, rotationY: 20, rotationZ: 30 },
+      access: { accessMode: 'specific_accounts', allowedEmails: ['friend@example.com'] },
     });
 
     expect(fetchImpl).toHaveBeenCalledWith('https://worker.example/generate-3d/image-targets', {
@@ -379,6 +429,8 @@ describe('cloud image target client', () => {
             placement: { scale: 1.2, offset_x: 0.1, offset_y: -0.1, height: 0.2, rotation_x: 10, rotation_y: 20, rotation_z: 30 },
           },
         ],
+        access_mode: 'specific_accounts',
+        allowed_emails: ['friend@example.com'],
       }),
     });
     expect(target.id).toBe('target-1');

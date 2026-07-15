@@ -3,6 +3,9 @@ import {
   DEFAULT_APP_ROUTE,
   PAGE_ROUTES,
   hrefForRoute,
+  hrefForTargetScan,
+  absoluteTargetScanUrl,
+  locationFromHash,
   normalizeRoute,
   routeFromHash,
 } from '../src/ui/pageRoutes';
@@ -23,5 +26,16 @@ describe('page route helpers', () => {
     expect(routeFromHash('#/bad-route')).toBe('home');
     expect(hrefForRoute('scan')).toBe('#/scan');
     expect(hrefForRoute('targets')).toBe('#/targets');
+  });
+
+  it('reads and writes one target-specific scan location', () => {
+    expect(locationFromHash('#/scan/scan-abc')).toEqual({ route: 'scan', scanId: 'scan-abc' });
+    expect(locationFromHash('#/scan/scan%20abc')).toEqual({ route: 'scan', scanId: 'scan abc' });
+    expect(locationFromHash('#/scan/')).toEqual({ route: 'scan' });
+    expect(locationFromHash('#/targets/ignored')).toEqual({ route: 'targets' });
+    expect(hrefForTargetScan('scan abc')).toBe('#/scan/scan%20abc');
+    expect(absoluteTargetScanUrl('scan abc', 'https://example.com/Mark-AR/#/targets')).toBe(
+      'https://example.com/Mark-AR/#/scan/scan%20abc',
+    );
   });
 });

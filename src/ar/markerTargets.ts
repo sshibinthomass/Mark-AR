@@ -60,3 +60,10 @@ export function createRuntimeMarkerTargets({
 
   return [...builtInTargets, ...cloudRuntimeTargets, ...draftRuntimeTargets];
 }
+
+export function createSingleTargetRuntimeMarker(target: CloudImageTarget): RuntimeMarkerTarget[] {
+  return createRuntimeMarkerTargets({
+    builtInMarkers: [],
+    cloudTargets: [target],
+  });
+}

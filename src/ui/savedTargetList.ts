@@ -1,12 +1,15 @@
 import type { CloudImageTarget } from '../app/cloudImageTargets';
 import { isTextTargetObject } from '../app/targetEditorObjects';
 import { decorateDeleteIconButton } from './deleteIconButton';
+import { absoluteTargetScanUrl, hrefForTargetScan } from './pageRoutes';
 
 type SavedTargetListOptions = {
   targets: CloudImageTarget[];
   activeTargetId?: string;
   onEdit: (target: CloudImageTarget) => void;
   onDelete: (target: CloudImageTarget) => void | Promise<void>;
+  currentUrl?: string;
+  onCopyLink?: (target: CloudImageTarget, url: string) => void | Promise<void>;
 };
 
 export function renderSavedTargetList(
@@ -53,7 +56,38 @@ export function renderSavedTargetList(
     decorateDeleteIconButton(deleteButton, `Delete target ${target.label}`);
     deleteButton.addEventListener('click', () => void options.onDelete(target));
 
-    row.append(openButton, deleteButton);
+    const content = document.createElement('div');
+    content.className = 'saved-target-content';
+    content.append(openButton);
+    if (target.scanId) {
+      const scanHref = hrefForTargetScan(target.scanId);
+      const scanUrl = absoluteTargetScanUrl(
+        target.scanId,
+        options.currentUrl ?? window.location.href,
+      );
+      const links = document.createElement('div');
+      links.className = 'saved-target-links';
+      const urlLabel = document.createElement('code');
+      urlLabel.className = 'saved-target-url';
+      urlLabel.textContent = scanUrl;
+      urlLabel.title = scanUrl;
+      const actions = document.createElement('span');
+      actions.className = 'saved-target-link-actions';
+      const copyButton = document.createElement('button');
+      copyButton.type = 'button';
+      copyButton.dataset.copyTargetLink = target.id;
+      copyButton.textContent = 'Copy link';
+      copyButton.addEventListener('click', () => void options.onCopyLink?.(target, scanUrl));
+      const openLink = document.createElement('a');
+      openLink.dataset.openTargetScan = target.id;
+      openLink.href = scanHref;
+      openLink.textContent = 'Open scanner';
+      actions.append(copyButton, openLink);
+      links.append(urlLabel, actions);
+      content.append(links);
+    }
+
+    row.append(content, deleteButton);
     container.append(row);
   }
 }

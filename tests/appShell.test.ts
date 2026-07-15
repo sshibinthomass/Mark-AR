@@ -224,6 +224,17 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#reset-target-animation')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
     expect(container.querySelector('#save-image-target')).toBeTruthy();
+    const targetAccessMode = container.querySelector<HTMLSelectElement>('#target-access-mode');
+    expect(targetAccessMode).toBeTruthy();
+    expect(Array.from(targetAccessMode?.options ?? []).map((option) => [option.value, option.textContent])).toEqual([
+      ['owner_only', 'Only me'],
+      ['any_signed_in', 'Any signed-in user'],
+      ['anyone_with_link', 'Anyone with the link'],
+      ['specific_accounts', 'Specific accounts'],
+    ]);
+    expect(targetAccessMode?.value).toBe('owner_only');
+    expect(container.querySelector('#target-access-emails')).toBeTruthy();
+    expect(container.querySelector('#target-access-emails-field')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('#new-image-target')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')?.closest('[data-target-inspector-panel="target"]')).toBeTruthy();

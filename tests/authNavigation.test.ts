@@ -72,6 +72,26 @@ describe('AuthNavigation', () => {
 
     expect(navigation.takePending(signedIn)).toBeUndefined();
   });
+
+  it('restores an exact target scan hash after authentication', () => {
+    const navigation = new AuthNavigation();
+
+    navigation.rememberHref('#/scan/scan-abc');
+
+    expect(navigation.takePendingHref(signedOut)).toBeUndefined();
+    expect(navigation.takePendingHref(signedIn)).toBe('#/scan/scan-abc');
+    expect(navigation.takePendingHref(signedIn)).toBeUndefined();
+  });
+
+  it('cancels an exact pending scan when the user opens another non-account page', () => {
+    const navigation = new AuthNavigation();
+    const root = renderRouteFixture();
+
+    navigation.rememberHref('#/scan/scan-abc');
+    navigation.activate(root, 'scan', signedOut);
+
+    expect(navigation.takePendingHref(signedIn)).toBeUndefined();
+  });
 });
 
 function renderRouteFixture(): HTMLElement {

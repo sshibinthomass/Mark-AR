@@ -20,6 +20,9 @@ const textPlacement = composeGroupPlacement(groupPlacement, textLocalPlacement);
 
 const savedTarget: CloudImageTarget = {
   id: 'target-1',
+  scanId: 'scan-kitchen',
+  accessMode: 'specific_accounts',
+  allowedEmails: ['viewer@example.com'],
   label: 'Kitchen marker',
   imageUrl: 'https://worker.example/image-targets/images/kitchen.jpg',
   imageObjectKey: 'image-targets/images/kitchen.jpg',
@@ -158,6 +161,35 @@ describe('saved target editing integration', () => {
     }));
   });
 
+  it('loads, edits, and persists the saved target access policy', async () => {
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
+
+    document.querySelector<HTMLButtonElement>('[data-edit-target="target-1"]')?.click();
+    await waitFor(() => document.querySelector<HTMLSelectElement>('#target-access-mode')?.value === 'specific_accounts');
+
+    expect(document.querySelector<HTMLElement>('#target-access-emails-field')?.hidden).toBe(false);
+    expect(document.querySelector<HTMLTextAreaElement>('#target-access-emails')?.value).toBe('viewer@example.com');
+
+    const accessMode = document.querySelector<HTMLSelectElement>('#target-access-mode');
+    if (accessMode) {
+      accessMode.value = 'anyone_with_link';
+      accessMode.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    expect(document.querySelector<HTMLElement>('#target-access-emails-field')?.hidden).toBe(true);
+
+    document.querySelector<HTMLButtonElement>('#save-image-target')?.click();
+    await waitFor(() => cloudImageTargetMocks.updateImageTarget.mock.calls.length === 1);
+
+    expect(cloudImageTargetMocks.updateImageTarget).toHaveBeenCalledWith(expect.objectContaining({
+      targetId: 'target-1',
+      access: {
+        accessMode: 'anyone_with_link',
+        allowedEmails: [],
+      },
+    }));
+  });
+
   it('patches the active target without duplicating it and can reset to a new draft', async () => {
     await import('../src/main');
     await waitFor(() => Boolean(document.querySelector('[data-edit-target="target-1"]')));
@@ -170,6 +202,10 @@ describe('saved target editing integration', () => {
     expect(cloudImageTargetMocks.updateImageTarget).toHaveBeenCalledWith(expect.objectContaining({
       targetId: 'target-1',
       label: 'Kitchen marker',
+      access: {
+        accessMode: 'specific_accounts',
+        allowedEmails: ['viewer@example.com'],
+      },
       objects: expect.arrayContaining([
         expect.objectContaining({ id: 'chair-1' }),
         expect.objectContaining({ kind: 'text', id: 'text-1', text: expect.objectContaining({ value: 'Welcome' }) }),

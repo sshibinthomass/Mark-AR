@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { AR_MARKERS } from '../src/ar/markerCatalog';
-import { createRuntimeMarkerTargets } from '../src/ar/markerTargets';
+import { createRuntimeMarkerTargets, createSingleTargetRuntimeMarker } from '../src/ar/markerTargets';
 
 describe('marker target mapping', () => {
+  it('creates an isolated runtime list containing only the selected target at index zero', () => {
+    const targets = createSingleTargetRuntimeMarker({
+      id: 'isolated',
+      label: 'Isolated target',
+      imageUrl: 'https://worker.example/image-targets/images/isolated.jpg',
+      imageObjectKey: 'image-targets/images/isolated.jpg',
+      objects: [{
+        id: 'chair',
+        model: { id: 'chair', label: 'Chair', url: 'https://worker.example/chair.glb' },
+        placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12, rotationX: 0, rotationY: 0, rotationZ: 0 },
+      }],
+      groups: [],
+    });
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0]).toMatchObject({
+      marker: { id: 'cloud-isolated', label: 'Isolated target', targetIndex: 0 },
+    });
+  });
+
   it('combines built-in markers and cloud image targets with sequential target indices', () => {
     const targets = createRuntimeMarkerTargets({
       builtInMarkers: AR_MARKERS,

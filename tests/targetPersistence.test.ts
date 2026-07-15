@@ -71,6 +71,9 @@ const completeTarget: CloudImageTarget = {
   placement,
   objects: structuredClone(objects),
   groups: structuredClone(groups),
+  scanId: 'scan-target-1',
+  accessMode: 'specific_accounts',
+  allowedEmails: ['friend@example.com'],
 };
 
 describe('saved target authoring acknowledgement', () => {
@@ -78,7 +81,30 @@ describe('saved target authoring acknowledgement', () => {
     const normalizedTarget = structuredClone(completeTarget);
     normalizedTarget.objects[0].animation = { preset: 'none', tracks: [] };
 
-    expect(savedTargetAuthoringMismatch(objects, groups, normalizedTarget)).toBeUndefined();
+    expect(savedTargetAuthoringMismatch(objects, groups, normalizedTarget, {
+      scanId: 'scan-target-1',
+      accessMode: 'specific_accounts',
+      allowedEmails: ['friend@example.com'],
+    })).toBeUndefined();
+  });
+
+  it('rejects a changed scan id, access mode, or account allowlist', () => {
+    const expectedAccess = {
+      scanId: 'scan-target-1',
+      accessMode: 'specific_accounts' as const,
+      allowedEmails: ['friend@example.com'],
+    };
+    const changedScan = structuredClone(completeTarget);
+    changedScan.scanId = 'different-scan';
+    expect(savedTargetAuthoringMismatch(objects, groups, changedScan, expectedAccess)).toContain('scan link');
+
+    const changedMode = structuredClone(completeTarget);
+    changedMode.accessMode = 'anyone_with_link';
+    expect(savedTargetAuthoringMismatch(objects, groups, changedMode, expectedAccess)).toContain('access mode');
+
+    const changedAccounts = structuredClone(completeTarget);
+    changedAccounts.allowedEmails = ['other@example.com'];
+    expect(savedTargetAuthoringMismatch(objects, groups, changedAccounts, expectedAccess)).toContain('account access');
   });
 
   it('identifies a text object removed by a lossy Worker response', () => {

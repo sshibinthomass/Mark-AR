@@ -1655,6 +1655,78 @@ h1 {
   transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
 }
 
+.saved-target-content {
+  min-width: 0;
+}
+
+.target-access-card {
+  gap: 10px;
+  border: 1px solid rgba(13, 148, 136, 0.2);
+  border-radius: 10px;
+  padding: 12px;
+  background: linear-gradient(145deg, rgba(240, 253, 250, 0.92), rgba(255, 255, 255, 0.86));
+}
+
+.target-access-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.target-access-heading small,
+.target-access-note,
+#target-access-emails-field small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.target-access-note {
+  margin: 0;
+}
+
+.saved-target-links {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 7px 8px 8px;
+  background: rgba(240, 253, 250, 0.46);
+}
+
+.saved-target-url {
+  overflow: hidden;
+  color: var(--teal-dark);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-target-link-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.saved-target-link-actions button,
+.saved-target-link-actions a {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--teal-dark);
+  background: rgba(13, 148, 136, 0.1);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.saved-target-link-actions button:hover,
+.saved-target-link-actions a:hover {
+  background: rgba(13, 148, 136, 0.18);
+  transform: none;
+}
+
 .saved-target-row.is-active {
   border-color: rgba(15, 118, 110, 0.58);
   background: rgba(240, 253, 250, 0.96);

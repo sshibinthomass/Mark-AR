@@ -1,6 +1,6 @@
 import './style.css';
 import { startMarkerAR, type MarkerARSession } from './ar/mindarRuntime';
-import { createRuntimeMarkerTargets } from './ar/markerTargets';
+import { createRuntimeMarkerTargets, createSingleTargetRuntimeMarker } from './ar/markerTargets';
 import {
   DEFAULT_GENERATE_MODEL_API_URL,
   loadCloudflareModelOptions,
@@ -9,11 +9,21 @@ import {
 import {
   createImageTarget,
   deleteImageTarget,
+  getImageTargetForScan,
+  ImageTargetRequestError,
   listImageTargets,
   updateImageTarget,
   type CloudImageTarget,
   type CloudImageTargetObject,
 } from './app/cloudImageTargets';
+import {
+  DEFAULT_IMAGE_TARGET_ACCESS,
+  isImageTargetAccessMode,
+  normalizeImageTargetAccess,
+  parseAllowedEmails,
+  validateImageTargetAccess,
+  type ImageTargetAccess,
+} from './app/imageTargetAccess';
 import {
   DEFAULT_IMAGE_TARGET_ANIMATION,
   animationForPreset,
@@ -112,7 +122,13 @@ import { applyAuthFormMode, type AuthFormMode } from './ui/authFormMode';
 import { renderAppShell } from './ui/appShell';
 import { createAnimationTrackEditor } from './ui/animationTrackEditor';
 import { renderTargetModelRail } from './ui/modelRail';
-import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
+import {
+  hrefForRoute,
+  hrefForTargetScan,
+  locationFromHash,
+  type AppLocation,
+  type AppRoute,
+} from './ui/pageRoutes';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
 import { renderSavedTargetList } from './ui/savedTargetList';
@@ -138,6 +154,9 @@ const workerLogoutButton = queryRequired<HTMLButtonElement>('#worker-logout');
 const authModeButtons = shell.querySelectorAll<HTMLButtonElement>('[data-auth-mode]');
 const targetImageFile = document.querySelector<HTMLInputElement>('#target-image-file');
 const targetLabelInput = document.querySelector<HTMLInputElement>('#target-label');
+const targetAccessModeSelect = document.querySelector<HTMLSelectElement>('#target-access-mode');
+const targetAccessEmailsField = document.querySelector<HTMLElement>('#target-access-emails-field');
+const targetAccessEmailsInput = document.querySelector<HTMLTextAreaElement>('#target-access-emails');
 const targetModelSelect = document.querySelector<HTMLSelectElement>('#target-model-select');
 const targetPreviewStage = document.querySelector<HTMLElement>('#target-preview-stage');
 const targetModelRail = document.querySelector<HTMLElement>('#target-model-rail');
@@ -182,6 +201,9 @@ const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#re
 const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-status');
 const savedImageTargetList = document.querySelector<HTMLElement>('#saved-image-target-list');
 let session: MarkerARSession | undefined;
+let focusedScanTarget: CloudImageTarget | undefined;
+let activeScanId: string | undefined;
+let scanRequestVersion = 0;
 let authToken = loadWorkerAuthToken();
 let authUiState: AuthUiState = authToken
   ? { status: 'checking', message: 'Checking your saved session…' }
@@ -192,6 +214,8 @@ let cloudflareModels: CloudflareModelOption[] = [];
 let cloudImageTargets: CloudImageTarget[] = [];
 let targetImagePayload: ImageTargetImagePayload | undefined;
 let editingTarget: EditingTargetState | undefined;
+let editingTargetScanId: string | undefined;
+let targetAccess: ImageTargetAccess = { ...DEFAULT_IMAGE_TARGET_ACCESS };
 let targetPlacement: ImageTargetPlacement = DEFAULT_IMAGE_TARGET_PLACEMENT;
 let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
 let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
@@ -215,11 +239,11 @@ const animationTrackEditor = targetAnimationTracks
 
 applyAuthUi(shell, authUiState);
 applyAuthFormMode(shell, authFormMode);
-activateRequestedRoute(routeFromHash(window.location.hash));
+activateRequestedLocation(locationFromHash(window.location.hash));
 void initializeCloudflareControls();
 
 window.addEventListener('hashchange', () => {
-  activateRequestedRoute(routeFromHash(window.location.hash));
+  activateRequestedLocation(locationFromHash(window.location.hash));
 });
 
 shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link) => {
@@ -257,16 +281,22 @@ authModeButtons.forEach((button) => {
 });
 
 startButton.addEventListener('click', async () => {
+  await startCurrentArSession();
+});
+
+async function startCurrentArSession(): Promise<void> {
   startButton.disabled = true;
   status.textContent = 'Preparing marker targets';
   session?.stop();
   stage.replaceChildren();
 
   try {
-    const runtimeTargets = createRuntimeMarkerTargets({
-      cloudTargets: cloudImageTargets,
-      draftTarget: createCurrentDraftTarget(),
-    });
+    const runtimeTargets = focusedScanTarget
+      ? createSingleTargetRuntimeMarker(focusedScanTarget)
+      : createRuntimeMarkerTargets({
+          cloudTargets: cloudImageTargets,
+          draftTarget: createCurrentDraftTarget(),
+        });
     session = await startMarkerAR(stage, {
       targets: runtimeTargets,
       onCompileProgress: (percent) => {
@@ -276,17 +306,20 @@ startButton.addEventListener('click', async () => {
         status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
       },
       onReady: () => {
-        status.textContent = 'Camera active. Scan a saved cloud image target.';
+        status.textContent = focusedScanTarget
+          ? `Camera active. Scan ${focusedScanTarget.label}.`
+          : 'Camera active. Scan a saved cloud image target.';
       },
     });
-    startButton.textContent = 'Restart AR';
+    startButton.textContent = focusedScanTarget ? 'Restart camera' : 'Restart AR';
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to start AR';
     status.textContent = message;
+    startButton.textContent = 'Start camera';
   } finally {
     startButton.disabled = false;
   }
-});
+}
 
 workerLoginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -390,6 +423,24 @@ targetImageFile?.addEventListener('change', async () => {
     targetLabelInput.value = file.name.replace(/\.[^.]+$/, '');
   }
   await updateTargetPreview();
+});
+
+targetAccessModeSelect?.addEventListener('change', () => {
+  if (!isImageTargetAccessMode(targetAccessModeSelect.value)) {
+    return;
+  }
+  targetAccess = normalizeImageTargetAccess({
+    accessMode: targetAccessModeSelect.value,
+    allowedEmails: parseAllowedEmails(targetAccessEmailsInput?.value ?? ''),
+  });
+  syncTargetAccessInputs();
+});
+
+targetAccessEmailsInput?.addEventListener('input', () => {
+  targetAccess = normalizeImageTargetAccess({
+    accessMode: targetAccess.accessMode,
+    allowedEmails: parseAllowedEmails(targetAccessEmailsInput.value),
+  });
 });
 
 [targetScaleInput, targetOffsetXInput, targetOffsetYInput, targetHeightInput, targetRotationXInput, targetRotationYInput, targetRotationZInput].forEach((input) => {
@@ -533,6 +584,7 @@ refreshImageTargetsButton?.addEventListener('click', async () => {
 });
 
 renderTargetObjectList();
+syncTargetAccessInputs();
 syncTargetCameraInputs(targetCameraView);
 syncTargetTransformModeButtons(targetTransformMode);
 syncTargetAnimationInputs(targetAnimation);
@@ -623,7 +675,105 @@ function activateRequestedRoute(requestedRoute: AppRoute): void {
   }
 }
 
+function activateRequestedLocation(location: AppLocation): void {
+  const leavingScan = shell.dataset.activePage === 'scan' && location.route !== 'scan';
+  activateRequestedRoute(location.route);
+  if (location.route === 'scan' && location.scanId) {
+    void openTargetSpecificScan(location.scanId);
+    return;
+  }
+  const hadTargetSpecificScan = Boolean(activeScanId);
+  clearTargetSpecificScan();
+  if (leavingScan && !hadTargetSpecificScan) {
+    stopActiveArSession();
+    resetScanControls();
+  }
+}
+
+async function openTargetSpecificScan(scanId: string): Promise<void> {
+  const requestVersion = ++scanRequestVersion;
+  activeScanId = scanId;
+  session?.stop();
+  session = undefined;
+  focusedScanTarget = undefined;
+  stage.replaceChildren();
+  startButton.disabled = true;
+  startButton.textContent = 'Loading target';
+  status.textContent = 'Loading target...';
+
+  try {
+    const target = await getImageTargetForScan({
+      apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
+      scanId,
+      authToken,
+    });
+    if (requestVersion !== scanRequestVersion) {
+      return;
+    }
+    focusedScanTarget = target;
+    startButton.textContent = 'Restart camera';
+    startButton.disabled = false;
+    await startCurrentArSession();
+  } catch (error) {
+    if (requestVersion !== scanRequestVersion) {
+      return;
+    }
+    startButton.textContent = 'Start camera';
+    startButton.disabled = true;
+    if (error instanceof ImageTargetRequestError && error.status === 401) {
+      authNavigation.rememberHref(hrefForTargetScan(scanId));
+      status.textContent = 'Sign in to open this target.';
+      setAuthUiState({ ...authUiState, message: 'Sign in to open this target.' });
+      if (window.location.hash !== hrefForRoute('account')) {
+        window.location.hash = hrefForRoute('account');
+      }
+      return;
+    }
+    if (error instanceof ImageTargetRequestError && error.status === 403) {
+      status.textContent = "You don't have access to this target.";
+      return;
+    }
+    if (error instanceof ImageTargetRequestError && error.status === 404) {
+      status.textContent = 'Target not found.';
+      return;
+    }
+    status.textContent = errorMessage(error, 'Unable to load target.');
+  }
+}
+
+function clearTargetSpecificScan(): void {
+  if (!activeScanId) {
+    return;
+  }
+  scanRequestVersion += 1;
+  activeScanId = undefined;
+  focusedScanTarget = undefined;
+  stopActiveArSession();
+  resetScanControls();
+}
+
+function stopActiveArSession(): void {
+  session?.stop();
+  session = undefined;
+  stage.replaceChildren();
+}
+
+function resetScanControls(): void {
+  startButton.textContent = 'Start camera';
+  startButton.disabled = false;
+  status.textContent = 'Camera access starts only after you choose Start camera.';
+}
+
 function restorePendingProtectedRoute(): void {
+  const href = authNavigation.takePendingHref(authUiState);
+  if (href) {
+    if (window.location.hash === href) {
+      activateRequestedLocation(locationFromHash(href));
+      return;
+    }
+    window.location.hash = href;
+    return;
+  }
   const route = authNavigation.takePending(authUiState);
   if (!route) {
     return;
@@ -1480,6 +1630,20 @@ async function saveCurrentImageTarget(): Promise<void> {
   const groups = targetGroups.filter((group) => targetObjects.some((object) => (
     object.groupId === group.id && saveableObjectIds.has(object.id)
   )));
+  const access = readTargetAccess();
+  const ownerEmail = authUiState.status === 'signed-in' ? authUiState.email : undefined;
+  const accessError = validateImageTargetAccess(access, ownerEmail);
+  if (accessError) {
+    updateImageTargetStatus(accessError, true);
+    return;
+  }
+  const normalizedOwnerEmail = ownerEmail?.trim().toLowerCase();
+  const accessToSave = normalizeImageTargetAccess({
+    ...access,
+    allowedEmails: access.allowedEmails.filter((email) => email !== normalizedOwnerEmail),
+  });
+  targetAccess = accessToSave;
+  syncTargetAccessInputs();
   updateImageTargetStatus('Saving image target...', false);
 
   try {
@@ -1494,6 +1658,7 @@ async function saveCurrentImageTarget(): Promise<void> {
         label,
         objects,
         groups,
+        access: accessToSave,
         ...(targetImagePayload ?? {}),
       });
     } else {
@@ -1509,9 +1674,11 @@ async function saveCurrentImageTarget(): Promise<void> {
         imageMimeType: imagePayload.imageMimeType,
         objects,
         groups,
+        access: accessToSave,
       });
     }
-    const directMismatch = savedTargetAuthoringMismatch(objects, groups, savedTarget);
+    const expectedAccess = { ...accessToSave, ...(editingTargetScanId ? { scanId: editingTargetScanId } : {}) };
+    const directMismatch = savedTargetAuthoringMismatch(objects, groups, savedTarget, expectedAccess);
     if (directMismatch) {
       throw new Error(`${directMismatch} Your editor changes were kept.`);
     }
@@ -1533,7 +1700,10 @@ async function saveCurrentImageTarget(): Promise<void> {
     if (!refreshedTarget) {
       throw new Error(`The saved-target refresh did not return target ${savedTarget.id}. Your editor changes were kept.`);
     }
-    const refreshedMismatch = savedTargetAuthoringMismatch(objects, groups, refreshedTarget);
+    const refreshedMismatch = savedTargetAuthoringMismatch(objects, groups, refreshedTarget, {
+      ...accessToSave,
+      scanId: savedTarget.scanId,
+    });
     if (refreshedMismatch) {
       throw new Error(`${refreshedMismatch} Your editor changes were kept.`);
     }
@@ -1598,6 +1768,18 @@ function renderSavedImageTargets(): void {
   renderSavedTargetList(savedImageTargetList, {
     targets: cloudImageTargets,
     activeTargetId: editingTarget?.targetId,
+    currentUrl: window.location.href,
+    onCopyLink: async (_target, scanUrl) => {
+      try {
+        if (!navigator.clipboard?.writeText) {
+          throw new Error('Clipboard access is unavailable in this browser.');
+        }
+        await navigator.clipboard.writeText(scanUrl);
+        updateImageTargetStatus('Scan link copied.', false);
+      } catch (error) {
+        updateImageTargetStatus(errorMessage(error, 'Unable to copy scan link'), true);
+      }
+    },
     onEdit: (target) => {
       void loadSavedImageTarget(target);
     },
@@ -1622,6 +1804,11 @@ function renderSavedImageTargets(): void {
 async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
   const session = createEditingTargetSession(target);
   editingTarget = { targetId: session.targetId, imageUrl: session.imageUrl };
+  editingTargetScanId = target.scanId;
+  targetAccess = normalizeImageTargetAccess({
+    accessMode: target.accessMode,
+    allowedEmails: target.allowedEmails,
+  }, target.visibility);
   targetImagePayload = undefined;
   if (targetImageFile) {
     targetImageFile.value = '';
@@ -1632,6 +1819,7 @@ async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
   targetObjects = session.objects;
   targetGroups = session.groups;
   targetSelection = session.selection;
+  syncTargetAccessInputs();
 
   const firstModel = targetObjects.find(isModelTargetObject);
   if (targetModelSelect) {
@@ -1647,6 +1835,8 @@ async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
 
 function resetImageTargetEditor(): void {
   editingTarget = undefined;
+  editingTargetScanId = undefined;
+  targetAccess = { ...DEFAULT_IMAGE_TARGET_ACCESS };
   targetImagePayload = undefined;
   targetObjects = [];
   targetGroups = [];
@@ -1664,6 +1854,7 @@ function resetImageTargetEditor(): void {
     targetModelSelect.value = '';
   }
   syncTargetTextInputs(DEFAULT_TARGET_TEXT);
+  syncTargetAccessInputs();
   syncSelectionToInspector();
   renderTargetObjectList();
   syncTargetSaveMode();
@@ -1678,6 +1869,28 @@ function syncTargetSaveMode(): void {
   }
   if (newImageTargetButton) {
     newImageTargetButton.hidden = !editingTarget;
+  }
+}
+
+function readTargetAccess(): ImageTargetAccess {
+  const accessMode = targetAccessModeSelect && isImageTargetAccessMode(targetAccessModeSelect.value)
+    ? targetAccessModeSelect.value
+    : targetAccess.accessMode;
+  return normalizeImageTargetAccess({
+    accessMode,
+    allowedEmails: parseAllowedEmails(targetAccessEmailsInput?.value ?? ''),
+  });
+}
+
+function syncTargetAccessInputs(): void {
+  if (targetAccessModeSelect) {
+    targetAccessModeSelect.value = targetAccess.accessMode;
+  }
+  if (targetAccessEmailsInput) {
+    targetAccessEmailsInput.value = targetAccess.allowedEmails.join('\n');
+  }
+  if (targetAccessEmailsField) {
+    targetAccessEmailsField.hidden = targetAccess.accessMode !== 'specific_accounts';
   }
 }
 
