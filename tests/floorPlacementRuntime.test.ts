@@ -311,6 +311,45 @@ describe('prepareFloorPlacement', () => {
     );
   });
 
+  it('ends a resolved waiting session immediately when stop invalidates it', async () => {
+    const firstEnd = deferred<void>();
+    const secondResolution = deferred<XRSession>();
+    const firstSession = fakeXRSession();
+    const secondSession = fakeXRSession();
+    const harness = createHarness({
+      sessionPromises: [Promise.resolve(firstSession.session), secondResolution.promise],
+      targetScenes: [fakeTargetScene()],
+    });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    await controller.launch();
+    firstSession.end.mockReturnValueOnce(firstEnd.promise);
+
+    const secondLaunch = controller.launch();
+    expect(firstSession.end).toHaveBeenCalledOnce();
+
+    secondResolution.resolve(secondSession.session);
+    await flushPromises();
+
+    const stopPromise = controller.stop();
+
+    expect(secondSession.end).toHaveBeenCalledOnce();
+    expect(harness.renderer.xr.setSession).toHaveBeenCalledTimes(1);
+    expect(harness.renderer.xr.setSession).toHaveBeenCalledWith(firstSession.session);
+    expect(harness.hooks.onSessionStart).toHaveBeenCalledOnce();
+    expect(harness.createTargetSceneObject).toHaveBeenCalledOnce();
+
+    firstEnd.resolve();
+    await stopPromise;
+    await secondLaunch;
+
+    expect(secondSession.end).toHaveBeenCalledOnce();
+    expect(harness.renderer.xr.setSession).toHaveBeenCalledTimes(1);
+    expect(harness.hooks.onSessionStart).toHaveBeenCalledOnce();
+    expect(harness.createTargetSceneObject).toHaveBeenCalledOnce();
+  });
+
   it('ends a session once when stop wins during renderer session setup', async () => {
     const rendererSessionReady = deferred<void>();
     const harness = createHarness();
