@@ -7,6 +7,8 @@ import {
   Vector3,
   type BufferAttribute,
   type Material,
+  type Object3D,
+  type Texture,
 } from 'three';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { Font, FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
@@ -22,7 +24,12 @@ import helvetikerFontJson from 'three/examples/fonts/helvetiker_regular.typeface
 import optimerBoldFontJson from 'three/examples/fonts/optimer_bold.typeface.json?raw';
 import optimerFontJson from 'three/examples/fonts/optimer_regular.typeface.json?raw';
 import studioSerifFontJson from 'three/examples/fonts/gentilis_regular.typeface.json?raw';
-import { normalizeTargetText, type TargetTextContent, type TargetTextFont } from '../app/targetEditorObjects';
+import {
+  normalizeTargetText,
+  type LocalTextTargetObject,
+  type TargetTextContent,
+  type TargetTextFont,
+} from '../app/targetEditorObjects';
 
 type TextObjectOptions = {
   loadFont?: (font: TargetTextFont) => Promise<Font>;
@@ -49,7 +56,20 @@ const bundledFontJson: Partial<Record<TargetTextFont, string>> = {
 
 const loadedFonts = new Map<TargetTextFont, Promise<Font>>();
 
+export type PreparedTextObject3D = {
+  group: Group;
+  ready: Promise<void>;
+  dispose(): void;
+};
+
 export function createTextObject3D(text: TargetTextContent, options: TextObjectOptions = {}): Group {
+  return prepareTextObject3D(text, options).group;
+}
+
+export function prepareTextObject3D(
+  text: LocalTextTargetObject['text'],
+  options: TextObjectOptions = {},
+): PreparedTextObject3D {
   const normalized = normalizeTargetText(text);
   const group = new Group();
   group.name = 'local-text-3d-object';
@@ -69,15 +89,33 @@ export function createTextObject3D(text: TargetTextContent, options: TextObjectO
     gloss: normalized.gloss,
   };
 
-  void buildTextMesh(group, normalized, options.loadFont ?? loadTextFont);
-  return group;
+  let disposed = false;
+  const ready = buildTextMesh(normalized, options.loadFont ?? loadTextFont).then((mesh) => {
+    if (disposed) {
+      disposeObjectTree(mesh);
+      return;
+    }
+    group.add(mesh);
+  });
+
+  return {
+    group,
+    ready,
+    dispose() {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      disposeObjectTree(group);
+      group.clear();
+    },
+  };
 }
 
 async function buildTextMesh(
-  group: Group,
   text: TargetTextContent,
   loadFont: (font: TargetTextFont) => Promise<Font>,
-): Promise<void> {
+): Promise<Mesh> {
   let font: Font;
   try {
     font = await loadFont(text.font);
@@ -86,10 +124,42 @@ async function buildTextMesh(
   }
 
   try {
-    group.add(createExtrudedTextMesh(renderableText(text.value), font, text));
+    return createExtrudedTextMesh(renderableText(text.value), font, text);
   } catch {
-    group.add(createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans'), text));
+    return createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans'), text);
   }
+}
+
+function disposeObjectTree(root: Object3D): void {
+  const geometries = new Set<Mesh['geometry']>();
+  const materials = new Set<Material>();
+  const textures = new Set<Texture>();
+
+  root.traverse((object) => {
+    const mesh = object as Mesh;
+    if (!mesh.isMesh) {
+      return;
+    }
+    if (!geometries.has(mesh.geometry)) {
+      geometries.add(mesh.geometry);
+      mesh.geometry.dispose();
+    }
+    const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of meshMaterials) {
+      if (materials.has(material)) {
+        continue;
+      }
+      materials.add(material);
+      for (const value of Object.values(material)) {
+        const texture = value as Texture | null;
+        if (texture?.isTexture && !textures.has(texture)) {
+          textures.add(texture);
+          texture.dispose();
+        }
+      }
+      material.dispose();
+    }
+  });
 }
 
 function createExtrudedTextMesh(value: string, font: Font, text: TargetTextContent): Mesh {

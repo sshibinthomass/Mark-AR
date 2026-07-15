@@ -1,9 +1,9 @@
 import { Mesh, MeshStandardMaterial, type Group } from 'three';
 import { FontLoader, type Font } from 'three/examples/jsm/loaders/FontLoader.js';
 import testFontJson from 'three/examples/fonts/helvetiker_regular.typeface.json?raw';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TEXT_FONT_OPTIONS, type TargetTextContent } from '../src/app/targetEditorObjects';
-import { createTextObject3D } from '../src/scene/textObject3d';
+import { createTextObject3D, prepareTextObject3D } from '../src/scene/textObject3d';
 
 const testFont = new FontLoader().parse(JSON.parse(testFontJson)) as Font;
 
@@ -69,6 +69,55 @@ describe('createTextObject3D', () => {
     expect(geometryOptions.depth).toBeCloseTo(0.11);
     expect(geometryOptions.bevelEnabled).toBe(true);
     expect(geometryOptions.bevelSize).toBeCloseTo(0.012);
+  });
+
+  it('exposes readiness for asynchronously prepared text geometry', async () => {
+    let resolveFont!: (font: Font) => void;
+    const prepared = prepareTextObject3D(
+      { value: 'Prepared', language: 'english', font: 'studio-sans' },
+      { loadFont: () => new Promise<Font>((resolve) => { resolveFont = resolve; }) },
+    );
+
+    expect(collectMeshes(prepared.group)).toHaveLength(0);
+    resolveFont(testFont);
+    await prepared.ready;
+
+    expect(collectMeshes(prepared.group).map((mesh) => mesh.geometry.type)).toContain('TextGeometry');
+  });
+
+  it('disposes prepared text geometry and materials exactly once', async () => {
+    const prepared = prepareTextObject3D(
+      { value: 'Disposable', language: 'english', font: 'studio-sans' },
+      { loadFont: async () => testFont },
+    );
+    await prepared.ready;
+    const mesh = collectMeshes(prepared.group)[0];
+    const geometryDispose = vi.spyOn(mesh.geometry, 'dispose');
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const materialDisposals = materials.map((material) => vi.spyOn(material, 'dispose'));
+
+    prepared.dispose();
+    prepared.dispose();
+
+    expect(geometryDispose).toHaveBeenCalledTimes(1);
+    for (const materialDispose of materialDisposals) {
+      expect(materialDispose).toHaveBeenCalledTimes(1);
+    }
+    expect(prepared.group.children).toHaveLength(0);
+  });
+
+  it('prevents text geometry from attaching after disposal', async () => {
+    let resolveFont!: (font: Font) => void;
+    const prepared = prepareTextObject3D(
+      { value: 'Too late', language: 'english', font: 'studio-sans' },
+      { loadFont: () => new Promise<Font>((resolve) => { resolveFont = resolve; }) },
+    );
+
+    prepared.dispose();
+    resolveFont(testFont);
+    await prepared.ready;
+
+    expect(collectMeshes(prepared.group)).toHaveLength(0);
   });
 });
 
