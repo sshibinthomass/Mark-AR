@@ -139,12 +139,11 @@ vi.mock('../src/scene/ImageTargetPreview', () => ({
 describe('target-specific scan route integration', () => {
   let hashChangeListeners: EventListener[] = [];
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.resetModules();
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
     window.history.replaceState(null, '', '#/scan/scan-one');
-    await new Promise((resolve) => setTimeout(resolve, 0));
     authMocks.loadWorkerAuthToken.mockReset();
     authMocks.loadWorkerAuthToken.mockReturnValue(null);
     authMocks.getCurrentWebArUser.mockReset();
@@ -187,11 +186,13 @@ describe('target-specific scan route integration', () => {
     }) as typeof window.addEventListener);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const listener of hashChangeListeners) {
       window.removeEventListener('hashchange', listener);
     }
+    window.history.replaceState(null, '', '#/scan/scan-one');
     vi.restoreAllMocks();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
   it('stops a generic scanner session when navigating away from Scan', async () => {
@@ -348,7 +349,39 @@ describe('target-specific scan route integration', () => {
     expect(rotation.value).toBe('0');
 
     floorRuntimeMocks.hooks?.onStatus('Floor found. Tap Place.');
-    expect(required('#floor-ar-status').textContent).toBe('Floor found. Tap Place.');
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Only this marker placed on the floor.',
+    );
+  });
+
+  it('keeps the placed state when floor readiness later becomes false', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onPlacementReady(true);
+    floorRuntimeMocks.hooks?.onPlaced();
+
+    floorRuntimeMocks.hooks?.onPlacementReady(false);
+
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Only this marker placed on the floor.',
+    );
+    expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
+    expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
+  });
+
+  it('keeps the placed state when floor readiness later remains true', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onPlacementReady(true);
+    floorRuntimeMocks.hooks?.onPlaced();
+
+    floorRuntimeMocks.hooks?.onPlacementReady(true);
+
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Only this marker placed on the floor.',
+    );
+    expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
+    expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
   });
 
   it('stops floor AR and restarts MindAR with the same focused target when Scan image is clicked', async () => {
@@ -365,6 +398,25 @@ describe('target-specific scan route integration', () => {
     expect(restartedTargets[0].marker.imagePath).toBe(scanTarget.imageUrl);
     expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Place on floor');
     expect(required('#floor-ar-message').textContent).toBe('Floor placement is ready.');
+  });
+
+  it('ignores a re-entrant Scan image click while floor stop is pending', async () => {
+    const floorStop = deferred<void>();
+    floorRuntimeMocks.stop.mockReturnValueOnce(floorStop.promise);
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+
+    expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
+    expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(1);
+    expect(markerArMocks.startMarkerAR).toHaveBeenCalledTimes(1);
+
+    floorStop.resolve();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
+    expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
+    expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(1);
   });
 
   it('leaves explicit floor recovery controls after a native session end without auto-starting marker AR', async () => {

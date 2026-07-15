@@ -227,6 +227,9 @@ let floorController: FloorPlacementController | undefined;
 let floorControllerRequestVersion = 0;
 let floorLaunchVersion = 0;
 let floorUiState: FloorPlacementUiState = { state: 'hidden' };
+let floorScenePlaced = false;
+let returningToMarker = false;
+let returnToMarkerVersion = 0;
 let authToken = loadWorkerAuthToken();
 let authUiState: AuthUiState = authToken
   ? { status: 'checking', message: 'Checking your saved session…' }
@@ -309,6 +312,9 @@ startButton.addEventListener('click', async () => {
 });
 
 floorToggle.addEventListener('click', () => {
+  if (returningToMarker) {
+    return;
+  }
   if (activeSharedLinkMode === 'floor') {
     void returnToFocusedMarkerScan();
     return;
@@ -329,14 +335,14 @@ floorToggle.addEventListener('click', () => {
 });
 
 floorPlace.addEventListener('click', () => {
-  if (activeSharedLinkMode !== 'floor') {
+  if (returningToMarker || activeSharedLinkMode !== 'floor') {
     return;
   }
   floorController?.place();
 });
 
 floorRotation.addEventListener('input', () => {
-  if (activeSharedLinkMode !== 'floor' || !floorController) {
+  if (returningToMarker || activeSharedLinkMode !== 'floor' || !floorController) {
     return;
   }
   const degrees = Number(floorRotation.value);
@@ -346,7 +352,7 @@ floorRotation.addEventListener('input', () => {
 });
 
 floorReset.addEventListener('click', () => {
-  if (activeSharedLinkMode !== 'floor' || !floorController) {
+  if (returningToMarker || activeSharedLinkMode !== 'floor' || !floorController) {
     return;
   }
   floorController.reset();
@@ -354,7 +360,7 @@ floorReset.addEventListener('click', () => {
 });
 
 floorRestart.addEventListener('click', () => {
-  if (activeSharedLinkMode !== 'floor' || !floorController) {
+  if (returningToMarker || activeSharedLinkMode !== 'floor' || !floorController) {
     return;
   }
   setFloorPlacementUi({
@@ -897,6 +903,8 @@ async function prepareFocusedFloorPlacement(
           if (!isCurrentFloorHook()) {
             return;
           }
+          resetReturningToMarker();
+          floorScenePlaced = false;
           setFloorPlacementUi({
             state: 'floor-scanning',
             message: 'Move your phone until the floor ring appears.',
@@ -906,6 +914,8 @@ async function prepareFocusedFloorPlacement(
           if (!isCurrentFloorHook()) {
             return;
           }
+          resetReturningToMarker();
+          floorScenePlaced = false;
           setFloorPlacementUi({
             state: 'floor-ended',
             message: 'Floor AR ended. Scan the image or place it again.',
@@ -921,6 +931,9 @@ async function prepareFocusedFloorPlacement(
           if (!isCurrentFloorHook()) {
             return;
           }
+          if (floorScenePlaced) {
+            return;
+          }
           setFloorPlacementUi(ready
             ? { state: 'floor-ready', message: 'Floor found. Tap Place.' }
             : {
@@ -932,6 +945,7 @@ async function prepareFocusedFloorPlacement(
           if (!isCurrentFloorHook()) {
             return;
           }
+          floorScenePlaced = true;
           setFloorPlacementUi({
             state: 'floor-placed',
             message: `${target.label} placed on the floor.`,
@@ -955,6 +969,8 @@ async function prepareFocusedFloorPlacement(
 
     floorController = preparedController;
     floorControllerRequestVersion = requestVersion;
+    resetReturningToMarker();
+    floorScenePlaced = false;
     floorRotation.value = '0';
     if (activeSharedLinkMode === 'marker') {
       setFloorPlacementUi({ state: 'marker-ready', message: 'Floor placement is ready.' });
@@ -972,21 +988,33 @@ async function prepareFocusedFloorPlacement(
 
 function applyFocusedFloorStatus(message: string): void {
   if (message === 'Move your phone until the floor ring appears.') {
+    if (floorScenePlaced) {
+      return;
+    }
     setFloorPlacementUi({ state: 'floor-scanning', message });
     return;
   }
   if (message === 'Floor found. Tap Place.') {
+    if (floorScenePlaced) {
+      return;
+    }
     setFloorPlacementUi({ state: 'floor-ready', message });
     return;
   }
   if (message === 'Floor AR ended. Scan the image or place it again.') {
+    resetReturningToMarker();
+    floorScenePlaced = false;
     setFloorPlacementUi({ state: 'floor-ended', message });
     return;
   }
+  resetReturningToMarker();
+  floorScenePlaced = false;
   setFloorPlacementUi({ state: 'floor-error', message });
 }
 
 function launchFocusedFloorPlacement(controller: FloorPlacementController): void {
+  resetReturningToMarker();
+  floorScenePlaced = false;
   const requestVersion = floorControllerRequestVersion;
   const launchVersion = ++floorLaunchVersion;
   try {
@@ -1001,6 +1029,8 @@ function launchFocusedFloorPlacement(controller: FloorPlacementController): void
         return;
       }
       if (floorUiState.state !== 'floor-error') {
+        resetReturningToMarker();
+        floorScenePlaced = false;
         setFloorPlacementUi({
           state: 'floor-error',
           message: errorMessage(error, 'Floor AR could not start.'),
@@ -1014,6 +1044,8 @@ function launchFocusedFloorPlacement(controller: FloorPlacementController): void
       && floorController === controller
       && requestVersion === scanRequestVersion
     ) {
+      resetReturningToMarker();
+      floorScenePlaced = false;
       setFloorPlacementUi({
         state: 'floor-error',
         message: errorMessage(error, 'Floor AR could not start.'),
@@ -1023,6 +1055,9 @@ function launchFocusedFloorPlacement(controller: FloorPlacementController): void
 }
 
 async function returnToFocusedMarkerScan(): Promise<void> {
+  if (returningToMarker) {
+    return;
+  }
   const controller = floorController;
   const target = focusedScanTarget;
   const requestVersion = floorControllerRequestVersion;
@@ -1030,13 +1065,20 @@ async function returnToFocusedMarkerScan(): Promise<void> {
     return;
   }
 
+  const returnVersion = ++returnToMarkerVersion;
+  returningToMarker = true;
   activeSharedLinkMode = 'marker';
   floorLaunchVersion += 1;
+  floorScenePlaced = false;
   try {
     await controller.stop();
   } catch {
     // Marker recovery remains available even if the browser already ended floor AR.
   }
+  if (returnVersion !== returnToMarkerVersion) {
+    return;
+  }
+  returningToMarker = false;
   if (
     activeSharedLinkMode !== 'marker'
     || floorController !== controller
@@ -1046,6 +1088,7 @@ async function returnToFocusedMarkerScan(): Promise<void> {
     return;
   }
 
+  floorScenePlaced = false;
   setFloorPlacementUi({ state: 'marker-ready', message: 'Floor placement is ready.' });
   await startCurrentArSession();
 }
@@ -1053,9 +1096,11 @@ async function returnToFocusedMarkerScan(): Promise<void> {
 function disposeFocusedFloorPlacement(): void {
   activeSharedLinkMode = 'marker';
   floorLaunchVersion += 1;
+  resetReturningToMarker();
   const controller = floorController;
   floorController = undefined;
   floorControllerRequestVersion = 0;
+  floorScenePlaced = false;
   if (controller) {
     try {
       void controller.stop().catch(() => undefined);
@@ -1072,6 +1117,11 @@ function invalidateMarkerStart(): void {
   markerStartVersion += 1;
   markerStartAbort?.abort();
   markerStartAbort = undefined;
+}
+
+function resetReturningToMarker(): void {
+  returnToMarkerVersion += 1;
+  returningToMarker = false;
 }
 
 function isAbortError(error: unknown): boolean {
