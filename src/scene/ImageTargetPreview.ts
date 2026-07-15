@@ -24,7 +24,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
-import { evaluateAnimationFrame, normalizeAnimation } from '../app/imageTargetAnimation';
+import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
 import {
@@ -52,6 +52,7 @@ import {
   type PreviewCameraView,
 } from './previewCamera';
 import { createTextObject3D } from './textObject3d';
+import { applyTargetAnimation, applyTargetPlacement } from './targetObjectTransform';
 
 export { DEFAULT_PREVIEW_CAMERA_VIEW, type PreviewCameraView } from './previewCamera';
 
@@ -278,7 +279,7 @@ export class ImageTargetPreview {
       this.groupRoots.set(group.id, root);
       this.groupPlacements.set(group.id, normalizePlacement(group.placement));
       this.groupAnimations.set(group.id, normalizeAnimation(group.animation));
-      this.applyPlacementToRoot(root, group.placement);
+      applyTargetPlacement(root, group.placement);
       this.modelRoot.add(root);
     }
 
@@ -806,7 +807,7 @@ export class ImageTargetPreview {
       return;
     }
 
-    this.applyPlacementToRoot(loadedModel, placement);
+    applyTargetPlacement(loadedModel, placement);
   }
 
   private applyObjectAnimations(): void {
@@ -814,7 +815,7 @@ export class ImageTargetPreview {
       const animation = this.groupAnimations.get(groupId);
       const placement = this.groupPlacements.get(groupId);
       if (animation && placement) {
-        this.applyAnimatedPlacement(root, placement, animation);
+        applyTargetAnimation(root, placement, animation, this.elapsedSeconds);
       }
     }
     for (const [objectId, loadedModel] of this.loadedModels) {
@@ -824,37 +825,8 @@ export class ImageTargetPreview {
         continue;
       }
 
-      this.applyAnimatedPlacement(loadedModel, placement, animation);
+      applyTargetAnimation(loadedModel, placement, animation, this.elapsedSeconds);
     }
-  }
-
-  private applyPlacementToRoot(root: Object3D, placement: ImageTargetPlacement): void {
-    root.position.set(placement.offsetX, placement.height, placement.offsetY);
-    root.scale.setScalar(placement.scale);
-    root.rotation.set(
-      degreesToRadians(placement.rotationX),
-      degreesToRadians(placement.rotationY),
-      degreesToRadians(placement.rotationZ),
-    );
-  }
-
-  private applyAnimatedPlacement(
-    root: Object3D,
-    placement: ImageTargetPlacement,
-    animation: ImageTargetAnimation,
-  ): void {
-    const frame = evaluateAnimationFrame(animation, this.elapsedSeconds);
-    root.position.set(
-      placement.offsetX + frame.position.x,
-      placement.height + frame.position.y,
-      placement.offsetY + frame.position.z,
-    );
-    root.scale.setScalar(placement.scale * frame.scaleMultiplier);
-    root.rotation.set(
-      degreesToRadians(placement.rotationX) + frame.rotationRadians.x,
-      degreesToRadians(placement.rotationY) + frame.rotationRadians.y,
-      degreesToRadians(placement.rotationZ) + frame.rotationRadians.z,
-    );
   }
 
   private updateGroupPlacement(groupId: string, placement: ImageTargetPlacement): void {
@@ -866,7 +838,7 @@ export class ImageTargetPreview {
     }
     group.placement = nextPlacement;
     this.groupPlacements.set(groupId, nextPlacement);
-    this.applyPlacementToRoot(root, nextPlacement);
+    applyTargetPlacement(root, nextPlacement);
     this.previewObjects = this.previewObjects.map((object) => object.groupId === groupId
       ? { ...object, placement: resolveObjectPlacement(object, this.groups) } as TargetEditorObject
       : object);
@@ -902,7 +874,7 @@ export class ImageTargetPreview {
       this.applyPlacementToObject(object.id);
       changes.push({ objectId: object.id, placement: { ...editablePlacement } });
     }
-    this.applyPlacementToRoot(this.selectionPivotRoot, nextPivot);
+    applyTargetPlacement(this.selectionPivotRoot, nextPivot);
     if (this.onPlacementsChange) {
       this.onPlacementsChange(changes);
     } else {
@@ -1018,7 +990,7 @@ export class ImageTargetPreview {
 
     if (selectedModel === this.selectionPivotRoot) {
       const pivot = selectionPivotPlacement(this.previewObjects, this.groups, this.selection.objectIds);
-      this.applyPlacementToRoot(this.selectionPivotRoot, pivot);
+      applyTargetPlacement(this.selectionPivotRoot, pivot);
       if (!this.selectionPivotRoot.parent) {
         this.modelRoot.add(this.selectionPivotRoot);
       }
@@ -1265,10 +1237,6 @@ function placementFromObject(object: Object3D): ImageTargetPlacement {
     rotationY: radiansToDegrees(object.rotation.y),
     rotationZ: radiansToDegrees(object.rotation.z),
   });
-}
-
-function degreesToRadians(value: number): number {
-  return (value * Math.PI) / 180;
 }
 
 function radiansToDegrees(value: number): number {
