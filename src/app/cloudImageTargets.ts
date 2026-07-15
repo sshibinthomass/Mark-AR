@@ -9,6 +9,12 @@ import { normalizeAnimation } from './imageTargetAnimation';
 import type { ImageTargetImagePayload, ImageTargetPlacement } from './imageTargetPayload';
 import { normalizePlacement } from './imageTargetPayload';
 import {
+  normalizeAllowedEmails,
+  normalizeImageTargetAccess,
+  type ImageTargetAccess,
+  type ImageTargetAccessMode,
+} from './imageTargetAccess';
+import {
   composeGroupPlacement,
   normalizeLocalPlacement,
   type TargetEditorGroup,
@@ -37,6 +43,9 @@ export type CloudImageTarget = {
   groups: CloudImageTargetGroup[];
   ownerEmail?: string;
   visibility?: ModelVisibility;
+  scanId?: string;
+  accessMode?: ImageTargetAccessMode;
+  allowedEmails?: string[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -130,6 +139,9 @@ type WorkerImageTargetEntry = {
   groups?: WorkerImageTargetGroup[];
   owner_email?: string;
   visibility?: ModelVisibility;
+  scan_id?: string;
+  access_mode?: ImageTargetAccessMode;
+  allowed_emails?: string[];
   created_at?: string;
   updated_at?: string;
 };
@@ -156,6 +168,7 @@ type CreateImageTargetInput = ClientInput &
     placement?: ImageTargetPlacement;
     objects?: TargetEditorObject[];
     groups?: CloudImageTargetGroup[];
+    access?: ImageTargetAccess;
   };
 
 type UpdateImageTargetInput = ClientInput & {
@@ -165,7 +178,12 @@ type UpdateImageTargetInput = ClientInput & {
   placement?: ImageTargetPlacement;
   objects?: TargetEditorObject[];
   groups?: CloudImageTargetGroup[];
+  access?: ImageTargetAccess;
 } & Partial<ImageTargetImagePayload>;
+
+type GetImageTargetForScanInput = ClientInput & {
+  scanId: string;
+};
 
 type DeleteImageTargetInput = ClientInput & {
   targetId: string;
@@ -201,6 +219,7 @@ export async function createImageTarget({
   placement,
   objects,
   groups,
+  access,
 }: CreateImageTargetInput): Promise<CloudImageTarget> {
   const normalizedGroups = normalizeCloudImageTargetGroups(groups);
   const requestObjects = imageTargetObjectsRequestBody(objects, normalizedGroups, model, placement);
@@ -215,6 +234,10 @@ export async function createImageTarget({
       ...(firstModel ? { model: firstModel.model, placement: firstModel.placement } : {}),
       objects: requestObjects,
       ...(normalizedGroups.length > 0 ? { groups: normalizedGroups.map(groupRequestBody) } : {}),
+      ...(access ? {
+        access_mode: access.accessMode,
+        allowed_emails: normalizeAllowedEmails(access.allowedEmails),
+      } : {}),
     }),
   });
   return parseImageTargetResponse(response, 'Image target create failed');
@@ -232,6 +255,7 @@ export async function updateImageTarget({
   groups,
   imageBase64,
   imageMimeType,
+  access,
 }: UpdateImageTargetInput): Promise<CloudImageTarget> {
   const body: Record<string, unknown> = {};
   if (label !== undefined) {
@@ -265,6 +289,10 @@ export async function updateImageTarget({
   if (imageMimeType !== undefined) {
     body.image_mime_type = imageMimeType;
   }
+  if (access) {
+    body.access_mode = access.accessMode;
+    body.allowed_emails = normalizeAllowedEmails(access.allowedEmails);
+  }
 
   const response = await fetchImpl(imageTargetItemUrl(apiUrl, targetId), {
     method: 'PATCH',
@@ -272,6 +300,18 @@ export async function updateImageTarget({
     body: JSON.stringify(body),
   });
   return parseImageTargetResponse(response, 'Image target update failed');
+}
+
+export async function getImageTargetForScan({
+  apiUrl,
+  scanId,
+  authToken,
+  fetchImpl = fetch,
+}: GetImageTargetForScanInput): Promise<CloudImageTarget> {
+  const response = await fetchImpl(`${imageTargetsUrl(apiUrl)}/scan/${encodeURIComponent(scanId)}`, {
+    headers: authHeaders(authToken),
+  });
+  return parseImageTargetResponse(response, 'Image target scan failed');
 }
 
 export async function deleteImageTarget({
@@ -300,6 +340,11 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
     return null;
   }
   const firstModel = objects.find(isModelTargetObject);
+  const hasAccessMetadata = Boolean(entry.scan_id || entry.access_mode || entry.allowed_emails);
+  const access = normalizeImageTargetAccess({
+    accessMode: entry.access_mode,
+    allowedEmails: entry.allowed_emails,
+  }, entry.visibility);
 
   return {
     id: entry.id,
@@ -311,6 +356,11 @@ function mapImageTargetEntry(entry: WorkerImageTargetEntry): CloudImageTarget | 
     groups,
     ...(entry.owner_email ? { ownerEmail: entry.owner_email } : {}),
     ...(entry.visibility ? { visibility: entry.visibility } : {}),
+    ...(entry.scan_id ? { scanId: entry.scan_id } : {}),
+    ...(hasAccessMetadata ? {
+      accessMode: access.accessMode,
+      allowedEmails: access.allowedEmails,
+    } : {}),
     ...(entry.created_at ? { createdAt: entry.created_at } : {}),
     ...(entry.updated_at ? { updatedAt: entry.updated_at } : {}),
   };
@@ -429,13 +479,20 @@ function animationFromWire(animation: NonNullable<WorkerImageTargetObject['anima
 async function parseImageTargetResponse(response: Response, fallback: string): Promise<CloudImageTarget> {
   const body = (await response.json()) as WorkerImageTargetEntry & WorkerErrorResponse;
   if (!response.ok) {
-    throw new Error(body.error ?? `${fallback} with HTTP ${response.status}.`);
+    throw new ImageTargetRequestError(body.error ?? `${fallback} with HTTP ${response.status}.`, response.status);
   }
   const target = mapImageTargetEntry(body);
   if (!target) {
     throw new Error('Worker response did not include an image target.');
   }
   return target;
+}
+
+export class ImageTargetRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ImageTargetRequestError';
+  }
 }
 
 function imageTargetsUrl(apiUrl: string): string {
