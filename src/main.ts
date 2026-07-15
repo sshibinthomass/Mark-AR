@@ -1,4 +1,8 @@
 import './style.css';
+import {
+  prepareFloorPlacement,
+  type FloorPlacementController,
+} from './ar/floorPlacementRuntime';
 import { startMarkerAR, type MarkerARSession } from './ar/mindarRuntime';
 import { createRuntimeMarkerTargets, createSingleTargetRuntimeMarker } from './ar/markerTargets';
 import {
@@ -121,6 +125,10 @@ import { AuthNavigation } from './ui/authNavigation';
 import { applyAuthFormMode, type AuthFormMode } from './ui/authFormMode';
 import { renderAppShell } from './ui/appShell';
 import { createAnimationTrackEditor } from './ui/animationTrackEditor';
+import {
+  applyFloorPlacementUi,
+  type FloorPlacementUiState,
+} from './ui/floorPlacementUi';
 import { renderTargetModelRail } from './ui/modelRail';
 import {
   hrefForRoute,
@@ -146,6 +154,14 @@ const shell = queryRequired<HTMLElement>('[data-app-shell]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');
 const status = queryRequired<HTMLParagraphElement>('#ar-status');
+const floorStage = queryRequired<HTMLDivElement>('#floor-ar-stage');
+const floorOverlay = queryRequired<HTMLDivElement>('#floor-ar-overlay');
+const floorGestureSurface = queryRequired<HTMLDivElement>('#floor-ar-gesture-surface');
+const floorToggle = queryRequired<HTMLButtonElement>('#floor-ar-toggle');
+const floorPlace = queryRequired<HTMLButtonElement>('#floor-ar-place');
+const floorRotation = queryRequired<HTMLInputElement>('#floor-ar-rotation');
+const floorReset = queryRequired<HTMLButtonElement>('#floor-ar-reset');
+const floorRestart = queryRequired<HTMLButtonElement>('#floor-ar-restart');
 const workerLoginForm = queryRequired<HTMLFormElement>('#worker-login-form');
 const workerNameInput = queryRequired<HTMLInputElement>('#worker-name');
 const workerEmailInput = queryRequired<HTMLInputElement>('#worker-email');
@@ -204,6 +220,13 @@ let session: MarkerARSession | undefined;
 let focusedScanTarget: CloudImageTarget | undefined;
 let activeScanId: string | undefined;
 let scanRequestVersion = 0;
+let markerStartVersion = 0;
+let markerStartAbort: AbortController | undefined;
+let activeSharedLinkMode: 'marker' | 'floor' = 'marker';
+let floorController: FloorPlacementController | undefined;
+let floorControllerRequestVersion = 0;
+let floorLaunchVersion = 0;
+let floorUiState: FloorPlacementUiState = { state: 'hidden' };
 let authToken = loadWorkerAuthToken();
 let authUiState: AuthUiState = authToken
   ? { status: 'checking', message: 'Checking your saved session…' }
@@ -239,6 +262,7 @@ const animationTrackEditor = targetAnimationTracks
 
 applyAuthUi(shell, authUiState);
 applyAuthFormMode(shell, authFormMode);
+setFloorPlacementUi({ state: 'hidden' });
 activateRequestedLocation(locationFromHash(window.location.hash));
 void initializeCloudflareControls();
 
@@ -284,40 +308,133 @@ startButton.addEventListener('click', async () => {
   await startCurrentArSession();
 });
 
+floorToggle.addEventListener('click', () => {
+  if (activeSharedLinkMode === 'floor') {
+    void returnToFocusedMarkerScan();
+    return;
+  }
+  if (!floorController || !focusedScanTarget) {
+    return;
+  }
+
+  activeSharedLinkMode = 'floor';
+  invalidateMarkerStart();
+  session?.stop();
+  session = undefined;
+  setFloorPlacementUi({
+    state: 'floor-scanning',
+    message: 'Move your phone until the floor ring appears.',
+  });
+  launchFocusedFloorPlacement(floorController);
+});
+
+floorPlace.addEventListener('click', () => {
+  if (activeSharedLinkMode !== 'floor') {
+    return;
+  }
+  floorController?.place();
+});
+
+floorRotation.addEventListener('input', () => {
+  if (activeSharedLinkMode !== 'floor' || !floorController) {
+    return;
+  }
+  const degrees = Number(floorRotation.value);
+  if (Number.isFinite(degrees)) {
+    floorController.setRotation(degrees);
+  }
+});
+
+floorReset.addEventListener('click', () => {
+  if (activeSharedLinkMode !== 'floor' || !floorController) {
+    return;
+  }
+  floorController.reset();
+  floorRotation.value = '0';
+});
+
+floorRestart.addEventListener('click', () => {
+  if (activeSharedLinkMode !== 'floor' || !floorController) {
+    return;
+  }
+  setFloorPlacementUi({
+    state: 'floor-scanning',
+    message: 'Move your phone until the floor ring appears.',
+  });
+  launchFocusedFloorPlacement(floorController);
+});
+
 async function startCurrentArSession(): Promise<void> {
+  const startVersion = ++markerStartVersion;
+  markerStartAbort?.abort();
+  const abortController = new AbortController();
+  markerStartAbort = abortController;
+  const startTarget = focusedScanTarget;
   startButton.disabled = true;
   status.textContent = 'Preparing marker targets';
   session?.stop();
+  session = undefined;
   stage.replaceChildren();
 
   try {
-    const runtimeTargets = focusedScanTarget
-      ? createSingleTargetRuntimeMarker(focusedScanTarget)
+    const runtimeTargets = startTarget
+      ? createSingleTargetRuntimeMarker(startTarget)
       : createRuntimeMarkerTargets({
           cloudTargets: cloudImageTargets,
           draftTarget: createCurrentDraftTarget(),
         });
-    session = await startMarkerAR(stage, {
+    const isCurrentStart = () => (
+      startVersion === markerStartVersion
+      && activeSharedLinkMode === 'marker'
+      && focusedScanTarget === startTarget
+    );
+    const startedSession = await startMarkerAR(stage, {
       targets: runtimeTargets,
       onCompileProgress: (percent) => {
-        status.textContent = `Compiling targets ${Math.round(percent)}%`;
+        if (isCurrentStart()) {
+          status.textContent = `Compiling targets ${Math.round(percent)}%`;
+        }
       },
       onMarkerVisibility: ({ marker, visible }) => {
-        status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
+        if (isCurrentStart()) {
+          status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
+        }
       },
       onReady: () => {
-        status.textContent = focusedScanTarget
-          ? `Camera active. Scan ${focusedScanTarget.label}.`
-          : 'Camera active. Scan a saved cloud image target.';
+        if (isCurrentStart()) {
+          status.textContent = startTarget
+            ? `Camera active. Scan ${startTarget.label}.`
+            : 'Camera active. Scan a saved cloud image target.';
+        }
       },
+      signal: abortController.signal,
     });
-    startButton.textContent = focusedScanTarget ? 'Restart camera' : 'Restart AR';
+    if (!isCurrentStart()) {
+      startedSession.stop();
+      return;
+    }
+    session = startedSession;
+    startButton.textContent = startTarget ? 'Restart camera' : 'Restart AR';
   } catch (error) {
+    if (
+      isAbortError(error)
+      || startVersion !== markerStartVersion
+      || activeSharedLinkMode !== 'marker'
+      || focusedScanTarget !== startTarget
+    ) {
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Unable to start AR';
     status.textContent = message;
     startButton.textContent = 'Start camera';
   } finally {
-    startButton.disabled = false;
+    if (
+      startVersion === markerStartVersion
+      && activeSharedLinkMode === 'marker'
+      && focusedScanTarget === startTarget
+    ) {
+      startButton.disabled = false;
+    }
   }
 }
 
@@ -341,6 +458,7 @@ async function signInToWorker(message = 'Signing in…'): Promise<void> {
     });
     const result = resolveLoginResult(sessionResult);
 
+    clearTargetSpecificScan();
     authToken = result.token;
     saveWorkerAuthToken(result.token);
     workerPasswordInput.value = '';
@@ -357,6 +475,7 @@ async function signInToWorker(message = 'Signing in…'): Promise<void> {
 }
 
 workerLogoutButton.addEventListener('click', async () => {
+  clearTargetSpecificScan();
   authToken = null;
   clearWorkerAuthToken();
   authNavigation.clear();
@@ -390,6 +509,7 @@ async function createWorkerAccount(): Promise<void> {
       return;
     }
 
+    clearTargetSpecificScan();
     authToken = result.token;
     saveWorkerAuthToken(result.token);
     workerNameInput.value = '';
@@ -607,6 +727,7 @@ async function initializeCloudflareControls(): Promise<void> {
         });
         restorePendingProtectedRoute();
       } else {
+        clearTargetSpecificScan();
         authToken = null;
         clearWorkerAuthToken();
         setAuthUiState({
@@ -615,6 +736,7 @@ async function initializeCloudflareControls(): Promise<void> {
         });
       }
     } catch (error) {
+      clearTargetSpecificScan();
       authToken = null;
       clearWorkerAuthToken();
       setAuthUiState({
@@ -692,11 +814,10 @@ function activateRequestedLocation(location: AppLocation): void {
 
 async function openTargetSpecificScan(scanId: string): Promise<void> {
   const requestVersion = ++scanRequestVersion;
+  disposeFocusedFloorPlacement();
   activeScanId = scanId;
-  session?.stop();
-  session = undefined;
+  stopActiveArSession();
   focusedScanTarget = undefined;
-  stage.replaceChildren();
   startButton.disabled = true;
   startButton.textContent = 'Loading target';
   status.textContent = 'Loading target...';
@@ -713,6 +834,8 @@ async function openTargetSpecificScan(scanId: string): Promise<void> {
     focusedScanTarget = target;
     startButton.textContent = 'Restart camera';
     startButton.disabled = false;
+    setFloorPlacementUi({ state: 'preparing', message: 'Preparing floor placement...' });
+    void prepareFocusedFloorPlacement(target, requestVersion);
     await startCurrentArSession();
   } catch (error) {
     if (requestVersion !== scanRequestVersion) {
@@ -741,6 +864,228 @@ async function openTargetSpecificScan(scanId: string): Promise<void> {
   }
 }
 
+async function prepareFocusedFloorPlacement(
+  target: CloudImageTarget,
+  requestVersion: number,
+): Promise<void> {
+  let preparedController: FloorPlacementController | undefined;
+  const isCurrentPreparation = () => (
+    requestVersion === scanRequestVersion
+    && focusedScanTarget === target
+  );
+  const isCurrentFloorHook = () => (
+    isCurrentPreparation()
+    && activeSharedLinkMode === 'floor'
+    && preparedController !== undefined
+    && floorController === preparedController
+    && floorControllerRequestVersion === requestVersion
+  );
+
+  try {
+    const preparation = await prepareFloorPlacement({
+      stage: floorStage,
+      overlayRoot: floorOverlay,
+      gestureSurface: floorGestureSurface,
+      asset: {
+        model: target.model,
+        placement: target.placement,
+        objects: target.objects,
+        groups: target.groups,
+      },
+      hooks: {
+        onSessionStart() {
+          if (!isCurrentFloorHook()) {
+            return;
+          }
+          setFloorPlacementUi({
+            state: 'floor-scanning',
+            message: 'Move your phone until the floor ring appears.',
+          });
+        },
+        onSessionEnd() {
+          if (!isCurrentFloorHook()) {
+            return;
+          }
+          setFloorPlacementUi({
+            state: 'floor-ended',
+            message: 'Floor AR ended. Scan the image or place it again.',
+          });
+        },
+        onStatus(message) {
+          if (!isCurrentFloorHook()) {
+            return;
+          }
+          applyFocusedFloorStatus(message);
+        },
+        onPlacementReady(ready) {
+          if (!isCurrentFloorHook()) {
+            return;
+          }
+          setFloorPlacementUi(ready
+            ? { state: 'floor-ready', message: 'Floor found. Tap Place.' }
+            : {
+                state: 'floor-scanning',
+                message: 'Move your phone until the floor ring appears.',
+              });
+        },
+        onPlaced() {
+          if (!isCurrentFloorHook()) {
+            return;
+          }
+          setFloorPlacementUi({
+            state: 'floor-placed',
+            message: `${target.label} placed on the floor.`,
+          });
+        },
+      },
+    });
+
+    if (!preparation.supported) {
+      if (isCurrentPreparation()) {
+        setFloorPlacementUi({ state: 'unsupported', message: preparation.message });
+      }
+      return;
+    }
+
+    preparedController = preparation.controller;
+    if (!isCurrentPreparation()) {
+      preparedController.dispose();
+      return;
+    }
+
+    floorController = preparedController;
+    floorControllerRequestVersion = requestVersion;
+    floorRotation.value = '0';
+    if (activeSharedLinkMode === 'marker') {
+      setFloorPlacementUi({ state: 'marker-ready', message: 'Floor placement is ready.' });
+    }
+  } catch (error) {
+    if (!isCurrentPreparation()) {
+      return;
+    }
+    setFloorPlacementUi({
+      state: 'unsupported',
+      message: errorMessage(error, 'Floor placement is unavailable. Image scanning is still available.'),
+    });
+  }
+}
+
+function applyFocusedFloorStatus(message: string): void {
+  if (message === 'Move your phone until the floor ring appears.') {
+    setFloorPlacementUi({ state: 'floor-scanning', message });
+    return;
+  }
+  if (message === 'Floor found. Tap Place.') {
+    setFloorPlacementUi({ state: 'floor-ready', message });
+    return;
+  }
+  if (message === 'Floor AR ended. Scan the image or place it again.') {
+    setFloorPlacementUi({ state: 'floor-ended', message });
+    return;
+  }
+  setFloorPlacementUi({ state: 'floor-error', message });
+}
+
+function launchFocusedFloorPlacement(controller: FloorPlacementController): void {
+  const requestVersion = floorControllerRequestVersion;
+  const launchVersion = ++floorLaunchVersion;
+  try {
+    const launch = controller.launch();
+    void launch.catch((error) => {
+      if (
+        launchVersion !== floorLaunchVersion
+        || activeSharedLinkMode !== 'floor'
+        || floorController !== controller
+        || requestVersion !== scanRequestVersion
+      ) {
+        return;
+      }
+      if (floorUiState.state !== 'floor-error') {
+        setFloorPlacementUi({
+          state: 'floor-error',
+          message: errorMessage(error, 'Floor AR could not start.'),
+        });
+      }
+    });
+  } catch (error) {
+    if (
+      launchVersion === floorLaunchVersion
+      && activeSharedLinkMode === 'floor'
+      && floorController === controller
+      && requestVersion === scanRequestVersion
+    ) {
+      setFloorPlacementUi({
+        state: 'floor-error',
+        message: errorMessage(error, 'Floor AR could not start.'),
+      });
+    }
+  }
+}
+
+async function returnToFocusedMarkerScan(): Promise<void> {
+  const controller = floorController;
+  const target = focusedScanTarget;
+  const requestVersion = floorControllerRequestVersion;
+  if (!controller || !target || requestVersion !== scanRequestVersion) {
+    return;
+  }
+
+  activeSharedLinkMode = 'marker';
+  floorLaunchVersion += 1;
+  try {
+    await controller.stop();
+  } catch {
+    // Marker recovery remains available even if the browser already ended floor AR.
+  }
+  if (
+    activeSharedLinkMode !== 'marker'
+    || floorController !== controller
+    || focusedScanTarget !== target
+    || requestVersion !== scanRequestVersion
+  ) {
+    return;
+  }
+
+  setFloorPlacementUi({ state: 'marker-ready', message: 'Floor placement is ready.' });
+  await startCurrentArSession();
+}
+
+function disposeFocusedFloorPlacement(): void {
+  activeSharedLinkMode = 'marker';
+  floorLaunchVersion += 1;
+  const controller = floorController;
+  floorController = undefined;
+  floorControllerRequestVersion = 0;
+  if (controller) {
+    try {
+      void controller.stop().catch(() => undefined);
+    } catch {
+      // Disposal below remains authoritative for synchronous stop failures.
+    }
+    controller.dispose();
+  }
+  floorRotation.value = '0';
+  setFloorPlacementUi({ state: 'hidden' });
+}
+
+function invalidateMarkerStart(): void {
+  markerStartVersion += 1;
+  markerStartAbort?.abort();
+  markerStartAbort = undefined;
+}
+
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'name' in error
+    && error.name === 'AbortError';
+}
+
+function setFloorPlacementUi(state: FloorPlacementUiState): void {
+  floorUiState = state;
+  applyFloorPlacementUi(shell, state);
+}
+
 function clearTargetSpecificScan(): void {
   if (!activeScanId) {
     return;
@@ -748,11 +1093,13 @@ function clearTargetSpecificScan(): void {
   scanRequestVersion += 1;
   activeScanId = undefined;
   focusedScanTarget = undefined;
+  disposeFocusedFloorPlacement();
   stopActiveArSession();
   resetScanControls();
 }
 
 function stopActiveArSession(): void {
+  invalidateMarkerStart();
   session?.stop();
   session = undefined;
   stage.replaceChildren();

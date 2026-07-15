@@ -1,5 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CloudImageTarget } from '../src/app/cloudImageTargets';
+
+const scanModel = {
+  id: 'chair',
+  label: 'Chair',
+  url: 'https://worker.example/models/chair.glb',
+};
+
+const scanPlacement = {
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
+  height: 0.12,
+  rotationX: 0,
+  rotationY: 0,
+  rotationZ: 0,
+};
 
 const scanTarget: CloudImageTarget = {
   id: 'target-one',
@@ -9,25 +25,22 @@ const scanTarget: CloudImageTarget = {
   label: 'Only this marker',
   imageUrl: 'https://worker.example/image-targets/only-this-marker.jpg',
   imageObjectKey: 'image-targets/only-this-marker.jpg',
+  model: scanModel,
+  placement: scanPlacement,
   objects: [{
     kind: 'model',
     id: 'object-one',
-    model: {
-      id: 'chair',
-      label: 'Chair',
-      url: 'https://worker.example/models/chair.glb',
-    },
-    placement: {
-      scale: 1,
-      offsetX: 0,
-      offsetY: 0,
-      height: 0.12,
-      rotationX: 0,
-      rotationY: 0,
-      rotationZ: 0,
-    },
+    model: scanModel,
+    placement: scanPlacement,
+    groupId: 'group-one',
+    localPlacement: { ...scanPlacement, offsetX: 0.2 },
   }],
-  groups: [],
+  groups: [{
+    id: 'group-one',
+    label: 'Furniture',
+    placement: { ...scanPlacement, height: 0 },
+    animation: { preset: 'none', tracks: [] },
+  }],
 };
 
 const cloudImageTargetMocks = vi.hoisted(() => {
@@ -55,7 +68,35 @@ const markerArMocks = vi.hoisted(() => ({
   startMarkerAR: vi.fn(),
 }));
 
+const floorRuntimeMocks = vi.hoisted(() => {
+  const launch = vi.fn<() => Promise<void>>(() => Promise.resolve());
+  const place = vi.fn<() => boolean>(() => true);
+  const setRotation = vi.fn<(degrees: number) => void>();
+  const reset = vi.fn<() => boolean>(() => true);
+  const stop = vi.fn<() => Promise<void>>(() => Promise.resolve());
+  const dispose = vi.fn<() => void>();
+
+  return {
+    prepareFloorPlacement: vi.fn(),
+    launch,
+    place,
+    setRotation,
+    reset,
+    stop,
+    dispose,
+    controller: { launch, place, setRotation, reset, stop, dispose },
+    hooks: undefined as undefined | {
+      onSessionStart(): void;
+      onSessionEnd(): void;
+      onStatus(message: string): void;
+      onPlacementReady(ready: boolean): void;
+      onPlaced(): void;
+    },
+  };
+});
+
 const authMocks = vi.hoisted(() => ({
+  getCurrentWebArUser: vi.fn(),
   loadWorkerAuthToken: vi.fn<() => string | null>(),
   loginToWebArWorker: vi.fn(),
 }));
@@ -69,7 +110,7 @@ vi.mock('../src/app/cloudImageTargets', () => cloudImageTargetMocks);
 
 vi.mock('../src/app/webArAuth', () => ({
   clearWorkerAuthToken: vi.fn(),
-  getCurrentWebArUser: vi.fn(async () => null),
+  getCurrentWebArUser: authMocks.getCurrentWebArUser,
   loadWorkerAuthToken: authMocks.loadWorkerAuthToken,
   loginToWebArWorker: authMocks.loginToWebArWorker,
   saveWorkerAuthToken: vi.fn(),
@@ -84,6 +125,10 @@ vi.mock('../src/ar/mindarRuntime', () => ({
   startMarkerAR: markerArMocks.startMarkerAR,
 }));
 
+vi.mock('../src/ar/floorPlacementRuntime', () => ({
+  prepareFloorPlacement: floorRuntimeMocks.prepareFloorPlacement,
+}));
+
 vi.mock('../src/scene/ImageTargetPreview', () => ({
   ImageTargetPreview: class {
     update = vi.fn(async () => undefined);
@@ -92,19 +137,61 @@ vi.mock('../src/scene/ImageTargetPreview', () => ({
 }));
 
 describe('target-specific scan route integration', () => {
-  beforeEach(() => {
+  let hashChangeListeners: EventListener[] = [];
+
+  beforeEach(async () => {
     vi.resetModules();
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
     window.history.replaceState(null, '', '#/scan/scan-one');
+    await new Promise((resolve) => setTimeout(resolve, 0));
     authMocks.loadWorkerAuthToken.mockReset();
     authMocks.loadWorkerAuthToken.mockReturnValue(null);
+    authMocks.getCurrentWebArUser.mockReset();
+    authMocks.getCurrentWebArUser.mockResolvedValue(null);
     authMocks.loginToWebArWorker.mockReset();
     cloudImageTargetMocks.getImageTargetForScan.mockReset();
     cloudImageTargetMocks.listImageTargets.mockClear();
     markerArMocks.sessionStop.mockClear();
     markerArMocks.startMarkerAR.mockReset();
     markerArMocks.startMarkerAR.mockResolvedValue({ stop: markerArMocks.sessionStop });
+    floorRuntimeMocks.prepareFloorPlacement.mockReset();
+    floorRuntimeMocks.launch.mockReset();
+    floorRuntimeMocks.launch.mockResolvedValue(undefined);
+    floorRuntimeMocks.place.mockReset();
+    floorRuntimeMocks.place.mockReturnValue(true);
+    floorRuntimeMocks.setRotation.mockReset();
+    floorRuntimeMocks.reset.mockReset();
+    floorRuntimeMocks.reset.mockReturnValue(true);
+    floorRuntimeMocks.stop.mockReset();
+    floorRuntimeMocks.stop.mockResolvedValue(undefined);
+    floorRuntimeMocks.dispose.mockReset();
+    floorRuntimeMocks.hooks = undefined;
+    floorRuntimeMocks.prepareFloorPlacement.mockImplementation(async (options: {
+      hooks: NonNullable<typeof floorRuntimeMocks.hooks>;
+    }) => {
+      floorRuntimeMocks.hooks = options.hooks;
+      return { supported: true, controller: floorRuntimeMocks.controller };
+    });
+    hashChangeListeners = [];
+    const addEventListener = window.addEventListener.bind(window);
+    vi.spyOn(window, 'addEventListener').mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => {
+      if (type === 'hashchange' && typeof listener === 'function') {
+        hashChangeListeners.push(listener);
+      }
+      addEventListener(type, listener, options);
+    }) as typeof window.addEventListener);
+  });
+
+  afterEach(() => {
+    for (const listener of hashChangeListeners) {
+      window.removeEventListener('hashchange', listener);
+    }
+    vi.restoreAllMocks();
   });
 
   it('stops a generic scanner session when navigating away from Scan', async () => {
@@ -118,6 +205,57 @@ describe('target-specific scan route integration', () => {
     await waitFor(() => markerArMocks.sessionStop.mock.calls.length === 1);
 
     expect(document.querySelector('[data-app-shell]')?.getAttribute('data-active-page')).toBe('home');
+  });
+
+  it('never prepares or exposes floor placement on the generic Scan route', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+
+    expect(floorRuntimeMocks.prepareFloorPlacement).not.toHaveBeenCalled();
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+  });
+
+  it('auto-starts marker AR while floor preparation is still pending and prepares the exact focused scene once', async () => {
+    const preparation = deferred<{
+      supported: true;
+      controller: typeof floorRuntimeMocks.controller;
+    }>();
+    floorRuntimeMocks.prepareFloorPlacement.mockImplementation((options: {
+      hooks: NonNullable<typeof floorRuntimeMocks.hooks>;
+    }) => {
+      floorRuntimeMocks.hooks = options.hooks;
+      return preparation.promise;
+    });
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+
+    await import('../src/main');
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+
+    expect(floorRuntimeMocks.prepareFloorPlacement).toHaveBeenCalledTimes(1);
+    const preparationOptions = floorRuntimeMocks.prepareFloorPlacement.mock.calls[0][0] as {
+      stage: HTMLElement;
+      overlayRoot: HTMLElement;
+      gestureSurface: HTMLElement;
+      asset: unknown;
+    };
+    expect(preparationOptions).toMatchObject({
+      stage: required('#floor-ar-stage'),
+      overlayRoot: required('#floor-ar-overlay'),
+      gestureSurface: required('#floor-ar-gesture-surface'),
+    });
+    expect(preparationOptions.asset).toEqual({
+      model: scanTarget.model,
+      placement: scanTarget.placement,
+      objects: scanTarget.objects,
+      groups: scanTarget.groups,
+    });
+    expect(required('#floor-ar-message').textContent).toBe('Preparing floor placement...');
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').disabled).toBe(true);
+    expect(markerArMocks.sessionStop).not.toHaveBeenCalled();
+
+    preparation.resolve({ supported: true, controller: floorRuntimeMocks.controller });
+    await waitFor(() => required<HTMLButtonElement>('#floor-ar-toggle').disabled === false);
   });
 
   it('opens the camera with exactly the target assigned to the URL', async () => {
@@ -148,6 +286,141 @@ describe('target-specific scan route integration', () => {
         objects: [expect.objectContaining({ id: 'object-one' })],
       },
     });
+    expect(options).toHaveProperty('signal');
+  });
+
+  it('keeps floor preparation tied to the route when the response omits its redundant scan id', async () => {
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue({
+      ...scanTarget,
+      scanId: undefined,
+    });
+
+    await import('../src/main');
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+
+    expect(floorRuntimeMocks.prepareFloorPlacement).toHaveBeenCalledTimes(1);
+    await waitFor(() => required<HTMLButtonElement>('#floor-ar-toggle').disabled === false);
+    expect(floorRuntimeMocks.dispose).not.toHaveBeenCalled();
+  });
+
+  it('stops marker AR before launching floor AR in the Place on floor click stack', async () => {
+    await openFocusedScan();
+
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+
+    expect(markerArMocks.sessionStop).toHaveBeenCalledTimes(1);
+    expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(1);
+    expect(markerArMocks.sessionStop.mock.invocationCallOrder[0]).toBeLessThan(
+      floorRuntimeMocks.launch.mock.invocationCallOrder[0],
+    );
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Move your phone until the floor ring appears.',
+    );
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+  });
+
+  it('delegates Place, rotation, and Reset to the prepared controller and applies exact lifecycle statuses', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+
+    floorRuntimeMocks.hooks?.onSessionStart();
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Move your phone until the floor ring appears.',
+    );
+
+    floorRuntimeMocks.hooks?.onPlacementReady(true);
+    expect(required('#floor-ar-status').textContent).toBe('Floor found. Tap Place.');
+    required<HTMLButtonElement>('#floor-ar-place').click();
+    expect(floorRuntimeMocks.place).toHaveBeenCalledTimes(1);
+
+    floorRuntimeMocks.hooks?.onPlaced();
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Only this marker placed on the floor.',
+    );
+
+    const rotation = required<HTMLInputElement>('#floor-ar-rotation');
+    rotation.value = '37';
+    rotation.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(floorRuntimeMocks.setRotation).toHaveBeenLastCalledWith(37);
+
+    required<HTMLButtonElement>('#floor-ar-reset').click();
+    expect(floorRuntimeMocks.reset).toHaveBeenCalledTimes(1);
+    expect(rotation.value).toBe('0');
+
+    floorRuntimeMocks.hooks?.onStatus('Floor found. Tap Place.');
+    expect(required('#floor-ar-status').textContent).toBe('Floor found. Tap Place.');
+  });
+
+  it('stops floor AR and restarts MindAR with the same focused target when Scan image is clicked', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
+
+    expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
+    const firstTargets = markerArMocks.startMarkerAR.mock.calls[0][1].targets;
+    const restartedTargets = markerArMocks.startMarkerAR.mock.calls[1][1].targets;
+    expect(restartedTargets).toEqual(firstTargets);
+    expect(restartedTargets[0].marker.imagePath).toBe(scanTarget.imageUrl);
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Place on floor');
+    expect(required('#floor-ar-message').textContent).toBe('Floor placement is ready.');
+  });
+
+  it('leaves explicit floor recovery controls after a native session end without auto-starting marker AR', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+
+    floorRuntimeMocks.hooks?.onSessionEnd();
+
+    expect(markerArMocks.startMarkerAR).toHaveBeenCalledTimes(1);
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Floor AR ended. Scan the image or place it again.',
+    );
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(false);
+  });
+
+  it('restarts the already-prepared floor controller directly without refetching the target', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onSessionEnd();
+
+    required<HTMLButtonElement>('#floor-ar-restart').click();
+
+    expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(2);
+    expect(cloudImageTargetMocks.getImageTargetForScan).toHaveBeenCalledTimes(1);
+    expect(markerArMocks.startMarkerAR).toHaveBeenCalledTimes(1);
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Move your phone until the floor ring appears.',
+    );
+  });
+
+  it('keeps marker scanning active and disables floor placement when WebXR is unsupported', async () => {
+    floorRuntimeMocks.prepareFloorPlacement.mockImplementation(async (options: {
+      hooks: NonNullable<typeof floorRuntimeMocks.hooks>;
+    }) => {
+      floorRuntimeMocks.hooks = options.hooks;
+      return {
+        supported: false,
+        message: 'Floor placement needs Android Chrome with WebXR. Image scanning is still available.',
+      };
+    });
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+
+    await import('../src/main');
+    await waitFor(() => required<HTMLButtonElement>('#floor-ar-toggle').disabled);
+
+    expect(markerArMocks.startMarkerAR).toHaveBeenCalledTimes(1);
+    expect(markerArMocks.sessionStop).not.toHaveBeenCalled();
+    expect(required('#floor-ar-message').textContent).toBe(
+      'Floor placement needs Android Chrome with WebXR. Image scanning is still available.',
+    );
+    expect(required<HTMLButtonElement>('#floor-ar-toggle')).toMatchObject({
+      hidden: false,
+      disabled: true,
+    });
+    expect(required<HTMLElement>('#ar-stage').hidden).toBe(false);
   });
 
   it.each([
@@ -162,7 +435,216 @@ describe('target-specific scan route integration', () => {
     await waitFor(() => document.querySelector('#ar-status')?.textContent === message);
 
     expect(markerArMocks.startMarkerAR).not.toHaveBeenCalled();
+    expect(floorRuntimeMocks.prepareFloorPlacement).not.toHaveBeenCalled();
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
     expect(document.querySelector<HTMLButtonElement>('#start-ar')?.disabled).toBe(true);
+  });
+
+  it('disposes the prepared floor controller and stops marker AR when leaving a focused scan', async () => {
+    await openFocusedScan();
+
+    window.location.hash = '#/';
+    await waitFor(() => floorRuntimeMocks.dispose.mock.calls.length === 1);
+
+    expect(markerArMocks.sessionStop).toHaveBeenCalledTimes(1);
+    expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+    expect(required('[data-app-shell]').getAttribute('data-active-page')).toBe('home');
+  });
+
+  it('stops and disposes an active floor session when leaving a focused scan', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    markerArMocks.sessionStop.mockClear();
+
+    window.location.hash = '#/';
+    await waitFor(() => floorRuntimeMocks.dispose.mock.calls.length === 1);
+
+    expect(markerArMocks.sessionStop).not.toHaveBeenCalled();
+    expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
+    expect(floorRuntimeMocks.dispose).toHaveBeenCalledTimes(1);
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+  });
+
+  it('invalidates the focused floor runtime when authentication changes', async () => {
+    authMocks.loadWorkerAuthToken.mockReturnValue('token-123');
+    authMocks.getCurrentWebArUser.mockResolvedValue({
+      email: 'viewer@example.com',
+      role: 'user',
+      status: 'active',
+    });
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    markerArMocks.sessionStop.mockClear();
+
+    required<HTMLButtonElement>('#worker-logout').click();
+    await waitFor(() => floorRuntimeMocks.dispose.mock.calls.length === 1);
+
+    expect(markerArMocks.sessionStop).not.toHaveBeenCalled();
+    expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
+    expect(floorRuntimeMocks.dispose).toHaveBeenCalledTimes(1);
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+  });
+
+  it('aborts a pending marker start on floor switch and stops its late resolved session', async () => {
+    const markerStart = deferred<{ stop(): void }>();
+    const lateSessionStop = vi.fn();
+    markerArMocks.startMarkerAR.mockReturnValueOnce(markerStart.promise);
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+
+    await import('../src/main');
+    await waitFor(() => (
+      floorRuntimeMocks.hooks !== undefined
+      && markerArMocks.startMarkerAR.mock.calls.length === 1
+    ));
+    const markerOptions = markerArMocks.startMarkerAR.mock.calls[0][1] as { signal: AbortSignal };
+
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+
+    expect(markerOptions.signal.aborted).toBe(true);
+    expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(1);
+    markerStart.resolve({ stop: lateSessionStop });
+    await waitFor(() => lateSessionStop.mock.calls.length === 1);
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Move your phone until the floor ring appears.',
+    );
+  });
+
+  it('treats an aborted marker start as cancellation instead of a camera failure', async () => {
+    markerArMocks.startMarkerAR.mockImplementationOnce((_stage: HTMLElement, options: {
+      signal: AbortSignal;
+    }) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => {
+        reject(new DOMException('Marker AR start aborted', 'AbortError'));
+      }, { once: true });
+    }));
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+
+    await import('../src/main');
+    await waitFor(() => (
+      floorRuntimeMocks.hooks !== undefined
+      && markerArMocks.startMarkerAR.mock.calls.length === 1
+    ));
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    await waitFor(() => floorRuntimeMocks.launch.mock.calls.length === 1);
+
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Move your phone until the floor ring appears.',
+    );
+    expect(required('#ar-status').textContent).not.toContain('aborted');
+  });
+
+  it('treats any AbortError shape as cancellation without publishing it', async () => {
+    const abortError = new Error('Synthetic marker cancellation');
+    abortError.name = 'AbortError';
+    markerArMocks.startMarkerAR.mockRejectedValueOnce(abortError);
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+
+    await import('../src/main');
+    await waitFor(() => required<HTMLButtonElement>('#start-ar').disabled === false);
+
+    expect(required('#ar-status').textContent).not.toBe('Synthetic marker cancellation');
+    expect(required<HTMLButtonElement>('#start-ar').textContent).toBe('Restart camera');
+  });
+
+  it('disposes a floor preparation that resolves after route departure and never reveals it', async () => {
+    const preparation = deferred<{
+      supported: true;
+      controller: typeof floorRuntimeMocks.controller;
+    }>();
+    floorRuntimeMocks.prepareFloorPlacement.mockImplementation((options: {
+      hooks: NonNullable<typeof floorRuntimeMocks.hooks>;
+    }) => {
+      floorRuntimeMocks.hooks = options.hooks;
+      return preparation.promise;
+    });
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+
+    await import('../src/main');
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+    window.location.hash = '#/';
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-active-page') === 'home');
+
+    preparation.resolve({ supported: true, controller: floorRuntimeMocks.controller });
+    await waitFor(() => floorRuntimeMocks.dispose.mock.calls.length === 1);
+
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+    expect(required('#floor-ar-message').textContent).toBe('');
+  });
+
+  it('catches a floor launch rejection and keeps Scan image plus Restart floor AR available', async () => {
+    floorRuntimeMocks.launch.mockRejectedValueOnce(new Error('XR permission denied'));
+    await openFocusedScan();
+
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    await waitFor(() => required<HTMLButtonElement>('#floor-ar-restart').hidden === false);
+
+    expect(required('#floor-ar-status').textContent).toContain('XR permission denied');
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-restart')).toMatchObject({
+      hidden: false,
+      disabled: false,
+    });
+  });
+
+  it('keeps the runtime asset error when launch rejects after the status hook reports it', async () => {
+    floorRuntimeMocks.launch.mockImplementationOnce(() => {
+      floorRuntimeMocks.hooks?.onStatus('Floor scene failed to load: model unavailable');
+      return Promise.reject(new Error('model unavailable'));
+    });
+    await openFocusedScan();
+
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    await waitFor(() => required<HTMLButtonElement>('#floor-ar-restart').hidden === false);
+
+    expect(required('#floor-ar-status').textContent).toBe(
+      'Floor scene failed to load: model unavailable',
+    );
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+  });
+
+  it('catches a Restart floor AR rejection without leaving recovery mode', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onSessionEnd();
+    floorRuntimeMocks.launch.mockRejectedValueOnce(new Error('second launch failed'));
+
+    required<HTMLButtonElement>('#floor-ar-restart').click();
+    await waitFor(() => required('#floor-ar-status').textContent?.includes('second launch failed') === true);
+
+    expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(2);
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(false);
+  });
+
+  it('ignores late floor hooks after returning to marker mode', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    const staleHooks = floorRuntimeMocks.hooks;
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
+
+    staleHooks?.onSessionEnd();
+    staleHooks?.onStatus('Floor scene failed to load: stale error');
+
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Place on floor');
+    expect(required('#floor-ar-message').textContent).toBe('Floor placement is ready.');
+    expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(true);
+  });
+
+  it('ignores late floor hooks after the focused route token changes', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    const staleHooks = floorRuntimeMocks.hooks;
+
+    window.location.hash = '#/';
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-active-page') === 'home');
+    staleHooks?.onSessionEnd();
+    staleHooks?.onStatus('Floor scene failed to load: stale error');
+
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+    expect(required('#floor-ar-message').textContent).toBe('');
+    expect(required('#floor-ar-status').textContent).toBe('');
   });
 
   it('leaves a manual Start camera retry when automatic startup is blocked', async () => {
@@ -214,6 +696,38 @@ describe('target-specific scan route integration', () => {
     });
   });
 });
+
+async function openFocusedScan(): Promise<void> {
+  cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+  await import('../src/main');
+  await waitFor(() => (
+    markerArMocks.startMarkerAR.mock.calls.length === 1
+    && floorRuntimeMocks.hooks !== undefined
+    && required<HTMLButtonElement>('#floor-ar-toggle').disabled === false
+  ));
+}
+
+function required<T extends Element = HTMLElement>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) {
+    throw new Error(`Missing test element: ${selector}`);
+  }
+  return element;
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: unknown): void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 async function waitFor(assertion: () => boolean): Promise<void> {
   const timeoutAt = Date.now() + 2000;
