@@ -3,12 +3,64 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/style.css', 'utf8');
 
-function cssRule(selector: string): string {
+function cssRule(selector: string, source = css): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(css)?.groups?.body ?? '';
+  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+}
+
+function mediaBlock(query: string): string {
+  const start = css.indexOf(`@media ${query}`);
+  if (start === -1) {
+    return '';
+  }
+
+  const openBrace = css.indexOf('{', start);
+  let depth = 0;
+  for (let index = openBrace; index < css.length; index += 1) {
+    const char = css[index];
+    if (char === '{') {
+      depth += 1;
+    }
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return css.slice(openBrace + 1, index);
+      }
+    }
+  }
+
+  return '';
 }
 
 describe('target inspector styles', () => {
+  it('allocates the remaining desktop card height to the scrollable inspector panel', () => {
+    const card = cssRule('.target-inspector-card');
+    const panels = cssRule('.target-inspector-panels');
+
+    expect(card).toMatch(/(?:^|\r?\n)\s*height: calc\(100svh - 104px\);/);
+    expect(card).toContain('grid-template-rows: auto auto minmax(0, 1fr)');
+    expect(card).toContain('overflow: hidden');
+    expect(panels).toContain('min-height: 0');
+    expect(panels).toContain('overflow-y: auto');
+  });
+
+  it('packs active inspector content at the top instead of stretching its grid rows', () => {
+    const panels = cssRule('.target-inspector-panels');
+
+    expect(panels).toContain('align-content: start');
+  });
+
+  it('returns the inspector card to content height on narrow layouts', () => {
+    const responsive = mediaBlock('(max-width: 900px)');
+    const card = cssRule('.target-inspector-card');
+    const responsiveCard = cssRule('.target-inspector-card', responsive);
+
+    expect(card).toMatch(/(?:^|\r?\n)\s*height: calc\(100svh - 104px\);/);
+    expect(responsiveCard).toMatch(/(?:^|\r?\n)\s*height: auto;/);
+    expect(responsiveCard).toContain('max-height: none');
+    expect(responsiveCard).toContain('overflow: visible');
+  });
+
   it('keeps tab buttons aligned after the broad target button rule', () => {
     const buttonRuleIndex = css.indexOf('.target-page button');
     const tabOverrideIndex = css.indexOf('.target-page .target-inspector-tabs button');

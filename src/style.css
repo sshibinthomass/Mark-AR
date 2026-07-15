@@ -1010,7 +1010,9 @@ h1 {
 }
 
 .target-inspector-card {
+  height: calc(100svh - 104px);
   max-height: calc(100svh - 104px);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -1051,6 +1053,7 @@ h1 {
 }
 
 .target-inspector-panels {
+  align-content: start;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2059,6 +2062,7 @@ button:disabled {
   }
 
   .target-inspector-card {
+    height: auto;
     max-height: none;
     overflow: visible;
   }
