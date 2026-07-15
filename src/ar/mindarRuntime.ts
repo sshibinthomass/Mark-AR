@@ -176,7 +176,12 @@ export async function startMarkerAR(
   };
 
   mindarStartAttempted = true;
+  const abortPendingStart = () => {
+    stop();
+  };
+  hooks.signal?.addEventListener('abort', abortPendingStart, { once: true });
   try {
+    throwIfAborted();
     await instance.start();
   } catch (error) {
     stop();
@@ -184,6 +189,8 @@ export async function startMarkerAR(
       throw new DOMException('Marker AR start aborted', 'AbortError');
     }
     throw error;
+  } finally {
+    hooks.signal?.removeEventListener('abort', abortPendingStart);
   }
   throwIfAborted();
   normalizeMindARCameraLayers(container);

@@ -247,6 +247,72 @@ describe('prepareFloorPlacement', () => {
     expect(harness.hooks.onSessionStart).not.toHaveBeenCalled();
   });
 
+  it('waits for an unresolved session request and stale session end before stop resolves', async () => {
+    const sessionRequest = deferred<XRSession>();
+    const sessionEnd = deferred<void>();
+    const staleSession = fakeXRSession();
+    staleSession.end.mockReturnValueOnce(sessionEnd.promise);
+    const harness = createHarness({ sessionPromises: [sessionRequest.promise] });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    const launchPromise = controller.launch();
+    let stopSettled = false;
+    const stopPromise = controller.stop().then(() => {
+      stopSettled = true;
+    });
+    await flushPromises();
+
+    expect(stopSettled).toBe(false);
+    expect(staleSession.end).not.toHaveBeenCalled();
+
+    sessionRequest.resolve(staleSession.session);
+    await flushPromises();
+
+    expect(staleSession.end).toHaveBeenCalledOnce();
+    expect(stopSettled).toBe(false);
+    expect(staleSession.session.addEventListener).not.toHaveBeenCalled();
+    expect(harness.renderer.xr.setSession).not.toHaveBeenCalled();
+    expect(harness.createTargetSceneObject).not.toHaveBeenCalled();
+    expect(harness.gesture.connect).not.toHaveBeenCalled();
+    expect(harness.renderer.setAnimationLoop).not.toHaveBeenCalled();
+    expect(harness.renderer.render).not.toHaveBeenCalled();
+    expect(harness.hooks.onSessionStart).not.toHaveBeenCalled();
+    expect(harness.hooks.onStatus).not.toHaveBeenCalled();
+
+    sessionEnd.resolve();
+    await Promise.all([stopPromise, launchPromise]);
+
+    expect(stopSettled).toBe(true);
+    expect(staleSession.end).toHaveBeenCalledOnce();
+  });
+
+  it('waits for an unresolved rejected session request without leaking resources', async () => {
+    const sessionRequest = deferred<XRSession>();
+    const harness = createHarness({ sessionPromises: [sessionRequest.promise] });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    const launchPromise = controller.launch();
+    let stopSettled = false;
+    const stopPromise = controller.stop().then(() => {
+      stopSettled = true;
+    });
+    await flushPromises();
+
+    expect(stopSettled).toBe(false);
+
+    sessionRequest.reject(new Error('permission denied after stop'));
+    await Promise.all([stopPromise, launchPromise]);
+
+    expect(stopSettled).toBe(true);
+    expect(harness.renderer.xr.setSession).not.toHaveBeenCalled();
+    expect(harness.createTargetSceneObject).not.toHaveBeenCalled();
+    expect(harness.gesture.connect).not.toHaveBeenCalled();
+    expect(harness.hooks.onSessionStart).not.toHaveBeenCalled();
+    expect(harness.hooks.onStatus).not.toHaveBeenCalled();
+  });
+
   it('ends a stale session resolution when a newer launch wins', async () => {
     const firstResolution = deferred<XRSession>();
     const secondResolution = deferred<XRSession>();
@@ -359,10 +425,18 @@ describe('prepareFloorPlacement', () => {
     const launchPromise = controller.launch();
     await flushPromises();
 
-    await controller.stop();
-    rendererSessionReady.resolve();
-    await launchPromise;
+    let stopSettled = false;
+    const stopPromise = controller.stop().then(() => {
+      stopSettled = true;
+    });
+    await flushPromises();
 
+    expect(stopSettled).toBe(false);
+
+    rendererSessionReady.resolve();
+    await Promise.all([stopPromise, launchPromise]);
+
+    expect(stopSettled).toBe(true);
     expect(harness.session.end).toHaveBeenCalledOnce();
     expect(harness.createTargetSceneObject).not.toHaveBeenCalled();
     expect(harness.hooks.onSessionStart).not.toHaveBeenCalled();

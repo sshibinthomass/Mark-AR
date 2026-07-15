@@ -125,6 +125,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
   private readonly dependencies: FloorPlacementDependencies;
   private readonly sessionEndPromises = new WeakMap<XRSession, Promise<void>>();
   private readonly pendingResolvedSessions = new Set<XRSession>();
+  private readonly pendingLaunches = new Set<Promise<void>>();
 
   private launchGeneration = 0;
   private disposed = false;
@@ -173,11 +174,15 @@ class FloorPlacementRuntime implements FloorPlacementController {
       const sessionPromise = this.launcherPreparation.launcher.start();
       const generation = ++this.launchGeneration;
       const supersededSessionCleanup = this.supersedeSessions();
-      return this.completeLaunch(sessionPromise, generation, supersededSessionCleanup);
+      return this.trackLaunch(
+        this.completeLaunch(sessionPromise, generation, supersededSessionCleanup),
+      );
     } catch (error) {
       const generation = ++this.launchGeneration;
       const supersededSessionCleanup = this.supersedeSessions();
-      return this.rejectLaunchAfterCleanup(error, generation, supersededSessionCleanup);
+      return this.trackLaunch(
+        this.rejectLaunchAfterCleanup(error, generation, supersededSessionCleanup),
+      );
     }
   }
 
@@ -208,12 +213,18 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
   stop(): Promise<void> {
     this.launchGeneration += 1;
+    const pendingLaunches = [...this.pendingLaunches];
     const pendingSessionCleanup = this.endPendingResolvedSessions();
     const session = this.activeSession;
     const activeSessionCleanup = session
       ? this.closeActiveSession(session, true, false)
       : Promise.resolve();
-    return Promise.all([pendingSessionCleanup, activeSessionCleanup]).then(() => undefined);
+    const pendingLaunchCleanup = Promise.allSettled(pendingLaunches).then(() => undefined);
+    return Promise.all([
+      pendingSessionCleanup,
+      activeSessionCleanup,
+      pendingLaunchCleanup,
+    ]).then(() => undefined);
   }
 
   dispose(): void {
@@ -284,6 +295,19 @@ class FloorPlacementRuntime implements FloorPlacementController {
       this.options.hooks.onStatus(failureStatus('Floor AR could not start', error));
     }
     throw error;
+  }
+
+  private trackLaunch(launchPromise: Promise<void>): Promise<void> {
+    this.pendingLaunches.add(launchPromise);
+    void launchPromise.then(
+      () => {
+        this.pendingLaunches.delete(launchPromise);
+      },
+      () => {
+        this.pendingLaunches.delete(launchPromise);
+      },
+    );
+    return launchPromise;
   }
 
   private supersedeSessions(): Promise<void> {

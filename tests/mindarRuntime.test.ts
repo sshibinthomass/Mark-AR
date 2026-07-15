@@ -266,7 +266,7 @@ describe('startMarkerAR', () => {
     expect(runtimeMocks.mindarStart).not.toHaveBeenCalled();
   });
 
-  it('cleans up and rejects when camera startup resolves after abort', async () => {
+  it('cleans up immediately while camera startup is pending and rejects without publishing', async () => {
     const controller = new AbortController();
     const compiledDispose = vi.fn();
     const cameraStart = createDeferred<void>();
@@ -281,6 +281,13 @@ describe('startMarkerAR', () => {
     });
     await vi.waitFor(() => expect(runtimeMocks.mindarStart).toHaveBeenCalledTimes(1));
     controller.abort();
+
+    expect(runtimeMocks.markerDispose).toHaveBeenCalledTimes(1);
+    expect(runtimeMocks.mindarStop).toHaveBeenCalledTimes(1);
+    expect(compiledDispose).toHaveBeenCalledTimes(1);
+    expect(onReady).not.toHaveBeenCalled();
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+
     cameraStart.resolve();
 
     await expect(startPromise).rejects.toMatchObject({
