@@ -1,6 +1,6 @@
 import './style.css';
 import { startMarkerAR, type MarkerARSession } from './ar/mindarRuntime';
-import { createRuntimeMarkerTargets } from './ar/markerTargets';
+import { createRuntimeMarkerTargets, createSingleTargetRuntimeMarker } from './ar/markerTargets';
 import {
   DEFAULT_GENERATE_MODEL_API_URL,
   loadCloudflareModelOptions,
@@ -9,6 +9,8 @@ import {
 import {
   createImageTarget,
   deleteImageTarget,
+  getImageTargetForScan,
+  ImageTargetRequestError,
   listImageTargets,
   updateImageTarget,
   type CloudImageTarget,
@@ -120,7 +122,13 @@ import { applyAuthFormMode, type AuthFormMode } from './ui/authFormMode';
 import { renderAppShell } from './ui/appShell';
 import { createAnimationTrackEditor } from './ui/animationTrackEditor';
 import { renderTargetModelRail } from './ui/modelRail';
-import { hrefForRoute, routeFromHash, type AppRoute } from './ui/pageRoutes';
+import {
+  hrefForRoute,
+  hrefForTargetScan,
+  locationFromHash,
+  type AppLocation,
+  type AppRoute,
+} from './ui/pageRoutes';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
 import { renderSavedTargetList } from './ui/savedTargetList';
@@ -193,6 +201,9 @@ const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#re
 const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-status');
 const savedImageTargetList = document.querySelector<HTMLElement>('#saved-image-target-list');
 let session: MarkerARSession | undefined;
+let focusedScanTarget: CloudImageTarget | undefined;
+let activeScanId: string | undefined;
+let scanRequestVersion = 0;
 let authToken = loadWorkerAuthToken();
 let authUiState: AuthUiState = authToken
   ? { status: 'checking', message: 'Checking your saved session…' }
@@ -228,11 +239,11 @@ const animationTrackEditor = targetAnimationTracks
 
 applyAuthUi(shell, authUiState);
 applyAuthFormMode(shell, authFormMode);
-activateRequestedRoute(routeFromHash(window.location.hash));
+activateRequestedLocation(locationFromHash(window.location.hash));
 void initializeCloudflareControls();
 
 window.addEventListener('hashchange', () => {
-  activateRequestedRoute(routeFromHash(window.location.hash));
+  activateRequestedLocation(locationFromHash(window.location.hash));
 });
 
 shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link) => {
@@ -270,16 +281,22 @@ authModeButtons.forEach((button) => {
 });
 
 startButton.addEventListener('click', async () => {
+  await startCurrentArSession();
+});
+
+async function startCurrentArSession(): Promise<void> {
   startButton.disabled = true;
   status.textContent = 'Preparing marker targets';
   session?.stop();
   stage.replaceChildren();
 
   try {
-    const runtimeTargets = createRuntimeMarkerTargets({
-      cloudTargets: cloudImageTargets,
-      draftTarget: createCurrentDraftTarget(),
-    });
+    const runtimeTargets = focusedScanTarget
+      ? createSingleTargetRuntimeMarker(focusedScanTarget)
+      : createRuntimeMarkerTargets({
+          cloudTargets: cloudImageTargets,
+          draftTarget: createCurrentDraftTarget(),
+        });
     session = await startMarkerAR(stage, {
       targets: runtimeTargets,
       onCompileProgress: (percent) => {
@@ -289,17 +306,19 @@ startButton.addEventListener('click', async () => {
         status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
       },
       onReady: () => {
-        status.textContent = 'Camera active. Scan a saved cloud image target.';
+        status.textContent = focusedScanTarget
+          ? `Camera active. Scan ${focusedScanTarget.label}.`
+          : 'Camera active. Scan a saved cloud image target.';
       },
     });
-    startButton.textContent = 'Restart AR';
+    startButton.textContent = focusedScanTarget ? 'Restart camera' : 'Restart AR';
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to start AR';
     status.textContent = message;
   } finally {
     startButton.disabled = false;
   }
-});
+}
 
 workerLoginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -655,7 +674,90 @@ function activateRequestedRoute(requestedRoute: AppRoute): void {
   }
 }
 
+function activateRequestedLocation(location: AppLocation): void {
+  activateRequestedRoute(location.route);
+  if (location.route === 'scan' && location.scanId) {
+    void openTargetSpecificScan(location.scanId);
+    return;
+  }
+  clearTargetSpecificScan();
+}
+
+async function openTargetSpecificScan(scanId: string): Promise<void> {
+  const requestVersion = ++scanRequestVersion;
+  activeScanId = scanId;
+  session?.stop();
+  session = undefined;
+  focusedScanTarget = undefined;
+  stage.replaceChildren();
+  startButton.disabled = true;
+  startButton.textContent = 'Loading target';
+  status.textContent = 'Loading target...';
+
+  try {
+    const target = await getImageTargetForScan({
+      apiUrl: DEFAULT_GENERATE_MODEL_API_URL,
+      scanId,
+      authToken,
+    });
+    if (requestVersion !== scanRequestVersion) {
+      return;
+    }
+    focusedScanTarget = target;
+    startButton.textContent = 'Restart camera';
+    startButton.disabled = false;
+    await startCurrentArSession();
+  } catch (error) {
+    if (requestVersion !== scanRequestVersion) {
+      return;
+    }
+    startButton.textContent = 'Start camera';
+    startButton.disabled = true;
+    if (error instanceof ImageTargetRequestError && error.status === 401) {
+      authNavigation.rememberHref(hrefForTargetScan(scanId));
+      status.textContent = 'Sign in to open this target.';
+      if (window.location.hash !== hrefForRoute('account')) {
+        window.location.hash = hrefForRoute('account');
+      }
+      return;
+    }
+    if (error instanceof ImageTargetRequestError && error.status === 403) {
+      status.textContent = "You don't have access to this target.";
+      return;
+    }
+    if (error instanceof ImageTargetRequestError && error.status === 404) {
+      status.textContent = 'Target not found.';
+      return;
+    }
+    status.textContent = errorMessage(error, 'Unable to load target.');
+  }
+}
+
+function clearTargetSpecificScan(): void {
+  if (!activeScanId) {
+    return;
+  }
+  scanRequestVersion += 1;
+  activeScanId = undefined;
+  focusedScanTarget = undefined;
+  session?.stop();
+  session = undefined;
+  stage.replaceChildren();
+  startButton.textContent = 'Start camera';
+  startButton.disabled = false;
+  status.textContent = 'Camera access starts only after you choose Start camera.';
+}
+
 function restorePendingProtectedRoute(): void {
+  const href = authNavigation.takePendingHref(authUiState);
+  if (href) {
+    if (window.location.hash === href) {
+      activateRequestedLocation(locationFromHash(href));
+      return;
+    }
+    window.location.hash = href;
+    return;
+  }
   const route = authNavigation.takePending(authUiState);
   if (!route) {
     return;
