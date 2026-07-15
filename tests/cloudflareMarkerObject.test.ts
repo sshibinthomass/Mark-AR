@@ -1,8 +1,115 @@
 import { describe, expect, it } from 'vitest';
-import { Group } from 'three';
+import { Euler, Group, Matrix4, Quaternion, Vector3 } from 'three';
 import { createCloudflareMarkerObject } from '../src/ar/cloudflareMarkerObject';
 
 describe('createCloudflareMarkerObject', () => {
+  it('preserves the complete preview transform beneath one MindAR basis', async () => {
+    const textModel = new Group();
+    const markerObject = createCloudflareMarkerObject({
+      groups: [{
+        id: 'room',
+        label: 'Room',
+        placement: {
+          scale: 1.2,
+          offsetX: 0.3,
+          offsetY: -0.25,
+          height: 0.4,
+          rotationX: 10,
+          rotationY: 20,
+          rotationZ: 30,
+        },
+      }],
+      objects: [
+        {
+          id: 'chair',
+          model: { id: 'chair', label: 'Chair', url: 'chair.glb' },
+          groupId: 'room',
+          localPlacement: {
+            scale: 0.8,
+            offsetX: -0.2,
+            offsetY: 0.15,
+            height: 0.1,
+            rotationX: -15,
+            rotationY: 25,
+            rotationZ: 40,
+          },
+          placement: {
+            scale: 1,
+            offsetX: 0,
+            offsetY: 0,
+            height: 0,
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0,
+          },
+        },
+        {
+          kind: 'text',
+          id: 'title',
+          text: { value: 'Exact AR', language: 'english', font: 'studio-sans' },
+          placement: {
+            scale: 1.1,
+            offsetX: 0.25,
+            offsetY: -0.1,
+            height: 0.22,
+            rotationX: 5,
+            rotationY: 15,
+            rotationZ: -10,
+          },
+        },
+      ],
+      loadModelGroup: async () => new Group(),
+      createTextObject: () => textModel,
+    });
+    await Promise.resolve();
+
+    const previewSpace = markerObject.group.getObjectByName('cloudflare-preview-space') as Group;
+    const groupRoot = markerObject.group.getObjectByName('cloudflare-group-root-room') as Group;
+    const chairRoot = markerObject.group.getObjectByName('cloudflare-model-root-chair') as Group;
+    const textRoot = markerObject.group.getObjectByName('cloudflare-model-root-title') as Group;
+
+    expect(previewSpace?.parent).toBe(markerObject.group);
+    expect(previewSpace?.rotation.x).toBeCloseTo(Math.PI / 2);
+    expect(groupRoot.parent).toBe(previewSpace);
+    expect(chairRoot.parent).toBe(groupRoot);
+    expect(textRoot.parent).toBe(previewSpace);
+    expect(groupRoot.position.toArray()).toEqual([0.3, 0.4, -0.25]);
+    expect(chairRoot.position.toArray()).toEqual([-0.2, 0.1, 0.15]);
+    expect(textRoot.position.toArray()).toEqual([0.25, 0.22, -0.1]);
+
+    markerObject.group.updateMatrixWorld(true);
+    const authoredTextMatrix = new Matrix4().compose(
+      new Vector3(0.25, 0.22, -0.1),
+      new Quaternion().setFromEuler(new Euler(5 * Math.PI / 180, 15 * Math.PI / 180, -10 * Math.PI / 180)),
+      new Vector3(1.1, 1.1, 1.1),
+    );
+    const expectedTextWorld = new Matrix4()
+      .makeRotationX(Math.PI / 2)
+      .multiply(authoredTextMatrix);
+
+    const authoredGroupMatrix = new Matrix4().compose(
+      new Vector3(0.3, 0.4, -0.25),
+      new Quaternion().setFromEuler(new Euler(10 * Math.PI / 180, 20 * Math.PI / 180, 30 * Math.PI / 180)),
+      new Vector3(1.2, 1.2, 1.2),
+    );
+    const authoredChairMatrix = new Matrix4().compose(
+      new Vector3(-0.2, 0.1, 0.15),
+      new Quaternion().setFromEuler(new Euler(-15 * Math.PI / 180, 25 * Math.PI / 180, 40 * Math.PI / 180)),
+      new Vector3(0.8, 0.8, 0.8),
+    );
+    const expectedChairWorld = new Matrix4()
+      .makeRotationX(Math.PI / 2)
+      .multiply(authoredGroupMatrix)
+      .multiply(authoredChairMatrix);
+
+    textRoot.matrixWorld.elements.forEach((value, index) => {
+      expect(value).toBeCloseTo(expectedTextWorld.elements[index]);
+    });
+    chairRoot.matrixWorld.elements.forEach((value, index) => {
+      expect(value).toBeCloseTo(expectedChairWorld.elements[index]);
+    });
+  });
+
   it('renders group roots with shared animation and additive child animation', async () => {
     const loadedModels = [new Group(), new Group(), new Group()];
     const markerObject = createCloudflareMarkerObject({
@@ -38,23 +145,27 @@ describe('createCloudflareMarkerObject', () => {
     const chairRoot = markerObject.group.getObjectByName('cloudflare-model-root-chair-object') as Group;
     const lampRoot = markerObject.group.getObjectByName('cloudflare-model-root-lamp-object') as Group;
     const orphanRoot = markerObject.group.getObjectByName('cloudflare-model-root-orphan-object') as Group;
+    const previewSpace = markerObject.group.getObjectByName('cloudflare-preview-space') as Group;
     expect(groupRoot).toBeTruthy();
     expect(groupRoot.position.x).toBeCloseTo(0.2);
-    expect(groupRoot.position.y).toBeCloseTo(-0.1);
-    expect(groupRoot.position.z).toBeCloseTo(0.3);
+    expect(groupRoot.position.y).toBeCloseTo(0.3);
+    expect(groupRoot.position.z).toBeCloseTo(-0.1);
     expect(groupRoot.scale.x).toBeCloseTo(1.5);
     expect(chairRoot.parent).toBe(groupRoot);
     expect(lampRoot.parent).toBe(groupRoot);
     expect(chairRoot.position.x).toBeCloseTo(-0.2);
-    expect(lampRoot.position.z).toBeCloseTo(0.1);
-    expect(orphanRoot.parent).toBe(markerObject.group);
+    expect(lampRoot.position.y).toBeCloseTo(0.1);
+    expect(lampRoot.position.z).toBeCloseTo(0);
+    expect(orphanRoot.parent).toBe(previewSpace);
     expect(orphanRoot.position.x).toBeCloseTo(-0.4);
+    expect(orphanRoot.position.y).toBeCloseTo(0.05);
+    expect(orphanRoot.position.z).toBeCloseTo(0.2);
 
     markerObject.update(0.5);
-    expect(groupRoot.position.y).toBeCloseTo(-0.1);
-    expect(groupRoot.position.z).toBeCloseTo(0.4);
-    expect(chairRoot.rotation.y).toBeCloseTo(-Math.PI / 6);
-    expect(chairRoot.rotation.z).toBeCloseTo(0);
+    expect(groupRoot.position.y).toBeCloseTo(0.4);
+    expect(groupRoot.position.z).toBeCloseTo(-0.1);
+    expect(chairRoot.rotation.y).toBeCloseTo(0);
+    expect(chairRoot.rotation.z).toBeCloseTo(Math.PI / 6);
     expect(lampRoot.rotation.z).toBeCloseTo(0);
   });
 
@@ -78,7 +189,9 @@ describe('createCloudflareMarkerObject', () => {
     expect(markerObject.group.name).toBe('cloudflare-model-object');
     expect(markerObject.group.getObjectByName('processed-base-plane')).toBeUndefined();
     expect(modelRoot.children).toContain(loadedModel);
-    expect(modelRoot.position.z).toBeGreaterThan(0);
+    expect(modelRoot.parent?.name).toBe('cloudflare-preview-space');
+    expect(modelRoot.position.y).toBeGreaterThan(0);
+    expect(modelRoot.position.z).toBeCloseTo(0);
   });
 
   it('loads multiple placed Cloudflare models', async () => {
@@ -121,20 +234,20 @@ describe('createCloudflareMarkerObject', () => {
     expect(markerObject.group.getObjectByName('processed-base-plane')).toBeUndefined();
     expect(chairRoot.children).toContain(chairModel);
     expect(chairRoot.position.x).toBeCloseTo(0.15);
-    expect(chairRoot.position.y).toBeCloseTo(-0.2);
-    expect(chairRoot.position.z).toBeCloseTo(0.16);
+    expect(chairRoot.position.y).toBeCloseTo(0.16);
+    expect(chairRoot.position.z).toBeCloseTo(-0.2);
     expect(chairRoot.scale.x).toBeCloseTo(1.2);
     expect(chairRoot.rotation.y).toBeCloseTo(Math.PI / 6);
     expect(plantRoot.children).toContain(plantModel);
     expect(plantRoot.position.x).toBeCloseTo(-0.2);
-    expect(plantRoot.position.y).toBeCloseTo(0.1);
-    expect(plantRoot.position.z).toBeCloseTo(0.08);
+    expect(plantRoot.position.y).toBeCloseTo(0.08);
+    expect(plantRoot.position.z).toBeCloseTo(0.1);
     expect(plantRoot.scale.x).toBeCloseTo(0.8);
     expect(plantRoot.rotation.x).toBeCloseTo(-Math.PI / 12);
     expect(plantRoot.rotation.z).toBeCloseTo(Math.PI / 4);
   });
 
-  it('applies animation tracks relative to the saved AR placement without drift', async () => {
+  it('applies animation tracks relative to the saved preview placement without drift', async () => {
     const loadedModel = new Group();
 
     const markerObject = createCloudflareMarkerObject({
@@ -173,11 +286,11 @@ describe('createCloudflareMarkerObject', () => {
 
     const modelRoot = markerObject.group.getObjectByName('cloudflare-model-root-animated-object') as Group;
     expect(modelRoot.position.x).toBeCloseTo(0.6);
-    expect(modelRoot.position.y).toBeCloseTo(0.1);
-    expect(modelRoot.position.z).toBeCloseTo(0.3);
+    expect(modelRoot.position.y).toBeCloseTo(0.3);
+    expect(modelRoot.position.z).toBeCloseTo(0.1);
     expect(modelRoot.rotation.x).toBeCloseTo(Math.PI / 18);
-    expect(modelRoot.rotation.y).toBeCloseTo(-Math.PI / 18);
-    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 6);
+    expect(modelRoot.rotation.y).toBeCloseTo(Math.PI / 9);
+    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 3);
     expect(modelRoot.scale.x).toBeCloseTo(2.5);
 
     markerObject.update(0.5);
@@ -188,7 +301,7 @@ describe('createCloudflareMarkerObject', () => {
     expect(modelRoot.scale.x).toBeCloseTo(2);
   });
 
-  it('maps preview Y-up animation to the MindAR Z-up axis', async () => {
+  it('keeps turntable and position tracks in preview axes under the MindAR basis', async () => {
     const markerObject = createCloudflareMarkerObject({
       objects: [
         {
@@ -225,10 +338,11 @@ describe('createCloudflareMarkerObject', () => {
     markerObject.update(0.5);
 
     const modelRoot = markerObject.group.getObjectByName('cloudflare-model-root-turntable-object') as Group;
-    expect(modelRoot.position.y).toBeCloseTo(-0.2);
-    expect(modelRoot.position.z).toBeCloseTo(0.4);
-    expect(modelRoot.rotation.y).toBeCloseTo(-Math.PI / 6);
-    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 2);
+    expect(modelRoot.parent?.name).toBe('cloudflare-preview-space');
+    expect(modelRoot.position.y).toBeCloseTo(0.4);
+    expect(modelRoot.position.z).toBeCloseTo(0.2);
+    expect(modelRoot.rotation.y).toBeCloseTo(Math.PI / 2);
+    expect(modelRoot.rotation.z).toBeCloseTo(Math.PI / 6);
   });
 
   it('renders local text objects in AR without loading a GLB', async () => {
@@ -254,9 +368,10 @@ describe('createCloudflareMarkerObject', () => {
     const textRoot = markerObject.group.getObjectByName('cloudflare-model-root-text-object') as Group;
 
     expect(textRoot.children).toContain(textGroup);
+    expect(textRoot.parent?.name).toBe('cloudflare-preview-space');
     expect(textRoot.position.x).toBeCloseTo(0.25);
-    expect(textRoot.position.y).toBeCloseTo(-0.1);
-    expect(textRoot.position.z).toBeCloseTo(0.22);
+    expect(textRoot.position.y).toBeCloseTo(0.22);
+    expect(textRoot.position.z).toBeCloseTo(-0.1);
     expect(textRoot.rotation.y).toBeCloseTo(Math.PI / 12);
   });
 });

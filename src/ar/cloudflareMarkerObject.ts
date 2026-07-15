@@ -8,7 +8,7 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
-import { evaluateAnimationFrame, normalizeAnimation } from '../app/imageTargetAnimation';
+import { normalizeAnimation } from '../app/imageTargetAnimation';
 import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizeLocalPlacement, type TargetEditorGroup } from '../app/targetEditorGroups';
 import {
@@ -17,6 +17,7 @@ import {
 } from '../app/targetEditorObjects';
 import { createTextObject3D } from '../scene/textObject3d';
 import { createNormalizedTargetModelGroup } from '../scene/targetModelNormalization';
+import { applyTargetAnimation, applyTargetPlacement } from '../scene/targetObjectTransform';
 import type { MarkerObject } from './arObjects';
 
 export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
@@ -44,6 +45,10 @@ export type CloudflarePlacedAsset = {
 export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): MarkerObject {
   const group = new Group();
   group.name = 'cloudflare-model-object';
+  const previewSpace = new Group();
+  previewSpace.name = 'cloudflare-preview-space';
+  previewSpace.rotation.x = Math.PI / 2;
+  group.add(previewSpace);
 
   const loadModelGroup = asset.loadModelGroup ?? loadGltfModelGroup;
   const createTextObject = asset.createTextObject ?? createTextObject3D;
@@ -59,8 +64,8 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
     const root = new Group();
     root.name = `cloudflare-group-root-${targetGroup.id}`;
     const placement = normalizePlacement(targetGroup.placement);
-    applyPlacement(root, placement);
-    group.add(root);
+    applyTargetPlacement(root, placement);
+    previewSpace.add(root);
     groupRoots.set(targetGroup.id, root);
     animatedRoots.push({
       root,
@@ -79,8 +84,8 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
       : object.placement
         ? normalizePlacement(object.placement)
         : normalizePlacement({ height: 0.04 });
-    applyPlacement(modelRoot, placement);
-    (parentGroup ?? group).add(modelRoot);
+    applyTargetPlacement(modelRoot, placement);
+    (parentGroup ?? previewSpace).add(modelRoot);
 
     if (isTextTargetObject(object)) {
       modelRoot.add(createTextObject(object.text));
@@ -115,7 +120,12 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
     update: (deltaSeconds: number) => {
       for (const animatedRoot of animatedRoots) {
         animatedRoot.elapsedSeconds += deltaSeconds;
-        applyAnimation(animatedRoot.root, animatedRoot.animation, animatedRoot.placement, animatedRoot.elapsedSeconds);
+        applyTargetAnimation(
+          animatedRoot.root,
+          animatedRoot.placement,
+          animatedRoot.animation,
+          animatedRoot.elapsedSeconds,
+        );
       }
     },
   };
@@ -130,42 +140,6 @@ function normalizeAssetGroups(groups: TargetEditorGroup[] | undefined): TargetEd
     seen.add(group.id);
     return true;
   });
-}
-
-function applyPlacement(root: Group, placement: ImageTargetPlacement): void {
-  root.position.set(placement.offsetX, placement.offsetY, placement.height);
-  root.scale.setScalar(placement.scale);
-  root.rotation.set(
-    degreesToRadians(placement.rotationX),
-    degreesToRadians(placement.rotationY),
-    degreesToRadians(placement.rotationZ),
-  );
-}
-
-function degreesToRadians(value: number): number {
-  return (value * Math.PI) / 180;
-}
-
-function applyAnimation(
-  modelRoot: Group,
-  animation: ImageTargetAnimation,
-  placement: ImageTargetPlacement,
-  elapsedSeconds: number,
-): void {
-  const frame = evaluateAnimationFrame(animation, elapsedSeconds);
-  // The editor preview is Y-up while MindAR target anchors are Z-up.
-  // Rotate animation offsets and axes +90 degrees around X: (x, y, z) -> (x, -z, y).
-  modelRoot.position.set(
-    placement.offsetX + frame.position.x,
-    placement.offsetY - frame.position.z,
-    placement.height + frame.position.y,
-  );
-  modelRoot.scale.setScalar(placement.scale * frame.scaleMultiplier);
-  modelRoot.rotation.set(
-    degreesToRadians(placement.rotationX) + frame.rotationRadians.x,
-    degreesToRadians(placement.rotationY) - frame.rotationRadians.z,
-    degreesToRadians(placement.rotationZ) + frame.rotationRadians.y,
-  );
 }
 
 function modelRootName(object: CloudflarePlacedObject, index: number, objectCount: number): string {
