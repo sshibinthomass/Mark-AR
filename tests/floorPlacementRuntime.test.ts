@@ -273,6 +273,83 @@ describe('prepareFloorPlacement', () => {
     expect(harness.createTargetSceneObject).toHaveBeenCalledOnce();
   });
 
+  it('immediately supersedes an active loading session before a newer request rejects', async () => {
+    const firstReady = deferred<void>();
+    const secondResolution = deferred<XRSession>();
+    const firstSession = fakeXRSession();
+    const firstTarget = fakeTargetScene(firstReady.promise);
+    const harness = createHarness({
+      sessionPromises: [Promise.resolve(firstSession.session), secondResolution.promise],
+      targetScenes: [firstTarget],
+    });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    const firstLaunch = controller.launch();
+    await flushPromises();
+
+    const secondLaunch = controller.launch();
+
+    expect(harness.startSession).toHaveBeenCalledTimes(2);
+    expect(firstSession.end).toHaveBeenCalledOnce();
+    expect(harness.startSession.mock.invocationCallOrder[1]).toBeLessThan(
+      firstSession.end.mock.invocationCallOrder[0],
+    );
+    expect(firstTarget.dispose).toHaveBeenCalledOnce();
+    expect(harness.gesture.disconnect).toHaveBeenCalledOnce();
+    expect(harness.renderer.setAnimationLoop).toHaveBeenLastCalledWith(null);
+    expect(harness.floorScene.placementRoot.children).toHaveLength(0);
+
+    firstReady.reject(new Error('stale first asset failure'));
+    await expect(firstLaunch).resolves.toBeUndefined();
+    secondResolution.reject(new Error('second request denied'));
+    await expect(secondLaunch).rejects.toThrow('second request denied');
+
+    expect(firstSession.end).toHaveBeenCalledOnce();
+    expect(firstTarget.dispose).toHaveBeenCalledOnce();
+    expect(harness.hooks.onStatus).toHaveBeenLastCalledWith(
+      expect.stringContaining('second request denied'),
+    );
+  });
+
+  it('ends a session once when stop wins during renderer session setup', async () => {
+    const rendererSessionReady = deferred<void>();
+    const harness = createHarness();
+    harness.renderer.xr.setSession.mockReturnValueOnce(rendererSessionReady.promise);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    const launchPromise = controller.launch();
+    await flushPromises();
+
+    await controller.stop();
+    rendererSessionReady.resolve();
+    await launchPromise;
+
+    expect(harness.session.end).toHaveBeenCalledOnce();
+    expect(harness.createTargetSceneObject).not.toHaveBeenCalled();
+    expect(harness.hooks.onSessionStart).not.toHaveBeenCalled();
+    expect(harness.hooks.onStatus).not.toHaveBeenCalled();
+  });
+
+  it('ends a session once when dispose wins during renderer session setup', async () => {
+    const rendererSessionReady = deferred<void>();
+    const harness = createHarness();
+    harness.renderer.xr.setSession.mockReturnValueOnce(rendererSessionReady.promise);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    const launchPromise = controller.launch();
+    await flushPromises();
+
+    controller.dispose();
+    rendererSessionReady.resolve();
+    await launchPromise;
+
+    expect(harness.session.end).toHaveBeenCalledOnce();
+    expect(harness.createTargetSceneObject).not.toHaveBeenCalled();
+    expect(harness.hooks.onSessionStart).not.toHaveBeenCalled();
+    expect(harness.hooks.onStatus).not.toHaveBeenCalled();
+    expect(harness.floorScene.dispose).toHaveBeenCalledOnce();
+  });
+
   it('ends a pending stale resolution and fully disposes exactly once', async () => {
     const pendingSession = deferred<XRSession>();
     const staleSession = fakeXRSession();

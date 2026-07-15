@@ -123,6 +123,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
   >;
   private readonly floorScene: FloorPlacementScene;
   private readonly dependencies: FloorPlacementDependencies;
+  private readonly sessionEndPromises = new WeakMap<XRSession, Promise<void>>();
 
   private launchGeneration = 0;
   private disposed = false;
@@ -170,10 +171,12 @@ class FloorPlacementRuntime implements FloorPlacementController {
     try {
       const sessionPromise = this.launcherPreparation.launcher.start();
       const generation = ++this.launchGeneration;
-      return this.completeLaunch(sessionPromise, generation);
+      const supersededSessionCleanup = this.supersedeActiveSession();
+      return this.completeLaunch(sessionPromise, generation, supersededSessionCleanup);
     } catch (error) {
-      this.options.hooks.onStatus(failureStatus('Floor AR could not start', error));
-      return Promise.reject(error);
+      const generation = ++this.launchGeneration;
+      const supersededSessionCleanup = this.supersedeActiveSession();
+      return this.rejectLaunchAfterCleanup(error, generation, supersededSessionCleanup);
     }
   }
 
@@ -223,7 +226,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
       this.detachSessionListeners(session);
       this.activeSession = null;
       this.sessionStarted = false;
-      void endSessionQuietly(session);
+      void this.endSessionOnce(session);
     }
 
     this.cleanupSessionResources(false);
@@ -237,11 +240,13 @@ class FloorPlacementRuntime implements FloorPlacementController {
   private async completeLaunch(
     sessionPromise: Promise<XRSession>,
     generation: number,
+    supersededSessionCleanup: Promise<void>,
   ): Promise<void> {
     let session: XRSession;
     try {
       session = await sessionPromise;
     } catch (error) {
+      await supersededSessionCleanup;
       if (!this.isCurrent(generation)) {
         return;
       }
@@ -249,20 +254,33 @@ class FloorPlacementRuntime implements FloorPlacementController {
       throw error;
     }
 
+    await supersededSessionCleanup;
+
     if (!this.isCurrent(generation)) {
-      await endSessionQuietly(session);
+      await this.endSessionOnce(session);
       return;
     }
 
-    if (this.activeSession && this.activeSession !== session) {
-      await this.closeActiveSession(this.activeSession, true, false);
-      if (!this.isCurrent(generation)) {
-        await endSessionQuietly(session);
-        return;
-      }
-    }
-
     await this.activateSession(session, generation);
+  }
+
+  private async rejectLaunchAfterCleanup(
+    error: unknown,
+    generation: number,
+    supersededSessionCleanup: Promise<void>,
+  ): Promise<never> {
+    await supersededSessionCleanup;
+    if (this.isCurrent(generation)) {
+      this.options.hooks.onStatus(failureStatus('Floor AR could not start', error));
+    }
+    throw error;
+  }
+
+  private supersedeActiveSession(): Promise<void> {
+    const session = this.activeSession;
+    return session
+      ? this.closeActiveSession(session, true, false)
+      : Promise.resolve();
   }
 
   private async activateSession(session: XRSession, generation: number): Promise<void> {
@@ -427,6 +445,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     }
 
     const notifyEnd = this.sessionStarted;
+    this.markSessionEnded(session);
     this.detachSessionListeners(session);
     this.activeSession = null;
     this.sessionStarted = false;
@@ -443,7 +462,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     reportEnded: boolean,
   ): Promise<void> {
     if (this.activeSession !== session) {
-      await endSessionQuietly(session);
+      await this.endSessionOnce(session);
       return;
     }
 
@@ -458,7 +477,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (reportEnded) {
       this.options.hooks.onStatus(ENDED_STATUS);
     }
-    await endSessionQuietly(session);
+    await this.endSessionOnce(session);
   }
 
   private async closeOrEndStaleSession(session: XRSession): Promise<void> {
@@ -466,7 +485,24 @@ class FloorPlacementRuntime implements FloorPlacementController {
       await this.closeActiveSession(session, false, false);
       return;
     }
-    await endSessionQuietly(session);
+    await this.endSessionOnce(session);
+  }
+
+  private endSessionOnce(session: XRSession): Promise<void> {
+    const existing = this.sessionEndPromises.get(session);
+    if (existing) {
+      return existing;
+    }
+
+    const ending = endSessionQuietly(session);
+    this.sessionEndPromises.set(session, ending);
+    return ending;
+  }
+
+  private markSessionEnded(session: XRSession): void {
+    if (!this.sessionEndPromises.has(session)) {
+      this.sessionEndPromises.set(session, Promise.resolve());
+    }
   }
 
   private cleanupSessionResources(resetHitTest: boolean): void {
