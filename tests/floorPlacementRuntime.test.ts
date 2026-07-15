@@ -313,6 +313,64 @@ describe('prepareFloorPlacement', () => {
     expect(harness.hooks.onStatus).not.toHaveBeenCalled();
   });
 
+  it('releases stop after XR end without waiting for stale target readiness', async () => {
+    const targetReady = deferred<void>();
+    const sessionEnd = deferred<void>();
+    const harness = createHarness({ targetReady: targetReady.promise });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    const launchPromise = controller.launch();
+    await flushPromises();
+    expect(harness.hooks.onSessionStart).toHaveBeenCalledOnce();
+    expect(harness.createTargetSceneObject).toHaveBeenCalledOnce();
+    expect(harness.gesture.connect).toHaveBeenCalledOnce();
+
+    harness.session.end.mockReturnValueOnce(sessionEnd.promise);
+    let stopSettled = false;
+    const stopPromise = controller.stop().then(() => {
+      stopSettled = true;
+    });
+
+    expect(harness.session.end).toHaveBeenCalledOnce();
+    expect(harness.targetScene.dispose).toHaveBeenCalledOnce();
+    expect(harness.gesture.disconnect).toHaveBeenCalledOnce();
+    expect(harness.renderer.setAnimationLoop).toHaveBeenLastCalledWith(null);
+    expect(harness.floorScene.placementRoot.children).toHaveLength(0);
+
+    sessionEnd.resolve();
+    await vi.waitFor(() => expect(stopSettled).toBe(true));
+
+    const lifecycleCounts = {
+      end: harness.session.end.mock.calls.length,
+      setSession: harness.renderer.xr.setSession.mock.calls.length,
+      sessionStart: harness.hooks.onSessionStart.mock.calls.length,
+      sessionEnd: harness.hooks.onSessionEnd.mock.calls.length,
+      status: harness.hooks.onStatus.mock.calls.length,
+      targetCreation: harness.createTargetSceneObject.mock.calls.length,
+      targetDisposal: harness.targetScene.dispose.mock.calls.length,
+      gestureConnect: harness.gesture.connect.mock.calls.length,
+      gestureDisconnect: harness.gesture.disconnect.mock.calls.length,
+      animationLoop: harness.renderer.setAnimationLoop.mock.calls.length,
+    };
+
+    targetReady.reject(new Error('late stale target failure'));
+    await Promise.all([stopPromise, launchPromise]);
+
+    expect(harness.session.end).toHaveBeenCalledTimes(lifecycleCounts.end);
+    expect(harness.renderer.xr.setSession).toHaveBeenCalledTimes(lifecycleCounts.setSession);
+    expect(harness.hooks.onSessionStart).toHaveBeenCalledTimes(lifecycleCounts.sessionStart);
+    expect(harness.hooks.onSessionEnd).toHaveBeenCalledTimes(lifecycleCounts.sessionEnd);
+    expect(harness.hooks.onStatus).toHaveBeenCalledTimes(lifecycleCounts.status);
+    expect(harness.createTargetSceneObject).toHaveBeenCalledTimes(lifecycleCounts.targetCreation);
+    expect(harness.targetScene.dispose).toHaveBeenCalledTimes(lifecycleCounts.targetDisposal);
+    expect(harness.gesture.connect).toHaveBeenCalledTimes(lifecycleCounts.gestureConnect);
+    expect(harness.gesture.disconnect).toHaveBeenCalledTimes(lifecycleCounts.gestureDisconnect);
+    expect(harness.renderer.setAnimationLoop).toHaveBeenCalledTimes(lifecycleCounts.animationLoop);
+    expect(harness.renderer.render).not.toHaveBeenCalled();
+    expect(harness.floorScene.placementRoot.children).toHaveLength(0);
+  });
+
   it('ends a stale session resolution when a newer launch wins', async () => {
     const firstResolution = deferred<XRSession>();
     const secondResolution = deferred<XRSession>();

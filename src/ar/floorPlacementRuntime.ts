@@ -79,6 +79,11 @@ type FloorPlacementOptions = {
   hooks: FloorPlacementHooks;
 };
 
+type FloorSessionActivation = {
+  session: XRSession;
+  targetScene: TargetSceneObject;
+};
+
 const DEFAULT_DEPENDENCIES: FloorPlacementDependencies = {
   prepareSessionLauncher: prepareFloorSessionLauncher,
   createScene: createDefaultFloorScene,
@@ -125,7 +130,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
   private readonly dependencies: FloorPlacementDependencies;
   private readonly sessionEndPromises = new WeakMap<XRSession, Promise<void>>();
   private readonly pendingResolvedSessions = new Set<XRSession>();
-  private readonly pendingLaunches = new Set<Promise<void>>();
+  private readonly pendingXROwnerships = new Set<Promise<unknown>>();
 
   private launchGeneration = 0;
   private disposed = false;
@@ -174,13 +179,14 @@ class FloorPlacementRuntime implements FloorPlacementController {
       const sessionPromise = this.launcherPreparation.launcher.start();
       const generation = ++this.launchGeneration;
       const supersededSessionCleanup = this.supersedeSessions();
-      return this.trackLaunch(
-        this.completeLaunch(sessionPromise, generation, supersededSessionCleanup),
+      const xrOwnership = this.trackXROwnership(
+        this.acquireXROwnership(sessionPromise, generation, supersededSessionCleanup),
       );
+      return this.completeLaunch(xrOwnership, generation);
     } catch (error) {
       const generation = ++this.launchGeneration;
       const supersededSessionCleanup = this.supersedeSessions();
-      return this.trackLaunch(
+      return this.trackXROwnership(
         this.rejectLaunchAfterCleanup(error, generation, supersededSessionCleanup),
       );
     }
@@ -213,17 +219,19 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
   stop(): Promise<void> {
     this.launchGeneration += 1;
-    const pendingLaunches = [...this.pendingLaunches];
+    const pendingXROwnerships = [...this.pendingXROwnerships];
     const pendingSessionCleanup = this.endPendingResolvedSessions();
     const session = this.activeSession;
     const activeSessionCleanup = session
       ? this.closeActiveSession(session, true, false)
       : Promise.resolve();
-    const pendingLaunchCleanup = Promise.allSettled(pendingLaunches).then(() => undefined);
+    const pendingXROwnershipCleanup = Promise.allSettled(pendingXROwnerships).then(
+      () => undefined,
+    );
     return Promise.all([
       pendingSessionCleanup,
       activeSessionCleanup,
-      pendingLaunchCleanup,
+      pendingXROwnershipCleanup,
     ]).then(() => undefined);
   }
 
@@ -251,18 +259,18 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.floorScene.dispose();
   }
 
-  private async completeLaunch(
+  private async acquireXROwnership(
     sessionPromise: Promise<XRSession>,
     generation: number,
     supersededSessionCleanup: Promise<void>,
-  ): Promise<void> {
+  ): Promise<FloorSessionActivation | null> {
     let session: XRSession;
     try {
       session = await sessionPromise;
     } catch (error) {
       await supersededSessionCleanup;
       if (!this.isCurrent(generation)) {
-        return;
+        return null;
       }
       this.options.hooks.onStatus(failureStatus('Floor AR could not start', error));
       throw error;
@@ -270,7 +278,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
     if (!this.isCurrent(generation)) {
       await this.endSessionOnce(session);
-      return;
+      return null;
     }
 
     this.pendingResolvedSessions.add(session);
@@ -279,10 +287,38 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
     if (!this.isCurrent(generation)) {
       await this.endSessionOnce(session);
+      return null;
+    }
+
+    return this.activateSession(session, generation);
+  }
+
+  private async completeLaunch(
+    xrOwnership: Promise<FloorSessionActivation | null>,
+    generation: number,
+  ): Promise<void> {
+    const activation = await xrOwnership;
+    if (!activation) {
       return;
     }
 
-    await this.activateSession(session, generation);
+    const { session, targetScene } = activation;
+    try {
+      await targetScene.ready;
+    } catch (error) {
+      if (!this.isCurrent(generation) || this.activeSession !== session) {
+        return;
+      }
+      await this.failActiveSession(session, generation, 'Floor scene failed to load', error);
+      return;
+    }
+
+    if (!this.isCurrent(generation) || this.activeSession !== session) {
+      return;
+    }
+
+    this.targetReady = true;
+    this.updatePlacementReadiness();
   }
 
   private async rejectLaunchAfterCleanup(
@@ -297,17 +333,17 @@ class FloorPlacementRuntime implements FloorPlacementController {
     throw error;
   }
 
-  private trackLaunch(launchPromise: Promise<void>): Promise<void> {
-    this.pendingLaunches.add(launchPromise);
-    void launchPromise.then(
+  private trackXROwnership<T>(xrOwnership: Promise<T>): Promise<T> {
+    this.pendingXROwnerships.add(xrOwnership);
+    void xrOwnership.then(
       () => {
-        this.pendingLaunches.delete(launchPromise);
+        this.pendingXROwnerships.delete(xrOwnership);
       },
       () => {
-        this.pendingLaunches.delete(launchPromise);
+        this.pendingXROwnerships.delete(xrOwnership);
       },
     );
-    return launchPromise;
+    return xrOwnership;
   }
 
   private supersedeSessions(): Promise<void> {
@@ -334,7 +370,10 @@ class FloorPlacementRuntime implements FloorPlacementController {
       : Promise.resolve();
   }
 
-  private async activateSession(session: XRSession, generation: number): Promise<void> {
+  private async activateSession(
+    session: XRSession,
+    generation: number,
+  ): Promise<FloorSessionActivation | null> {
     this.activeSession = session;
     this.attachSessionListeners(session);
     this.hitTest.reset();
@@ -350,15 +389,15 @@ class FloorPlacementRuntime implements FloorPlacementController {
     } catch (error) {
       if (!this.isCurrent(generation) || this.activeSession !== session) {
         await this.closeOrEndStaleSession(session);
-        return;
+        return null;
       }
       await this.failActiveSession(session, generation, 'Floor AR could not start', error);
-      return;
+      return null;
     }
 
     if (!this.isCurrent(generation) || this.activeSession !== session) {
       await this.closeOrEndStaleSession(session);
-      return;
+      return null;
     }
 
     this.sessionStarted = true;
@@ -372,7 +411,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
       );
     } catch (error) {
       await this.failActiveSession(session, generation, 'Floor scene failed to load', error);
-      return;
+      return null;
     }
 
     this.targetScene = targetScene;
@@ -381,23 +420,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.connectGestures();
     this.options.hooks.onStatus(SCANNING_STATUS);
     this.floorScene.renderer.setAnimationLoop(this.onAnimationFrame);
-
-    try {
-      await targetScene.ready;
-    } catch (error) {
-      if (!this.isCurrent(generation) || this.activeSession !== session) {
-        return;
-      }
-      await this.failActiveSession(session, generation, 'Floor scene failed to load', error);
-      return;
-    }
-
-    if (!this.isCurrent(generation) || this.activeSession !== session) {
-      return;
-    }
-
-    this.targetReady = true;
-    this.updatePlacementReadiness();
+    return { session, targetScene };
   }
 
   private async failActiveSession(
