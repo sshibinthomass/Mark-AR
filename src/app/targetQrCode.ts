@@ -121,10 +121,10 @@ export function composeTargetQrPixels(
   fillRect(image, centerBadge, [255, 255, 255, 255]);
   blendScaledImage(image, centerLogo, centerLogoRect);
 
-  const footerLogoRect = fitBottomRightRect(footerLogo, {
+  const footerLogoRect = fitBottomCenteredRect(footerLogo, {
     maxWidth: 620,
     maxHeight: 150,
-    right: CANVAS_SIZE - 48,
+    centerX: qrRect.x + qrRect.width / 2,
     bottom: CANVAS_SIZE - 48,
   });
   blendScaledImage(image, footerLogo, footerLogoRect);
@@ -302,18 +302,18 @@ function fitCenteredRect(
   };
 }
 
-function fitBottomRightRect(
+function fitBottomCenteredRect(
   image: RgbaImage,
   bounds: {
     maxWidth: number;
     maxHeight: number;
-    right: number;
+    centerX: number;
     bottom: number;
   },
 ): Rect {
   const size = fitSize(image, bounds.maxWidth, bounds.maxHeight);
   return {
-    x: Math.round(bounds.right - size.width),
+    x: Math.round(bounds.centerX - size.width / 2),
     y: Math.round(bounds.bottom - size.height),
     ...size,
   };

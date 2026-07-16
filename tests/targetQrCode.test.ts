@@ -50,6 +50,9 @@ describe('branded target QR artifacts', () => {
     expect(image.layout.footerLogo.y).toBeGreaterThan(
       image.layout.qr.y + image.layout.qr.height,
     );
+    const qrCenterX = image.layout.qr.x + image.layout.qr.width / 2;
+    const footerCenterX = image.layout.footerLogo.x + image.layout.footerLogo.width / 2;
+    expect(Math.abs(footerCenterX - qrCenterX)).toBeLessThanOrEqual(0.5);
     expect(pixelAt(image, image.layout.qr.x, image.layout.qr.y)).toEqual([255, 255, 255, 255]);
   });
 
