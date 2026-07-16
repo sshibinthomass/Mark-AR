@@ -168,6 +168,7 @@ describe('target QR integration', () => {
 
     document.querySelector<HTMLButtonElement>('[data-target-qr-done]')?.click();
     expect(isQrDialogOpen()).toBe(false);
+    expect(browserMocks.revokeObjectURL).toHaveBeenCalledWith('blob:target-qr-1');
     document.querySelector<HTMLButtonElement>('#save-image-target')?.click();
     await waitFor(() => cloudMocks.updateImageTarget.mock.calls.length === 1);
 
@@ -211,6 +212,34 @@ describe('target QR integration', () => {
     });
     expect(document.querySelector('[data-target-qr-overlay]')).toBeTruthy();
     expect(isQrDialogOpen()).toBe(false);
+  }, 10000);
+
+  it('coalesces repeated saved-row download clicks while generation is pending', async () => {
+    cloudMocks.currentTarget = existingTarget();
+    let resolveArtifact = (_value: { blob: Blob; filename: string }) => undefined;
+    qrMocks.createTargetQrArtifact.mockImplementationOnce(() => (
+      new Promise((resolve) => {
+        resolveArtifact = resolve;
+      })
+    ));
+
+    await import('../src/main');
+    await waitFor(() => Boolean(document.querySelector('[data-download-target-qr="target-existing"]')));
+    const download = document.querySelector<HTMLButtonElement>(
+      '[data-download-target-qr="target-existing"]',
+    );
+
+    download?.click();
+    download?.click();
+    await waitFor(() => qrMocks.createTargetQrArtifact.mock.calls.length === 1);
+    resolveArtifact({
+      blob: new Blob(['png'], { type: 'image/png' }),
+      filename: 'anchorar-existing-marker-qr.png',
+    });
+    await waitFor(() => qrMocks.downloadTargetQrArtifact.mock.calls.length === 1);
+
+    expect(qrMocks.createTargetQrArtifact).toHaveBeenCalledTimes(1);
+    expect(qrMocks.downloadTargetQrArtifact).toHaveBeenCalledTimes(1);
   }, 10000);
 
   it('keeps the saved target successful when generation fails and retries in place', async () => {
@@ -273,6 +302,25 @@ describe('target QR integration', () => {
     expect(document.querySelector('#image-target-status')?.textContent).toContain(
       'Refresh offline',
     );
+  }, 10000);
+
+  it('does not prompt or generate a QR when the create response lacks a scan ID', async () => {
+    cloudMocks.createImageTarget.mockImplementationOnce(async (input: SaveInput) => {
+      cloudMocks.currentTarget = {
+        ...targetFromInput(input),
+        scanId: undefined,
+      };
+      return cloudMocks.currentTarget;
+    });
+
+    await import('../src/main');
+    await createNewTarget();
+    await waitFor(() => document.querySelector('#image-target-status')?.textContent?.includes(
+      'did not return a scan link',
+    ) === true);
+
+    expect(isQrDialogOpen()).toBe(false);
+    expect(qrMocks.createTargetQrArtifact).not.toHaveBeenCalled();
   }, 10000);
 });
 
