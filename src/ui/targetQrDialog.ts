@@ -146,6 +146,7 @@ export function createTargetQrDialog(
   let returnFocus: HTMLElement | undefined;
   let imageReady = false;
   let shareBusy = false;
+  let dialogSession = 0;
   let destroyed = false;
 
   const setShareStatus = (message: string, tone: 'success' | 'error' = 'success'): void => {
@@ -172,6 +173,7 @@ export function createTargetQrDialog(
   };
 
   const close = (): void => {
+    dialogSession += 1;
     if (overlay.hidden) {
       return;
     }
@@ -225,6 +227,7 @@ export function createTargetQrDialog(
     if (!input || shareBusy || !imageReady) {
       return;
     }
+    const session = dialogSession;
     setShareBusy(true);
     clearShareStatus();
 
@@ -237,19 +240,24 @@ export function createTargetQrDialog(
 
     void shareResult
       .then((result) => {
-        if (currentInput !== input || overlay.hidden || result === 'cancelled') {
+        if (
+          dialogSession !== session
+          || currentInput !== input
+          || overlay.hidden
+          || result === 'cancelled'
+        ) {
           return;
         }
         const copy = SHARE_RESULT_COPY[result];
         setShareStatus(copy.message, copy.tone);
       }, () => {
-        if (currentInput === input && !overlay.hidden) {
+        if (dialogSession === session && currentInput === input && !overlay.hidden) {
           const copy = SHARE_RESULT_COPY.failed;
           setShareStatus(copy.message, copy.tone);
         }
       })
       .finally(() => {
-        if (currentInput === input && !overlay.hidden) {
+        if (dialogSession === session && currentInput === input && !overlay.hidden) {
           setShareBusy(false);
         }
       });
@@ -292,6 +300,7 @@ export function createTargetQrDialog(
       if (destroyed) {
         return;
       }
+      dialogSession += 1;
       currentInput = input;
       returnFocus = input.returnFocus
         ?? (document.activeElement instanceof HTMLElement ? document.activeElement : undefined);

@@ -266,6 +266,52 @@ describe('target QR first-creation dialog', () => {
     expect(host.querySelector<HTMLElement>('[data-target-qr-share-status]')?.hidden).toBe(true);
   });
 
+  it('ignores an old share result after reopening with the same input object', async () => {
+    const host = document.createElement('main');
+    document.body.append(host);
+    let resolveOldShare = (_result: 'shared') => undefined;
+    let resolveNewShare = (_result: 'downloaded-copy-failed') => undefined;
+    const handlers = createHandlers();
+    handlers.onShare
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveOldShare = resolve;
+      }))
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveNewShare = resolve;
+      }));
+    const dialog = createTargetQrDialog(host, handlers);
+    const input = openInput();
+    const share = host.querySelector<HTMLButtonElement>('[data-target-qr-share]')!;
+    const status = host.querySelector<HTMLElement>('[data-target-qr-share-status]')!;
+
+    dialog.open(input);
+    dialog.setReady('blob:old-target-preview');
+    share.click();
+    dialog.close();
+
+    dialog.open(input);
+    dialog.setReady('blob:new-target-preview');
+    share.click();
+
+    resolveOldShare('shared');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(status.hidden).toBe(true);
+    expect(status.textContent).toBe('');
+    expect(share.disabled).toBe(true);
+    expect(share.textContent).toBe('Sharing\u2026');
+
+    resolveNewShare('downloaded-copy-failed');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(status.hidden).toBe(false);
+    expect(status.textContent).toBe('QR downloaded. Copy the scan link manually from above.');
+    expect(share.disabled).toBe(false);
+    expect(share.textContent).toBe('Share QR');
+  });
+
   it('destroys its markup and listeners without double-closing', () => {
     const host = document.createElement('main');
     document.body.append(host);

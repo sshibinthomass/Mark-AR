@@ -373,7 +373,7 @@ it.each([
 });
 ```
 
-Add cancellation and stale-result assertions:
+Add cancellation assertions and a same-object close/reopen regression:
 
 ```ts
 it('keeps cancellation silent and ignores a result after close', async () => {
@@ -400,6 +400,49 @@ it('keeps cancellation silent and ignores a result after close', async () => {
   await Promise.resolve();
   expect(dialog.isOpen()).toBe(false);
   expect(host.querySelector<HTMLElement>('[data-target-qr-share-status]')?.hidden).toBe(true);
+});
+
+it('ignores an old share result after reopening with the same input object', async () => {
+  const host = document.createElement('main');
+  document.body.append(host);
+  let resolveOldShare = (_result: 'shared') => undefined;
+  let resolveNewShare = (_result: 'downloaded-copy-failed') => undefined;
+  const handlers = createHandlers();
+  handlers.onShare
+    .mockImplementationOnce(() => new Promise((resolve) => {
+      resolveOldShare = resolve;
+    }))
+    .mockImplementationOnce(() => new Promise((resolve) => {
+      resolveNewShare = resolve;
+    }));
+  const dialog = createTargetQrDialog(host, handlers);
+  const input = openInput();
+  const share = host.querySelector<HTMLButtonElement>('[data-target-qr-share]')!;
+  const status = host.querySelector<HTMLElement>('[data-target-qr-share-status]')!;
+
+  dialog.open(input);
+  dialog.setReady('blob:old-target-preview');
+  share.click();
+  dialog.close();
+
+  dialog.open(input);
+  dialog.setReady('blob:new-target-preview');
+  share.click();
+
+  resolveOldShare('shared');
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(status.hidden).toBe(true);
+  expect(status.textContent).toBe('');
+  expect(share.disabled).toBe(true);
+  expect(share.textContent).toBe('Sharing\u2026');
+
+  resolveNewShare('downloaded-copy-failed');
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(status.textContent).toBe('QR downloaded. Copy the scan link manually from above.');
+  expect(share.disabled).toBe(false);
+  expect(share.textContent).toBe('Share QR');
 });
 ```
 
@@ -496,9 +539,9 @@ const SHARE_RESULT_COPY: Record<Exclude<TargetQrShareResult, 'cancelled'>, {
 };
 ```
 
-Track `imageReady` and `shareBusy`. `setShareBusy(true)` must synchronously disable share, set `Sharing…`, and set `aria-busy="true"`; false restores `Share QR`, removes `aria-busy`, and enables only when `imageReady` is true. `setLoading`, `setError`, `open`, and `close` clear share status and reset busy state. `setReady` enables share and download.
+Track `imageReady`, `shareBusy`, and a monotonically increasing dialog session token. Increment the token on every `open` and `close`. `setShareBusy(true)` must synchronously disable share, set `Sharing…`, and set `aria-busy="true"`; false restores `Share QR`, removes `aria-busy`, and enables only when `imageReady` is true. `setLoading`, `setError`, `open`, and `close` clear share status and reset busy state. `setReady` enables share and download.
 
-The click handler must capture the current input object, synchronously enter busy state, clear status, and invoke `handlers.onShare(scanUrl, targetLabel)` immediately. On resolution, update status only if the same input is still current and the dialog is open. On rejection, treat it as `failed`. In `finally`, restore busy state only for that same open input. Register and remove the share listener with the existing listeners.
+The click handler must capture both the current input object and current dialog session token, synchronously enter busy state, clear status, and invoke `handlers.onShare(scanUrl, targetLabel)` immediately. On resolution or rejection, update status only when the captured token still matches, the same input is still current, and the dialog is open; treat rejection as `failed`. Apply the same three-part guard in `finally` before restoring busy state, so a result from a closed or reopened session cannot affect the current session even when the caller reuses the exact same input object. Register and remove the share listener with the existing listeners.
 
 Add status styling in `src/style.css`:
 
