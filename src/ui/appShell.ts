@@ -130,8 +130,8 @@ export function renderAppShell(): string {
               <p id="floor-ar-message"></p>
             </div>
             <div class="scanner-actions">
-              <button id="start-ar" type="button">Start AR</button>
-              <button id="floor-ar-toggle" type="button" hidden>Place on floor</button>
+              <button id="start-ar" class="action-control action-control--primary" type="button">Start AR</button>
+              <button id="floor-ar-toggle" class="action-control action-control--secondary" type="button" hidden>Place on floor</button>
             </div>
           </div>
         </div>
@@ -223,9 +223,9 @@ export function renderAppShell(): string {
                   <p class="target-access-note">Shared accounts can scan this target. Only you can edit it.</p>
                 </div>
                 <div class="button-row target-save-strip">
-                  <button id="save-image-target" class="primary" type="button">Save target</button>
-                  <button id="new-image-target" type="button" hidden>New target</button>
-                  <button id="refresh-image-targets" type="button">Refresh targets</button>
+                  <button id="save-image-target" class="action-control action-control--primary" type="button">Save target</button>
+                  <button id="new-image-target" class="action-control action-control--secondary" type="button" hidden>New target</button>
+                  <button id="refresh-image-targets" class="action-control action-control--secondary" type="button">Refresh targets</button>
                 </div>
                 <div class="saved-target-compact">
                   <div class="tool-card-head">
@@ -479,7 +479,7 @@ export function renderAppShell(): string {
                     <span>Password</span>
                     <input id="worker-password" name="password" type="password" minlength="8" autocomplete="current-password" required />
                   </label>
-                  <button id="worker-login" class="primary auth-primary-action" type="submit"><span data-auth-submit-label>Sign in</span></button>
+                  <button id="worker-login" class="action-control action-control--primary auth-primary-action" type="submit"><span data-auth-submit-label>Sign in</span></button>
                 </form>
               </div>
             </div>

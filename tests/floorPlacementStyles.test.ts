@@ -80,15 +80,19 @@ describe('floor placement styles', () => {
   });
 
   it('provides 44px touch targets and a visible floor-control focus ring', () => {
+    const floorBack = cssRule('.floor-ar-back');
     const floorButtons = cssRule('.floor-ar-controls button');
     const floorToggle = cssRule('#floor-ar-toggle');
     const rotation = cssRule('#floor-ar-rotation');
 
+    expect(floorBack).toContain('top: max(14px, env(safe-area-inset-top))');
+    expect(floorBack).toContain('left: 14px');
+    expect(floorBack).toContain('min-height: 44px');
     expect(floorButtons).toContain('min-height: 44px');
     expect(floorToggle).toContain('min-height: 44px');
     expect(rotation).toContain('min-height: 44px');
     expect(css).toMatch(
-      /\.floor-ar-controls button:focus-visible,\s*#floor-ar-toggle:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--gold\)/m,
+      /\.floor-ar-back:focus-visible,\s*\.floor-ar-controls button:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--gold\)/m,
     );
   });
 

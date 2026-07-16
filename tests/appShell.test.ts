@@ -121,6 +121,9 @@ describe('renderAppShell', () => {
     });
     expect(container.querySelector('#floor-ar-toggle')?.textContent?.trim()).toBe('Place on floor');
     expect(container.querySelector('#floor-ar-toggle')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('#start-ar')?.classList.contains('action-control--primary')).toBe(true);
+    expect(container.querySelector('#floor-ar-toggle')?.classList.contains('action-control--secondary')).toBe(true);
+    expect(container.querySelector('#floor-ar-back')?.classList.contains('action-control--inverse')).toBe(true);
     expect(container.querySelector('#start-ar')?.closest('.scanner-actions')).toBeTruthy();
     expect(container.querySelector('#floor-ar-toggle')?.closest('.scanner-actions')).toBeTruthy();
     expect((container.querySelector('#floor-ar-place') as HTMLButtonElement).disabled).toBe(true);
@@ -300,6 +303,9 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#reset-target-animation')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('#target-preview-stage')).toBeTruthy();
     expect(container.querySelector('#save-image-target')).toBeTruthy();
+    expect(container.querySelector('#save-image-target')?.classList.contains('action-control--primary')).toBe(true);
+    expect(container.querySelector('#refresh-image-targets')?.classList.contains('action-control--secondary')).toBe(true);
+    expect(container.querySelector('#worker-login')?.classList.contains('action-control--primary')).toBe(true);
     const targetAccessMode = container.querySelector<HTMLSelectElement>('#target-access-mode');
     expect(targetAccessMode).toBeTruthy();
     expect(Array.from(targetAccessMode?.options ?? []).map((option) => [option.value, option.textContent])).toEqual([
