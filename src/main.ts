@@ -137,6 +137,7 @@ import {
   type AppLocation,
   type AppRoute,
 } from './ui/pageRoutes';
+import { setupResponsiveLayout } from './ui/responsiveLayout';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
 import { renderSavedTargetList } from './ui/savedTargetList';
@@ -148,9 +149,9 @@ if (!app) {
 }
 
 app.innerHTML = renderAppShell();
-const targetInspectorTabs = setupTargetInspectorTabs(app);
-
 const shell = queryRequired<HTMLElement>('[data-app-shell]');
+setupResponsiveLayout(shell);
+const targetInspectorTabs = setupTargetInspectorTabs(app);
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');
 const status = queryRequired<HTMLParagraphElement>('#ar-status');

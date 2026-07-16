@@ -48,6 +48,24 @@ describe('renderAppShell', () => {
     expect(
       [...container.querySelectorAll<HTMLElement>('[data-page]')].map((page) => page.dataset.page),
     ).toEqual(['home', 'scan', 'targets', 'account']);
+    expect(layoutOrder(container, '.landing-inner')).toEqual([
+      'landing-copy',
+      'landing-flow',
+      'landing-preview',
+      'mode-picker',
+    ]);
+    expect(layoutOrder(container, '.scanner-panel')).toEqual([
+      'scanner-stage',
+      'scanner-controls',
+    ]);
+    expect(layoutOrder(container, '.target-workspace')).toEqual([
+      'target-preview',
+      'target-inspector',
+    ]);
+    expect(layoutOrder(container, '.auth-layout')).toEqual([
+      'auth-access',
+      'auth-controls',
+    ]);
     expect(container.querySelector('[data-page="targets"]')).toBeTruthy();
     const protectedLinks = [...container.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]')];
     expect(protectedLinks).toHaveLength(2);
@@ -294,3 +312,9 @@ describe('renderAppShell', () => {
     expect(html).toContain('Web-AR Worker');
   });
 });
+
+function layoutOrder(root: ParentNode, selector: string): string[] {
+  return [...root.querySelector(selector)!.children]
+    .map((element) => (element as HTMLElement).dataset.layoutRole!)
+    .filter(Boolean);
+}

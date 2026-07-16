@@ -62,29 +62,29 @@ export function renderAppShell(): string {
 
       <section class="page landing-page" data-page="home" aria-label="Marker AR studio home">
         <div class="landing-inner">
-          <div class="landing-copy">
+          <div class="landing-copy" data-layout-role="landing-copy">
             <p class="landing-kicker">Marker Web AR</p>
             <h1 id="home-page-title" data-page-heading tabindex="-1">Marker AR studio</h1>
             <p>Create cloud image targets, place Cloudflare models above them, and scan the saved target in AR.</p>
-            <div class="landing-flow" aria-label="Marker AR workflow">
-              <div class="landing-flow-step">
-                <span>01</span>
-                <strong>Target</strong>
-                <small>Upload image</small>
-              </div>
-              <div class="landing-flow-step">
-                <span>02</span>
-                <strong>Objects</strong>
-                <small>Place GLB</small>
-              </div>
-              <div class="landing-flow-step">
-                <span>03</span>
-                <strong>AR</strong>
-                <small>Scan target</small>
-              </div>
+          </div>
+          <div class="landing-flow" data-layout-role="landing-flow" aria-label="Marker AR workflow">
+            <div class="landing-flow-step">
+              <span>01</span>
+              <strong>Target</strong>
+              <small>Upload image</small>
+            </div>
+            <div class="landing-flow-step">
+              <span>02</span>
+              <strong>Objects</strong>
+              <small>Place GLB</small>
+            </div>
+            <div class="landing-flow-step">
+              <span>03</span>
+              <strong>AR</strong>
+              <small>Scan target</small>
             </div>
           </div>
-          <div class="landing-preview" aria-hidden="true">
+          <div class="landing-preview" data-layout-role="landing-preview" aria-hidden="true">
             <div class="preview-stage">
               <span class="preview-floor"></span>
               <span class="preview-marker"></span>
@@ -92,7 +92,7 @@ export function renderAppShell(): string {
             </div>
             <p><strong>Cloudflare ready</strong><span>Models load from the Web-AR Worker.</span></p>
           </div>
-          <div class="mode-picker" aria-label="Workflow options">
+          <div class="mode-picker" data-layout-role="mode-picker" aria-label="Workflow options">
             ${modeCards.map(renderModeCard).join('')}
           </div>
         </div>
@@ -101,7 +101,7 @@ export function renderAppShell(): string {
       <section class="page" data-page="scan" hidden aria-label="Marker scanner">
         ${renderPageHeader('scan', 'Scan target', 'Use saved cloud image targets to anchor placed objects in AR.')}
         <div class="scanner-panel">
-          <div class="scanner-stage-stack">
+          <div class="scanner-stage-stack" data-layout-role="scanner-stage">
             <div id="ar-stage" class="ar-stage" aria-label="AR camera stage">
               <div class="stage-idle">
                 <span>Scan target</span>
@@ -122,7 +122,7 @@ export function renderAppShell(): string {
               </div>
             </div>
           </div>
-          <div class="scanner-controls" aria-live="polite">
+          <div class="scanner-controls" data-layout-role="scanner-controls" aria-live="polite">
             <div>
               <span class="status-label">Status</span>
               <p id="ar-status">Camera waiting</p>
@@ -139,7 +139,7 @@ export function renderAppShell(): string {
       <section class="page target-page" data-page="targets" hidden aria-label="Cloud image targets">
         ${renderPageHeader('targets', 'Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
         <section class="target-workspace">
-          <div class="target-preview-shell">
+          <div class="target-preview-shell" data-layout-role="target-preview">
             <div class="target-preview-controls">
               <div class="target-transform-toolbar" aria-label="Transform tools">
                 <button type="button" data-transform-mode="translate" aria-pressed="true">Move</button>
@@ -171,7 +171,7 @@ export function renderAppShell(): string {
             </div>
           </div>
 
-          <section class="tool-card target-inspector-card target-setup-card">
+          <section class="tool-card target-inspector-card target-setup-card" data-layout-role="target-inspector">
             <div class="tool-card-head target-inspector-head">
               <p class="eyebrow">Cloud target</p>
               <p id="image-target-status">Sign in, choose an image, and select a model.</p>
@@ -433,7 +433,7 @@ export function renderAppShell(): string {
       <section class="page" data-page="account" hidden aria-label="Web AR Worker login">
         ${renderPageHeader('account', 'Account', 'Sign in to create and manage cloud image targets.')}
         <section class="auth-layout">
-          <aside class="auth-access-card" aria-label="Image Targets access status">
+          <aside class="auth-access-card" data-layout-role="auth-access" aria-label="Image Targets access status">
             <div class="auth-orbit" aria-hidden="true">
               <span></span>
               <i></i>
@@ -452,7 +452,7 @@ export function renderAppShell(): string {
             </div>
           </aside>
 
-          <section class="tool-card worker-card auth-control-card">
+          <section class="tool-card worker-card auth-control-card" data-layout-role="auth-controls">
             <div class="tool-card-head auth-card-head">
               <p class="eyebrow">Web-AR account</p>
               <h3 data-auth-form-heading>Continue to Marker AR studio</h3>
