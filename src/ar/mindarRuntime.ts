@@ -36,6 +36,9 @@ export type MindARThreeConstructor = new (options: {
   imageTargetSrc: string;
   filterMinCF?: number;
   filterBeta?: number;
+  uiLoading?: 'yes' | 'no' | string;
+  uiScanning?: 'yes' | 'no' | string;
+  uiError?: 'yes' | 'no' | string;
 }) => MindARThreeInstance;
 
 export type MarkerVisibilityEvent = {
@@ -151,6 +154,9 @@ export async function startMarkerAR(
     imageTargetSrc: compiled.imageTargetSrc,
     filterMinCF: 0.001,
     filterBeta: 0.01,
+    uiLoading: 'no',
+    uiScanning: 'no',
+    uiError: 'no',
   });
   mindarThree = instance;
   markerObjects = setupScene(

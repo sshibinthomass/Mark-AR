@@ -5,6 +5,7 @@ import { AR_MARKERS } from '../src/ar/markerCatalog';
 const runtimeMocks = vi.hoisted(() => ({
   cloudflareFactory: vi.fn(),
   compileMarkerTargets: vi.fn(),
+  constructorOptions: [] as Array<Record<string, unknown>>,
   instances: [] as unknown[],
   markerDispose: vi.fn(),
   markerUpdate: vi.fn(),
@@ -46,7 +47,8 @@ vi.mock('../src/vendor/mind-ar/mindar-image-three.prod.js', async () => {
     start = runtimeMocks.mindarStart;
     stop = runtimeMocks.mindarStop;
 
-    constructor(_options: unknown) {
+    constructor(options: Record<string, unknown>) {
+      runtimeMocks.constructorOptions.push(options);
       runtimeMocks.instances.push(this);
     }
 
@@ -103,6 +105,7 @@ beforeEach(() => {
   runtimeMocks.mindarStart.mockReset().mockResolvedValue(undefined);
   runtimeMocks.mindarStop.mockReset();
   runtimeMocks.render.mockReset();
+  runtimeMocks.constructorOptions.length = 0;
   runtimeMocks.instances.length = 0;
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 41));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
@@ -187,6 +190,26 @@ describe('setupMarkerAnchors', () => {
 });
 
 describe('startMarkerAR', () => {
+  it('disables MindAR body-level loading, scanning, and error overlays', async () => {
+    const container = document.createElement('div');
+    runtimeMocks.compileMarkerTargets.mockResolvedValue(createCompiledTargets());
+
+    const session = await startMarkerAR(container, {
+      targets: [createCloudflareRuntimeTarget()],
+    });
+
+    expect(runtimeMocks.constructorOptions).toHaveLength(1);
+    expect(runtimeMocks.constructorOptions[0]).toMatchObject({
+      container,
+      imageTargetSrc: 'blob:compiled-targets',
+      uiLoading: 'no',
+      uiScanning: 'no',
+      uiError: 'no',
+    });
+
+    session.stop();
+  });
+
   it('stops once and disposes marker objects before compiled targets', async () => {
     const cleanupOrder: string[] = [];
     runtimeMocks.markerDispose.mockImplementation(() => cleanupOrder.push('marker'));
