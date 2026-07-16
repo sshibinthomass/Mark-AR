@@ -515,7 +515,7 @@ export function renderAppShell(): string {
 
 function renderRouteLink(route: AppRoute, label: string): string {
   if (route === 'targets') {
-    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in with an approved account to use Image Targets">${renderRouteLabel(route, label)}</a>`;
+    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-label="Targets — sign in required" title="Sign in with an approved account to use Image Targets">${renderRouteLabel(route, label)}</a>`;
   }
   return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${renderRouteLabel(route, label)}</a>`;
 }
@@ -549,7 +549,7 @@ function renderPageHeader(route: Exclude<AppRoute, 'home'>, title: string, text:
 
 function renderModeCard(card: ModeCard): string {
   const protectedAttributes = card.route === 'targets'
-    ? `href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in with an approved account to use Image Targets"`
+    ? `href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" title="Sign in with an approved account to use Image Targets"`
     : `href="${hrefForRoute(card.route)}"`;
   const actionAttribute = card.route === 'targets'
     ? ' data-auth-protected-label'

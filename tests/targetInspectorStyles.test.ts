@@ -61,7 +61,7 @@ describe('target inspector styles', () => {
     expect(responsiveCard).toContain('overflow: visible');
   });
 
-  it('keeps tab buttons aligned after the broad target button rule', () => {
+  it('keeps tab buttons aligned at the shared touch-target height', () => {
     const buttonRuleIndex = css.indexOf('.target-page button');
     const tabOverrideIndex = css.indexOf('.target-page .target-inspector-tabs button');
     const tabOverride = cssRule('.target-page .target-inspector-tabs button');
@@ -72,7 +72,7 @@ describe('target inspector styles', () => {
     expect(tabOverride).toContain('justify-content: center');
     expect(tabOverride).toContain('width: 100%');
     expect(tabOverride).toContain('min-width: 0');
-    expect(tabOverride).toContain('min-height: 34px');
+    expect(tabOverride).toContain('min-height: var(--control-height)');
     expect(tabOverride).toContain('padding: 6px 5px');
     expect(tabOverride).toContain('font-size: 11px');
   });
@@ -89,14 +89,15 @@ describe('target inspector styles', () => {
     expect(transformToolbarButton).toContain('flex: 1 1 0');
   });
 
-  it('keeps target delete buttons compact and icon-only', () => {
+  it('keeps target delete buttons icon-only at the shared touch-target size', () => {
     const deleteButton = cssRule('.target-page .icon-delete-button');
     const icon = cssRule('.trash-icon');
 
     expect(deleteButton).toContain('display: inline-grid');
     expect(deleteButton).toContain('place-items: center');
-    expect(deleteButton).toContain('width: 42px');
-    expect(deleteButton).toContain('min-width: 42px');
+    expect(deleteButton).toContain('width: var(--control-height)');
+    expect(deleteButton).toContain('min-width: var(--control-height)');
+    expect(deleteButton).toContain('min-height: var(--control-height)');
     expect(deleteButton).toContain('padding: 0');
     expect(icon).toContain('width: 16px');
     expect(icon).toContain('height: 18px');

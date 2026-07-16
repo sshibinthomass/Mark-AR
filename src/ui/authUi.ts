@@ -85,13 +85,20 @@ export function applyAuthUi(root: HTMLElement, state: AuthUiState): void {
       link.href = link.dataset.unlockedHref ?? '#/targets';
       link.removeAttribute('aria-disabled');
       link.removeAttribute('data-auth-locked');
+      link.removeAttribute('aria-label');
       link.removeAttribute('title');
       return;
     }
 
     link.href = '#/account';
-    link.setAttribute('aria-disabled', 'true');
+    link.removeAttribute('aria-disabled');
     link.dataset.authLocked = 'true';
+    if (link.dataset.routeLink === 'targets') {
+      link.setAttribute(
+        'aria-label',
+        state.status === 'checking' ? 'Targets — checking access' : 'Targets — sign in required',
+      );
+    }
     link.title = state.status === 'checking' ? 'Checking your session' : protectedTargetsMessage;
   });
 }

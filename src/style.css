@@ -78,6 +78,10 @@ select {
   outline-offset: 3px;
 }
 
+[data-page-heading]:focus {
+  outline: none;
+}
+
 a {
   color: inherit;
 }
@@ -2249,6 +2253,7 @@ button:disabled,
     justify-content: center;
     min-height: 52px;
     padding: 6px 10px;
+    backdrop-filter: none;
   }
 
   .brand-link {

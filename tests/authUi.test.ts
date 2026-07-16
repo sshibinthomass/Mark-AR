@@ -131,14 +131,15 @@ describe('auth UI state', () => {
     expect(root.querySelector('#worker-status')?.textContent).toBe(state.message);
   });
 
-  it('locks protected links and presents a sign-in identity while signed out', () => {
+  it('keeps protected links actionable to Account and presents a sign-in identity while signed out', () => {
     const root = renderAuthFixture();
 
     applyAuthUi(root, signedOut);
 
     const targetLink = root.querySelector<HTMLAnchorElement>('[data-auth-protected]');
     expect(targetLink?.getAttribute('href')).toBe('#/account');
-    expect(targetLink?.getAttribute('aria-disabled')).toBe('true');
+    expect(targetLink?.hasAttribute('aria-disabled')).toBe(false);
+    expect(targetLink?.tabIndex).toBe(0);
     expect(targetLink?.dataset.authLocked).toBe('true');
     expect(targetLink?.title).toBe(protectedTargetsMessage);
     expect(root.querySelector('[data-auth-account-label]')?.textContent).toBe('Sign in');

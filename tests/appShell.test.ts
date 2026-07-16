@@ -72,7 +72,10 @@ describe('renderAppShell', () => {
     expect(protectedLinks).toHaveLength(2);
     expect(protectedLinks.every((link) => link.dataset.unlockedHref === '#/targets')).toBe(true);
     expect(protectedLinks.every((link) => link.getAttribute('href') === '#/account')).toBe(true);
-    expect(protectedLinks.every((link) => link.getAttribute('aria-disabled') === 'true')).toBe(true);
+    expect(protectedLinks.every((link) => !link.hasAttribute('aria-disabled'))).toBe(true);
+    expect(container.querySelector('[data-route-link="targets"]')?.getAttribute('aria-label')).toBe(
+      'Targets — sign in required',
+    );
     expect(container.querySelector('[data-auth-account-label]')?.textContent).toBe('Sign in');
     expect(container.querySelector('[data-auth-access-label]')?.textContent).toBe('Locked');
     expect(container.querySelector('[data-auth-panel="signed-out"]')?.hasAttribute('hidden')).toBe(false);

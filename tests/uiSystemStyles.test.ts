@@ -33,6 +33,7 @@ describe('shared UI system styles', () => {
     expect(cssRule('.action-control--danger')).toContain('color: var(--danger)');
     expect(cssRule('.action-control--inverse')).toContain('color: #ffffff');
     expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*3px solid/m);
+    expect(cssRule('[data-page-heading]:focus')).toContain('outline: none');
   });
 
   it('uses three equal Home destination columns on desktop', () => {
