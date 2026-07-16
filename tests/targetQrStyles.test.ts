@@ -19,6 +19,7 @@ describe('target QR prompt styles', () => {
     expect(cssRule('.target-qr-preview-shell')).toContain('background:');
     expect(cssRule('.target-qr-actions')).toContain('flex-wrap: wrap');
     expect(cssRule('.target-qr-actions')).toContain('grid-column: 1 / -1');
+    expect(cssRule('.target-qr-share-status')).toContain('grid-column: 1 / -1');
   });
 
   it('switches to one column on small screens and removes motion when requested', () => {

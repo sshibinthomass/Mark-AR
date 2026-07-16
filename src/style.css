@@ -2170,6 +2170,19 @@ h1 {
   white-space: nowrap;
 }
 
+.target-qr-share-status {
+  grid-column: 1 / -1;
+  min-height: 1.3em;
+  margin: -2px 2px 0;
+  color: var(--teal-dark);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.target-qr-share-status[data-tone='error'] {
+  color: var(--danger);
+}
+
 .target-qr-actions {
   grid-column: 1 / -1;
   display: flex;
