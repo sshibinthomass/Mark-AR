@@ -9,7 +9,7 @@ Automatically create a branded, downloadable QR code for every saved target's st
 - Every saved target with a `scanId` has a QR code encoding its exact absolute `#/scan/<scan_id>` URL.
 - QR generation runs locally in Mark-AR. It does not call an external QR service or require the Worker to store a generated image.
 - The supplied `00-arvenilo-master-transparent-logo-QR.png` appears in the center of the QR.
-- The supplied `04-anchorar-platform-transparent-QR.png` appears outside the QR at the bottom-right of the final image.
+- The supplied `04-anchorar-platform-transparent-QR.png` appears outside the QR, horizontally centered beneath the complete QR square including its quiet zone.
 - The QR prompt appears only after the target's first successful creation.
 - Editing or re-saving an existing target never opens the prompt.
 - Every saved-target row provides a permanent `Download QR` action.
@@ -35,9 +35,9 @@ The exported PNG uses a square white canvas:
 - a standards-compliant quiet zone included around the QR modules;
 - dark modules on white for strong contrast;
 - the `00` logo centered inside a white protective badge and limited to approximately 16 percent of the QR width;
-- the `04` logo placed entirely below and outside the QR quiet zone, aligned to the bottom-right.
+- the `04` logo placed entirely below and outside the QR quiet zone, with its horizontal center aligned to the horizontal center of the complete QR square.
 
-The outer logo must never overlap the QR region or its quiet zone. The center badge must not cover any finder pattern. QR output uses error-correction level `H`, and the implementation verifies that the composed result still decodes to the exact target URL.
+The outer logo must never overlap the QR region or its quiet zone. Its horizontal center may differ from the QR center by no more than half a pixel because both rectangles are rasterized to whole-pixel dimensions. The center badge must not cover any finder pattern. QR output uses error-correction level `H`, and the implementation verifies that the composed result still decodes to the exact target URL.
 
 ## First-Creation Prompt
 
@@ -113,7 +113,7 @@ Automated tests cover:
 
 - encoding the exact absolute target scan URL;
 - high error correction and the required quiet zone;
-- placement bounds for the center `00` logo and exterior bottom-right `04` logo;
+- placement bounds for the center `00` logo and the horizontally centered exterior `04` logo;
 - decoding the final composed PNG back to the original URL;
 - safe filename generation;
 - opening the modal after a successful create;
