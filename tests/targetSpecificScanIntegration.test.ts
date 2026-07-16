@@ -206,6 +206,76 @@ describe('target-specific scan route integration', () => {
     await waitFor(() => markerArMocks.sessionStop.mock.calls.length === 1);
 
     expect(document.querySelector('[data-app-shell]')?.getAttribute('data-active-page')).toBe('home');
+    const stage = required('#ar-stage');
+    expect(stage.querySelector('[data-scanner-guide]')).toBeNull();
+    expect(stage.querySelector('.stage-idle')?.textContent).toBe('Scan target');
+    expect(document.querySelectorAll('[data-scanner-guide]')).toHaveLength(0);
+  });
+
+  it('owns one scanner guide inside the camera stage and toggles it from aggregate marker visibility', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    required<HTMLButtonElement>('#start-ar').click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+
+    const stage = required('#ar-stage');
+    const guide = required<HTMLElement>('#ar-stage [data-scanner-guide]');
+    const options = markerArMocks.startMarkerAR.mock.calls[0][1] as {
+      targets: Array<{ marker: { id: string; label: string; targetIndex: number } }>;
+      onMarkerVisibility(event: {
+        marker: { id: string; label: string; targetIndex: number };
+        visible: boolean;
+      }): void;
+    };
+
+    expect(stage.querySelectorAll('[data-scanner-guide]')).toHaveLength(1);
+    expect(guide.parentElement).toBe(stage);
+    expect([...document.body.children]).not.toContain(guide);
+    expect(guide.hidden).toBe(false);
+
+    options.onMarkerVisibility({ marker: options.targets[0].marker, visible: true });
+    options.onMarkerVisibility({ marker: options.targets[1].marker, visible: false });
+    expect(guide.hidden).toBe(true);
+
+    options.onMarkerVisibility({ marker: options.targets[0].marker, visible: false });
+    expect(guide.hidden).toBe(false);
+  });
+
+  it('does not duplicate the scanner guide when the camera restarts', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    const start = required<HTMLButtonElement>('#start-ar');
+    start.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+
+    start.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
+
+    expect(required('#ar-stage').querySelectorAll('[data-scanner-guide]')).toHaveLength(1);
+    expect(markerArMocks.sessionStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the guide while startup is pending and stops the late session', async () => {
+    const markerStart = deferred<{ stop(): void }>();
+    const lateStop = vi.fn();
+    markerArMocks.startMarkerAR.mockReturnValueOnce(markerStart.promise);
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    required<HTMLButtonElement>('#start-ar').click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+
+    window.location.hash = '#/';
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-active-page') === 'home');
+
+    expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
+    expect(required('#ar-stage').querySelector('.stage-idle')).toBeTruthy();
+
+    markerStart.resolve({ stop: lateStop });
+    await waitFor(() => lateStop.mock.calls.length === 1);
+    expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
   });
 
   it('tracks marker startup for immersive mobile navigation and clears it on departure', async () => {
@@ -339,6 +409,8 @@ describe('target-specific scan route integration', () => {
       textContent: 'Back to image scan',
     });
     expect(required<HTMLElement>('.scanner-controls').hidden).toBe(true);
+    expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
+    expect(required('#ar-stage').querySelector('.stage-idle')).toBeTruthy();
   });
 
   it('delegates Place, rotation, and Reset to the prepared controller and applies exact lifecycle statuses', async () => {
@@ -419,6 +491,7 @@ describe('target-specific scan route integration', () => {
     expect(restartedTargets[0].marker.imagePath).toBe(scanTarget.imageUrl);
     expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Place on floor');
     expect(required('#floor-ar-message').textContent).toBe('Floor placement is ready.');
+    expect(required('#ar-stage').querySelectorAll('[data-scanner-guide]')).toHaveLength(1);
   });
 
   it('ignores a re-entrant Back to image scan click while floor stop is pending', async () => {
@@ -747,6 +820,8 @@ describe('target-specific scan route integration', () => {
       disabled: false,
       textContent: 'Start camera',
     });
+    expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
+    expect(required('#ar-stage').querySelector('.stage-idle')?.textContent).toBe('Scan target');
   });
 
   it('remembers the exact scan URL across sign-in after a 401 response', async () => {

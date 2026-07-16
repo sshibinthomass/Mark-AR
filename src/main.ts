@@ -138,6 +138,11 @@ import {
   type AppRoute,
 } from './ui/pageRoutes';
 import { setupResponsiveLayout } from './ui/responsiveLayout';
+import {
+  prepareScannerStage,
+  resetScannerStage,
+  setScannerGuideVisible,
+} from './ui/scannerStage';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
 import { renderSavedTargetList } from './ui/savedTargetList';
@@ -328,10 +333,7 @@ floorToggle.addEventListener('click', () => {
   }
 
   activeSharedLinkMode = 'floor';
-  setScanSessionState('idle');
-  invalidateMarkerStart();
-  session?.stop();
-  session = undefined;
+  stopActiveArSession();
   setFloorPlacementUi({
     state: 'floor-scanning',
     message: 'Move your phone until the floor ring appears.',
@@ -386,11 +388,12 @@ async function startCurrentArSession(): Promise<void> {
   const abortController = new AbortController();
   markerStartAbort = abortController;
   const startTarget = focusedScanTarget;
+  const visibleMarkerIds = new Set<string>();
   startButton.disabled = true;
   status.textContent = 'Preparing marker targets';
   session?.stop();
   session = undefined;
-  stage.replaceChildren();
+  prepareScannerStage(stage);
 
   try {
     const runtimeTargets = startTarget
@@ -412,9 +415,16 @@ async function startCurrentArSession(): Promise<void> {
         }
       },
       onMarkerVisibility: ({ marker, visible }) => {
-        if (isCurrentStart()) {
-          status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
+        if (!isCurrentStart()) {
+          return;
         }
+        if (visible) {
+          visibleMarkerIds.add(marker.id);
+        } else {
+          visibleMarkerIds.delete(marker.id);
+        }
+        setScannerGuideVisible(stage, visibleMarkerIds.size === 0);
+        status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
       },
       onReady: () => {
         if (isCurrentStart()) {
@@ -443,6 +453,7 @@ async function startCurrentArSession(): Promise<void> {
     }
     const message = error instanceof Error ? error.message : 'Unable to start AR';
     setScanSessionState('idle');
+    resetScannerStage(stage);
     status.textContent = message;
     startButton.textContent = 'Start camera';
   } finally {
@@ -1172,7 +1183,7 @@ function stopActiveArSession(): void {
   invalidateMarkerStart();
   session?.stop();
   session = undefined;
-  stage.replaceChildren();
+  resetScannerStage(stage);
 }
 
 function resetScanControls(): void {
