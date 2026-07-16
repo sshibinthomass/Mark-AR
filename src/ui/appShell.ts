@@ -40,12 +40,20 @@ const modeCards: ModeCard[] = [
   },
 ];
 
+const routeIconPaths: Record<AppRoute, string> = {
+  home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9 21v-7h6v7"/>',
+  scan: '<path d="M4 8V4h4"/><path d="M16 4h4v4"/><path d="M20 16v4h-4"/><path d="M8 20H4v-4"/><path d="M7 12h10"/>',
+  targets: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 15 3-3 2 2 3-4 2 3"/>',
+  account: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>',
+};
+
 export function renderAppShell(): string {
   return `
     <main class="app-shell" data-app-shell>
       <nav class="shell-nav" aria-label="Marker AR pages">
-        <a class="brand-link" href="${hrefForRoute('home')}" data-route-link="home">Marker AR studio</a>
+        <a class="brand-link" href="${hrefForRoute('home')}">Marker AR studio</a>
         <div class="route-tabs">
+          ${renderRouteLink('home', 'Home')}
           ${renderRouteLink('scan', 'Scan')}
           ${renderRouteLink('targets', 'Targets')}
           ${renderRouteLink('account', '<span data-auth-account-label>Sign in</span>')}
@@ -56,7 +64,7 @@ export function renderAppShell(): string {
         <div class="landing-inner">
           <div class="landing-copy">
             <p class="landing-kicker">Marker Web AR</p>
-            <h1>Marker AR studio</h1>
+            <h1 id="home-page-title" data-page-heading tabindex="-1">Marker AR studio</h1>
             <p>Create cloud image targets, place Cloudflare models above them, and scan the saved target in AR.</p>
             <div class="landing-flow" aria-label="Marker AR workflow">
               <div class="landing-flow-step">
@@ -91,7 +99,7 @@ export function renderAppShell(): string {
       </section>
 
       <section class="page" data-page="scan" hidden aria-label="Marker scanner">
-        ${renderPageHeader('Scan target', 'Use saved cloud image targets to anchor placed objects in AR.')}
+        ${renderPageHeader('scan', 'Scan target', 'Use saved cloud image targets to anchor placed objects in AR.')}
         <div class="scanner-panel">
           <div class="scanner-stage-stack">
             <div id="ar-stage" class="ar-stage" aria-label="AR camera stage">
@@ -129,7 +137,7 @@ export function renderAppShell(): string {
       </section>
 
       <section class="page target-page" data-page="targets" hidden aria-label="Cloud image targets">
-        ${renderPageHeader('Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
+        ${renderPageHeader('targets', 'Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
         <section class="target-workspace">
           <div class="target-preview-shell">
             <div class="target-preview-controls">
@@ -423,7 +431,7 @@ export function renderAppShell(): string {
       </section>
 
       <section class="page" data-page="account" hidden aria-label="Web AR Worker login">
-        ${renderPageHeader('Account', 'Sign in to create and manage cloud image targets.')}
+        ${renderPageHeader('account', 'Account', 'Sign in to create and manage cloud image targets.')}
         <section class="auth-layout">
           <aside class="auth-access-card" aria-label="Image Targets access status">
             <div class="auth-orbit" aria-hidden="true">
@@ -506,18 +514,32 @@ export function renderAppShell(): string {
 
 function renderRouteLink(route: AppRoute, label: string): string {
   if (route === 'targets') {
-    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in with an approved account to use Image Targets">${label}</a>`;
+    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-disabled="true" title="Sign in with an approved account to use Image Targets">${renderRouteLabel(route, label)}</a>`;
   }
-  return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${label}</a>`;
+  return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${renderRouteLabel(route, label)}</a>`;
 }
 
-function renderPageHeader(title: string, text: string): string {
+function renderRouteLabel(route: AppRoute, label: string): string {
+  return `
+    <svg class="route-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      ${routeIconPaths[route]}
+    </svg>
+    <span class="route-label">${label}</span>
+  `;
+}
+
+function renderPageHeader(route: Exclude<AppRoute, 'home'>, title: string, text: string): string {
   return `
     <header class="page-header">
-      <a class="page-back" href="${hrefForRoute('home')}">Back</a>
-      <div>
+      <a class="page-home-link action-control action-control--quiet" href="${hrefForRoute('home')}">
+        <svg class="action-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m15 18-6-6 6-6"/>
+        </svg>
+        <span>Home</span>
+      </a>
+      <div class="page-heading-copy">
         <p class="eyebrow">Marker Web AR</p>
-        <h2>${title}</h2>
+        <h2 id="${route}-page-title" data-page-heading tabindex="-1">${title}</h2>
         <p>${text}</p>
       </div>
     </header>

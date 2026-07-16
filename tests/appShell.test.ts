@@ -9,13 +9,38 @@ describe('renderAppShell', () => {
 
     expect(
       [...container.querySelectorAll<HTMLAnchorElement>('.route-tabs a')].map((link) => ({
+        route: link.dataset.routeLink,
+        href: link.getAttribute('href'),
+        text: link.textContent?.trim(),
+        hasIcon: Boolean(link.querySelector('.route-icon')),
+      })),
+    ).toEqual([
+      { route: 'home', href: '#/', text: 'Home', hasIcon: true },
+      { route: 'scan', href: '#/scan', text: 'Scan', hasIcon: true },
+      { route: 'targets', href: '#/account', text: 'Targets', hasIcon: true },
+      { route: 'account', href: '#/account', text: 'Sign in', hasIcon: true },
+    ]);
+    expect(
+      [...container.querySelectorAll<HTMLElement>('[data-page-heading]')].map((heading) => ({
+        id: heading.id,
+        text: heading.textContent?.trim(),
+        tabIndex: heading.tabIndex,
+      })),
+    ).toEqual([
+      { id: 'home-page-title', text: 'Marker AR studio', tabIndex: -1 },
+      { id: 'scan-page-title', text: 'Scan target', tabIndex: -1 },
+      { id: 'targets-page-title', text: 'Image targets', tabIndex: -1 },
+      { id: 'account-page-title', text: 'Account', tabIndex: -1 },
+    ]);
+    expect(
+      [...container.querySelectorAll<HTMLAnchorElement>('.page-home-link')].map((link) => ({
         href: link.getAttribute('href'),
         text: link.textContent?.trim(),
       })),
     ).toEqual([
-      { href: '#/scan', text: 'Scan' },
-      { href: '#/account', text: 'Targets' },
-      { href: '#/account', text: 'Sign in' },
+      { href: '#/', text: 'Home' },
+      { href: '#/', text: 'Home' },
+      { href: '#/', text: 'Home' },
     ]);
     expect(
       [...container.querySelectorAll<HTMLElement>('.mode-card strong')].map((title) => title.textContent?.trim()),

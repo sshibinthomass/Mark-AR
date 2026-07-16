@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { activateAccessibleRoute, activateRoute } from '../src/ui/pageRouter';
 
 describe('activateRoute', () => {
@@ -20,6 +20,26 @@ describe('activateRoute', () => {
     expect(root.querySelector('[data-route-link="home"]')?.getAttribute('aria-current')).toBeNull();
     expect(root.querySelector('[data-route-link="scan"]')?.getAttribute('aria-current')).toBe('page');
     expect(root.dataset.activePage).toBe('scan');
+  });
+
+  it('scrolls to the page start and focuses the active page heading', () => {
+    const root = document.createElement('main');
+    root.innerHTML = `
+      <section data-page="home">
+        <h1 data-page-heading tabindex="-1">Home</h1>
+      </section>
+      <section data-page="scan" hidden>
+        <h2 data-page-heading tabindex="-1">Scan target</h2>
+      </section>
+    `;
+    const scrollToTop = vi.fn();
+    const focusHeading = vi.fn();
+
+    activateRoute(root, 'scan', { scrollToTop, focusHeading });
+
+    const scanHeading = root.querySelector<HTMLElement>('[data-page="scan"] [data-page-heading]');
+    expect(scrollToTop).toHaveBeenCalledTimes(1);
+    expect(focusHeading).toHaveBeenCalledWith(scanHeading);
   });
 
   it('activates Account and reports a block when a signed-out user requests Targets', () => {
