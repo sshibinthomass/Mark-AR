@@ -153,6 +153,7 @@ const shell = queryRequired<HTMLElement>('[data-app-shell]');
 setupResponsiveLayout(shell);
 setScanSessionState('idle');
 const targetInspectorTabs = setupTargetInspectorTabs(app);
+const targetPage = queryRequired<HTMLElement>('[data-page="targets"]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');
 const status = queryRequired<HTMLParagraphElement>('#ar-status');
@@ -556,6 +557,7 @@ targetImageFile?.addEventListener('change', async () => {
   }
 
   targetImagePayload = await imageFileToCapturedImage(file);
+  syncTargetSaveMode();
   if (targetLabelInput && !targetLabelInput.value) {
     targetLabelInput.value = file.name.replace(/\.[^.]+$/, '');
   }
@@ -2315,6 +2317,7 @@ function resetImageTargetEditor(): void {
 }
 
 function syncTargetSaveMode(): void {
+  targetPage.dataset.hasTargetDraft = String(Boolean(editingTarget || targetImagePayload));
   if (saveImageTargetButton) {
     saveImageTargetButton.textContent = editingTarget ? 'Update target' : 'Save target';
   }

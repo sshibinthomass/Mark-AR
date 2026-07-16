@@ -137,7 +137,7 @@ export function renderAppShell(): string {
         </div>
       </section>
 
-      <section class="page target-page" data-page="targets" hidden aria-label="Cloud image targets">
+      <section class="page target-page" data-page="targets" data-has-target-draft="false" hidden aria-label="Cloud image targets">
         ${renderPageHeader('targets', 'Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
         <section class="target-workspace">
           <div class="target-preview-shell" data-layout-role="target-preview">

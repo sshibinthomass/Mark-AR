@@ -67,6 +67,7 @@ describe('renderAppShell', () => {
       'auth-controls',
     ]);
     expect(container.querySelector('[data-page="targets"]')).toBeTruthy();
+    expect(container.querySelector('[data-page="targets"]')?.getAttribute('data-has-target-draft')).toBe('false');
     const protectedLinks = [...container.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]')];
     expect(protectedLinks).toHaveLength(2);
     expect(protectedLinks.every((link) => link.dataset.unlockedHref === '#/targets')).toBe(true);

@@ -149,6 +149,7 @@ describe('saved target editing integration', () => {
 
     expect(document.querySelector<HTMLButtonElement>('#save-image-target')?.textContent).toBe('Update target');
     expect(document.querySelector<HTMLButtonElement>('#new-image-target')?.hidden).toBe(false);
+    expect(document.querySelector('[data-page="targets"]')?.getAttribute('data-has-target-draft')).toBe('true');
     expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
     expect(document.querySelector('[data-edit-target="target-1"]')?.getAttribute('aria-current')).toBe('true');
     expect(previewMocks.update).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -226,6 +227,7 @@ describe('saved target editing integration', () => {
     expect(document.querySelector<HTMLInputElement>('#target-label')?.value).toBe('');
     expect(document.querySelectorAll('.target-object-row')).toHaveLength(0);
     expect(document.querySelector<HTMLButtonElement>('#new-image-target')?.hidden).toBe(true);
+    expect(document.querySelector('[data-page="targets"]')?.getAttribute('data-has-target-draft')).toBe('false');
     expect(document.querySelector('[data-edit-target="target-1"]')?.getAttribute('aria-current')).toBe('false');
   });
 

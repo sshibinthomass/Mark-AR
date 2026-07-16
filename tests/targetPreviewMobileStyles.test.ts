@@ -34,16 +34,20 @@ function cssRule(source: string, selector: string): string {
 
 describe('target preview mobile styles', () => {
   it('keeps target preview controls from covering the mobile canvas and model rail', () => {
-    const mobile = mediaBlock('(max-width: 620px)');
-    const previewControls = cssRule(mobile, '.target-preview-controls');
-    const transformToolbar = cssRule(mobile, '.target-transform-toolbar');
+    const mobileWorkspace = mediaBlock('(max-width: 760px)');
+    const compactPhone = mediaBlock('(max-width: 620px)');
+    const previewControls = cssRule(compactPhone, '.target-preview-controls');
+    const transformToolbar = cssRule(compactPhone, '.target-transform-toolbar');
 
+    expect(cssRule(mobileWorkspace, '.target-preview-stage')).toContain(
+      'height: clamp(300px, 48svh, 420px)',
+    );
     expect(previewControls).toContain('position: static');
     expect(previewControls).toContain('width: 100%');
     expect(previewControls).toContain('grid-template-columns: 1fr');
     expect(previewControls).toContain('margin-bottom: 8px');
     expect(transformToolbar).toContain('flex-direction: row');
     expect(transformToolbar).toContain('width: 100%');
-    expect(mobile).not.toContain('.target-camera-gizmo');
+    expect(compactPhone).not.toContain('.target-camera-gizmo');
   });
 });
