@@ -53,7 +53,7 @@ export async function shareTargetQrArtifact(
 
   try {
     await dependencies.share({
-      title: `AnchorAR — ${input.targetLabel}`,
+      title: `AnchorAR \u2014 ${input.targetLabel}`,
       text: `Scan this QR code to open the AR experience: ${input.scanUrl}`,
       url: input.scanUrl,
       files: [file],

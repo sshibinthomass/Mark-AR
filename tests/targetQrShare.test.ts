@@ -31,7 +31,7 @@ describe('target QR sharing', () => {
     expect(canShare).toHaveBeenCalledWith({ files: [expect.any(File)] });
     expect(share).toHaveBeenCalledOnce();
     const payload = share.mock.calls[0][0];
-    expect(payload.title).toBe('AnchorAR — Product marker');
+    expect(payload.title).toBe('AnchorAR \u2014 Product marker');
     expect(payload.text).toBe(`Scan this QR code to open the AR experience: ${scanUrl}`);
     expect(payload.url).toBe(scanUrl);
     expect(payload.files).toHaveLength(1);
