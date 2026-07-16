@@ -54,6 +54,11 @@ import {
   signupToWebArWorker,
 } from './app/webArAuth';
 import {
+  createTargetQrArtifact,
+  downloadTargetQrArtifact,
+  type TargetQrArtifact,
+} from './app/targetQrCode';
+import {
   loginIntroMessage,
   protectedTargetsMessage,
   signupIntroMessage,
@@ -131,6 +136,7 @@ import {
 } from './ui/floorPlacementUi';
 import { renderTargetModelRail } from './ui/modelRail';
 import {
+  absoluteTargetScanUrl,
   hrefForRoute,
   hrefForTargetScan,
   locationFromHash,
@@ -145,6 +151,10 @@ import {
 } from './ui/scannerStage';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
+import {
+  createTargetQrDialog,
+  type TargetQrDialog,
+} from './ui/targetQrDialog';
 import { renderSavedTargetList } from './ui/savedTargetList';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -262,6 +272,43 @@ let targetGroups: TargetEditorGroup[] = [];
 let targetSelection: TargetEditorSelection = { objectIds: [] };
 let targetAnimationMixed = false;
 let imageTargetPreview: ImageTargetPreview | undefined;
+let targetQrPromptRequestVersion = 0;
+let targetQrPromptTarget: CloudImageTarget | undefined;
+let targetQrPromptArtifact: TargetQrArtifact | undefined;
+let targetQrPromptPreviewUrl: string | undefined;
+const targetQrDownloadJobs = new Map<string, Promise<void>>();
+let targetQrDialog: TargetQrDialog;
+targetQrDialog = createTargetQrDialog(shell, {
+  onDownload: () => {
+    if (!targetQrPromptArtifact) {
+      return;
+    }
+    downloadTargetQrArtifact(targetQrPromptArtifact);
+    updateImageTargetStatus('QR code downloaded.', false);
+  },
+  onCopy: async (scanUrl) => {
+    await copyTargetScanUrl(scanUrl);
+  },
+  onOpenScanner: (scanHref) => {
+    targetQrDialog.close();
+    if (window.location.hash === scanHref) {
+      activateRequestedLocation(locationFromHash(scanHref));
+      return;
+    }
+    window.location.hash = scanHref;
+  },
+  onRetry: () => {
+    if (targetQrPromptTarget) {
+      void prepareTargetQrPrompt(targetQrPromptTarget);
+    }
+  },
+  onClose: () => {
+    targetQrPromptRequestVersion += 1;
+    releaseTargetQrPromptPreview();
+    targetQrPromptTarget = undefined;
+    targetQrPromptArtifact = undefined;
+  },
+});
 const animationTrackEditor = targetAnimationTracks
   ? createAnimationTrackEditor(targetAnimationTracks, {
       onChange: (animation) => {
@@ -2158,6 +2205,9 @@ async function saveCurrentImageTarget(): Promise<void> {
         `${savedMessage}, but the saved-target list could not refresh. ${errorMessage(error, 'Refresh failed.')}`,
         true,
       );
+      if (!wasEditing) {
+        void openCreatedTargetQrPrompt(savedTarget);
+      }
       return;
     }
     const refreshedTarget = refreshedTargets.find((target) => target.id === savedTarget.id);
@@ -2175,6 +2225,9 @@ async function saveCurrentImageTarget(): Promise<void> {
     renderSavedImageTargets();
     await loadSavedImageTarget(refreshedTarget);
     updateImageTargetStatus(wasEditing ? 'Image target updated in Cloudflare.' : 'Image target saved to Cloudflare.', false);
+    if (!wasEditing) {
+      void openCreatedTargetQrPrompt(refreshedTarget);
+    }
   } catch (error) {
     updateImageTargetStatus(errorMessage(error, 'Unable to save image target'), true);
   }
@@ -2234,16 +2287,9 @@ function renderSavedImageTargets(): void {
     activeTargetId: editingTarget?.targetId,
     currentUrl: window.location.href,
     onCopyLink: async (_target, scanUrl) => {
-      try {
-        if (!navigator.clipboard?.writeText) {
-          throw new Error('Clipboard access is unavailable in this browser.');
-        }
-        await navigator.clipboard.writeText(scanUrl);
-        updateImageTargetStatus('Scan link copied.', false);
-      } catch (error) {
-        updateImageTargetStatus(errorMessage(error, 'Unable to copy scan link'), true);
-      }
+      await copyTargetScanUrl(scanUrl);
     },
+    onDownloadQr: downloadQrForTarget,
     onEdit: (target) => {
       void loadSavedImageTarget(target);
     },
@@ -2263,6 +2309,110 @@ function renderSavedImageTargets(): void {
       }
     },
   });
+}
+
+async function openCreatedTargetQrPrompt(target: CloudImageTarget): Promise<void> {
+  if (!target.scanId) {
+    return;
+  }
+
+  targetQrPromptRequestVersion += 1;
+  releaseTargetQrPromptPreview();
+  targetQrPromptTarget = target;
+  targetQrPromptArtifact = undefined;
+  targetQrDialog.open({
+    targetLabel: target.label,
+    scanUrl: absoluteTargetScanUrl(target.scanId, window.location.href),
+    scanHref: hrefForTargetScan(target.scanId),
+    returnFocus: saveImageTargetButton ?? undefined,
+  });
+  await prepareTargetQrPrompt(target);
+}
+
+async function prepareTargetQrPrompt(target: CloudImageTarget): Promise<void> {
+  if (!target.scanId) {
+    return;
+  }
+
+  const requestVersion = ++targetQrPromptRequestVersion;
+  releaseTargetQrPromptPreview();
+  targetQrPromptArtifact = undefined;
+  targetQrDialog.setLoading();
+  const scanUrl = absoluteTargetScanUrl(target.scanId, window.location.href);
+
+  try {
+    const artifact = await createTargetQrArtifact({
+      scanUrl,
+      label: target.label,
+      targetId: target.id,
+    });
+    if (
+      requestVersion !== targetQrPromptRequestVersion
+      || !targetQrDialog.isOpen()
+      || targetQrPromptTarget?.id !== target.id
+    ) {
+      return;
+    }
+    targetQrPromptArtifact = artifact;
+    targetQrPromptPreviewUrl = URL.createObjectURL(artifact.blob);
+    targetQrDialog.setReady(targetQrPromptPreviewUrl);
+  } catch (error) {
+    if (
+      requestVersion === targetQrPromptRequestVersion
+      && targetQrDialog.isOpen()
+      && targetQrPromptTarget?.id === target.id
+    ) {
+      targetQrDialog.setError(errorMessage(error, 'Unable to prepare the QR code.'));
+    }
+  }
+}
+
+function releaseTargetQrPromptPreview(): void {
+  if (!targetQrPromptPreviewUrl) {
+    return;
+  }
+  URL.revokeObjectURL(targetQrPromptPreviewUrl);
+  targetQrPromptPreviewUrl = undefined;
+}
+
+async function copyTargetScanUrl(scanUrl: string): Promise<void> {
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard access is unavailable in this browser.');
+    }
+    await navigator.clipboard.writeText(scanUrl);
+    updateImageTargetStatus('Scan link copied.', false);
+  } catch (error) {
+    updateImageTargetStatus(errorMessage(error, 'Unable to copy scan link'), true);
+  }
+}
+
+async function downloadQrForTarget(
+  target: CloudImageTarget,
+  scanUrl: string,
+): Promise<void> {
+  const existingJob = targetQrDownloadJobs.get(target.id);
+  if (existingJob) {
+    return existingJob;
+  }
+
+  const job = (async () => {
+    try {
+      const artifact = await createTargetQrArtifact({
+        scanUrl,
+        label: target.label,
+        targetId: target.id,
+      });
+      downloadTargetQrArtifact(artifact);
+      updateImageTargetStatus('QR code downloaded.', false);
+    } catch (error) {
+      updateImageTargetStatus(errorMessage(error, 'Unable to download QR code'), true);
+    } finally {
+      targetQrDownloadJobs.delete(target.id);
+    }
+  })();
+  targetQrDownloadJobs.set(target.id, job);
+  return job;
 }
 
 async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
