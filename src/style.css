@@ -1978,8 +1978,10 @@ h1 {
 
 .saved-target-link-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .saved-target-link-actions button,

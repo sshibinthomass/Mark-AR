@@ -85,6 +85,7 @@ describe('saved target list', () => {
   it('renders and copies the stable URL for exactly one saved target', () => {
     const container = document.createElement('div');
     const onCopyLink = vi.fn();
+    const onDownloadQr = vi.fn();
 
     renderSavedTargetList(container, {
       targets: [modelTarget, textTarget],
@@ -92,17 +93,26 @@ describe('saved target list', () => {
       onEdit: vi.fn(),
       onDelete: vi.fn(),
       onCopyLink,
+      onDownloadQr,
     });
 
     const openScan = container.querySelector<HTMLAnchorElement>('[data-open-target-scan="target-model"]');
     const copyLink = container.querySelector<HTMLButtonElement>('[data-copy-target-link="target-model"]');
+    const downloadQr = container.querySelector<HTMLButtonElement>('[data-download-target-qr="target-model"]');
     expect(openScan?.getAttribute('href')).toBe('#/scan/scan-target-model');
     expect(openScan?.textContent).toBe('Open scanner');
     expect(copyLink?.textContent).toBe('Copy link');
+    expect(downloadQr?.textContent).toBe('Download QR');
     expect(container.querySelector('[data-open-target-scan="target-text"]')).toBeNull();
+    expect(container.querySelector('[data-download-target-qr="target-text"]')).toBeNull();
 
     copyLink?.click();
     expect(onCopyLink).toHaveBeenCalledWith(
+      modelTarget,
+      'https://example.com/Mark-AR/#/scan/scan-target-model',
+    );
+    downloadQr?.click();
+    expect(onDownloadQr).toHaveBeenCalledWith(
       modelTarget,
       'https://example.com/Mark-AR/#/scan/scan-target-model',
     );

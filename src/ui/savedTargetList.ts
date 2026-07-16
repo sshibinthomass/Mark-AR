@@ -10,6 +10,7 @@ type SavedTargetListOptions = {
   onDelete: (target: CloudImageTarget) => void | Promise<void>;
   currentUrl?: string;
   onCopyLink?: (target: CloudImageTarget, url: string) => void | Promise<void>;
+  onDownloadQr?: (target: CloudImageTarget, url: string) => void | Promise<void>;
 };
 
 export function renderSavedTargetList(
@@ -73,6 +74,13 @@ export function renderSavedTargetList(
       urlLabel.title = scanUrl;
       const actions = document.createElement('span');
       actions.className = 'saved-target-link-actions';
+      const downloadButton = document.createElement('button');
+      downloadButton.type = 'button';
+      downloadButton.dataset.downloadTargetQr = target.id;
+      downloadButton.textContent = 'Download QR';
+      downloadButton.addEventListener('click', () => (
+        void options.onDownloadQr?.(target, scanUrl)
+      ));
       const copyButton = document.createElement('button');
       copyButton.type = 'button';
       copyButton.dataset.copyTargetLink = target.id;
@@ -82,7 +90,7 @@ export function renderSavedTargetList(
       openLink.dataset.openTargetScan = target.id;
       openLink.href = scanHref;
       openLink.textContent = 'Open scanner';
-      actions.append(copyButton, openLink);
+      actions.append(downloadButton, copyButton, openLink);
       links.append(urlLabel, actions);
       content.append(links);
     }
