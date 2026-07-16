@@ -42,8 +42,10 @@ const qrMocks = vi.hoisted(() => ({
 }));
 
 const browserMocks = vi.hoisted(() => ({
+  canShare: vi.fn(),
   createObjectURL: vi.fn(),
   revokeObjectURL: vi.fn(),
+  share: vi.fn(),
   writeText: vi.fn(async () => undefined),
 }));
 
@@ -110,6 +112,8 @@ describe('target QR integration', () => {
     qrMocks.downloadTargetQrArtifact.mockClear();
     browserMocks.createObjectURL.mockReset();
     browserMocks.revokeObjectURL.mockClear();
+    browserMocks.share.mockReset();
+    browserMocks.canShare.mockReset();
     browserMocks.writeText.mockClear();
 
     cloudMocks.listImageTargets.mockImplementation(async () => (
@@ -135,6 +139,8 @@ describe('target QR integration', () => {
     browserMocks.createObjectURL.mockImplementation(() => (
       `blob:target-qr-${browserMocks.createObjectURL.mock.calls.length}`
     ));
+    browserMocks.share.mockResolvedValue(undefined);
+    browserMocks.canShare.mockReturnValue(true);
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
       value: browserMocks.createObjectURL,
@@ -146,6 +152,14 @@ describe('target QR integration', () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: browserMocks.writeText },
+    });
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: browserMocks.share,
+    });
+    Object.defineProperty(navigator, 'canShare', {
+      configurable: true,
+      value: browserMocks.canShare,
     });
   });
 
@@ -195,6 +209,53 @@ describe('target QR integration', () => {
     document.querySelector<HTMLButtonElement>('[data-target-qr-open]')?.click();
     await waitFor(() => window.location.hash === '#/scan/scan-new');
     expect(isQrDialogOpen()).toBe(false);
+  }, 10000);
+
+  it('shares the retained QR image and exact scan URL from the prompt', async () => {
+    await import('../src/main');
+    await createNewTarget();
+    await waitFor(() => isQrDialogOpen());
+
+    document.querySelector<HTMLButtonElement>('[data-target-qr-share]')?.click();
+    await waitFor(() => browserMocks.share.mock.calls.length === 1);
+
+    const payload = browserMocks.share.mock.calls[0][0] as ShareData;
+    expect(payload.title).toBe('AnchorAR — New marker');
+    expect(payload.text).toBe(
+      'Scan this QR code to open the AR experience: https://example.com/Mark-AR/#/scan/scan-new',
+    );
+    expect(payload.url).toBe('https://example.com/Mark-AR/#/scan/scan-new');
+    expect(payload.files?.[0].name).toBe('anchorar-new-marker-qr.png');
+    expect(payload.files?.[0].type).toBe('image/png');
+    expect(qrMocks.createTargetQrArtifact).toHaveBeenCalledTimes(1);
+    expect(qrMocks.downloadTargetQrArtifact).not.toHaveBeenCalled();
+    expect(browserMocks.writeText).not.toHaveBeenCalled();
+    await waitFor(() => document.querySelector('[data-target-qr-share-status]')?.textContent === (
+      'QR code and scan link shared.'
+    ));
+  }, 10000);
+
+  it('downloads the retained QR and copies its URL when file sharing is unsupported', async () => {
+    browserMocks.canShare.mockReturnValue(false);
+    await import('../src/main');
+    await createNewTarget();
+    await waitFor(() => isQrDialogOpen());
+
+    document.querySelector<HTMLButtonElement>('[data-target-qr-share]')?.click();
+    await waitFor(() => qrMocks.downloadTargetQrArtifact.mock.calls.length === 1);
+    await waitFor(() => browserMocks.writeText.mock.calls.length === 1);
+
+    expect(qrMocks.downloadTargetQrArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      filename: 'anchorar-new-marker-qr.png',
+    }));
+    expect(browserMocks.writeText).toHaveBeenCalledWith(
+      'https://example.com/Mark-AR/#/scan/scan-new',
+    );
+    expect(browserMocks.share).not.toHaveBeenCalled();
+    expect(qrMocks.createTargetQrArtifact).toHaveBeenCalledTimes(1);
+    await waitFor(() => document.querySelector('[data-target-qr-share-status]')?.textContent === (
+      'QR downloaded and scan link copied. Attach the QR image and paste the link in your app.'
+    ));
   }, 10000);
 
   it('generates and downloads the QR anytime from an existing saved-target row', async () => {

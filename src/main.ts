@@ -58,6 +58,7 @@ import {
   downloadTargetQrArtifact,
   type TargetQrArtifact,
 } from './app/targetQrCode';
+import { shareTargetQrArtifact } from './app/targetQrShare';
 import {
   loginIntroMessage,
   protectedTargetsMessage,
@@ -279,6 +280,18 @@ let targetQrPromptPreviewUrl: string | undefined;
 const targetQrDownloadJobs = new Map<string, Promise<void>>();
 let targetQrDialog: TargetQrDialog;
 targetQrDialog = createTargetQrDialog(shell, {
+  onShare: async (scanUrl, targetLabel) => {
+    if (!targetQrPromptArtifact) {
+      return 'failed';
+    }
+    return shareTargetQrArtifact({
+      artifact: targetQrPromptArtifact,
+      targetLabel,
+      scanUrl,
+      download: downloadTargetQrArtifact,
+      copy: writeTargetScanUrl,
+    });
+  },
   onDownload: () => {
     if (!targetQrPromptArtifact) {
       return;
@@ -2375,12 +2388,16 @@ function releaseTargetQrPromptPreview(): void {
   targetQrPromptPreviewUrl = undefined;
 }
 
+async function writeTargetScanUrl(scanUrl: string): Promise<void> {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('Clipboard access is unavailable in this browser.');
+  }
+  await navigator.clipboard.writeText(scanUrl);
+}
+
 async function copyTargetScanUrl(scanUrl: string): Promise<void> {
   try {
-    if (!navigator.clipboard?.writeText) {
-      throw new Error('Clipboard access is unavailable in this browser.');
-    }
-    await navigator.clipboard.writeText(scanUrl);
+    await writeTargetScanUrl(scanUrl);
     updateImageTargetStatus('Scan link copied.', false);
   } catch (error) {
     updateImageTargetStatus(errorMessage(error, 'Unable to copy scan link'), true);
