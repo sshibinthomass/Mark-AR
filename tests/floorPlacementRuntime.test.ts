@@ -164,6 +164,11 @@ describe('prepareFloorPlacement', () => {
     harness.gesture.handlers.onPinch(2);
     expect(harness.floorScene.placementRoot.scale.toArray()).toEqual([2, 2, 2]);
 
+    harness.session.emit('select');
+    expect(harness.floorScene.placementRoot.rotation.y).toBeCloseTo(Math.PI / 18);
+    expect(harness.floorScene.placementRoot.scale.toArray()).toEqual([2, 2, 2]);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledOnce();
+
     harness.gesture.handlers.onDrag({ x: 50, y: 50 });
     expect(harness.floorScene.placementRoot.position.distanceTo(new Vector3(0, 0, 0))).toBeCloseTo(0);
 
@@ -177,7 +182,36 @@ describe('prepareFloorPlacement', () => {
     harness.renderer.emitFrame();
     harness.gesture.handlers.onTap({ x: 50, y: 50 });
     harness.session.emit('select');
-    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(3);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps rotation and scale when DOM-overlay input ends after placement', async () => {
+    const harness = createHarness();
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await controller.launch();
+
+    harness.hitTest.setCurrentHit(new Matrix4().makeTranslation(1, 0, -2));
+    harness.renderer.emitFrame();
+    harness.session.emit('select');
+    expect(harness.hooks.onPlaced).toHaveBeenCalledOnce();
+
+    controller.setRotation(45);
+    harness.gesture.handlers.onPinch(2);
+
+    const beforeXRSelect = new Event('beforexrselect', {
+      bubbles: true,
+      cancelable: true,
+    });
+    harness.options.gestureSurface.dispatchEvent(beforeXRSelect);
+    if (!beforeXRSelect.defaultPrevented) {
+      harness.session.emit('select');
+    }
+
+    expect(beforeXRSelect.defaultPrevented).toBe(true);
+    expect(harness.floorScene.placementRoot.rotation.y).toBeCloseTo(Math.PI / 4);
+    expect(harness.floorScene.placementRoot.scale.toArray()).toEqual([2, 2, 2]);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledOnce();
   });
 
   it('cleans an externally ended session and remains reusable', async () => {
@@ -204,12 +238,18 @@ describe('prepareFloorPlacement', () => {
       'Floor AR ended. Scan the image or place it again.',
     );
     expect(harness.floorScene.dispose).not.toHaveBeenCalled();
+    const endedOverlaySelect = new Event('beforexrselect', { bubbles: true, cancelable: true });
+    harness.options.gestureSurface.dispatchEvent(endedOverlaySelect);
+    expect(endedOverlaySelect.defaultPrevented).toBe(false);
 
     await controller.launch();
 
     expect(harness.startSession).toHaveBeenCalledTimes(2);
     expect(secondTarget.group.parent).toBe(harness.floorScene.placementRoot);
     expect(harness.gesture.connect).toHaveBeenCalledTimes(2);
+    const relaunchedOverlaySelect = new Event('beforexrselect', { bubbles: true, cancelable: true });
+    harness.options.gestureSurface.dispatchEvent(relaunchedOverlaySelect);
+    expect(relaunchedOverlaySelect.defaultPrevented).toBe(true);
   });
 
   it('publishes and rejects an asset failure after cleaning session resources', async () => {
@@ -573,6 +613,7 @@ function baseOptions() {
   const stage = document.createElement('div');
   const overlayRoot = document.createElement('div');
   const gestureSurface = document.createElement('div');
+  overlayRoot.append(gestureSurface);
   const asset: CloudflarePlacedAsset = {
     model: { id: 'chair', label: 'Chair', url: 'chair.glb' },
   };

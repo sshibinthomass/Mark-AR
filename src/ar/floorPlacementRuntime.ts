@@ -121,6 +121,9 @@ class FloorPlacementRuntime implements FloorPlacementController {
   private readonly pointer = new Vector2();
   private readonly dragPlane = new Plane(new Vector3(0, 1, 0));
   private readonly dragPoint = new Vector3();
+  private readonly preventOverlayXRSelect = (event: Event): void => {
+    event.preventDefault();
+  };
   private readonly options: FloorPlacementOptions;
   private readonly launcherPreparation: Extract<
     FloorSessionLauncherPreparation,
@@ -496,7 +499,9 @@ class FloorPlacementRuntime implements FloorPlacementController {
       this.handleExternalSessionEnd(session);
     };
     this.sessionSelectListener = () => {
-      this.place();
+      if (!this.floorScene.placementRoot.visible) {
+        this.place();
+      }
     };
     session.addEventListener('end', this.sessionEndListener);
     session.addEventListener('select', this.sessionSelectListener);
@@ -603,6 +608,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (this.gesturesConnected) {
       return;
     }
+    this.options.overlayRoot.addEventListener('beforexrselect', this.preventOverlayXRSelect);
     this.gestureController.connect();
     this.gesturesConnected = true;
   }
@@ -611,6 +617,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (!this.gesturesConnected && this.gestureDisconnectPerformed) {
       return;
     }
+    this.options.overlayRoot.removeEventListener('beforexrselect', this.preventOverlayXRSelect);
     this.gestureController.disconnect();
     this.gesturesConnected = false;
     this.gestureDisconnectPerformed = true;
