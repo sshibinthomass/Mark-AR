@@ -6,13 +6,15 @@ describe('normalizeMindARCameraLayers', () => {
     const stage = document.createElement('div');
     const webglCanvas = document.createElement('canvas');
     const cssRenderer = document.createElement('div');
+    const scannerGuide = document.createElement('div');
     const video = document.createElement('video');
 
     cssRenderer.style.position = 'absolute';
+    scannerGuide.dataset.scannerGuide = '';
     video.style.position = 'absolute';
     video.style.zIndex = '-2';
 
-    stage.append(webglCanvas, cssRenderer, video);
+    stage.append(webglCanvas, cssRenderer, scannerGuide, video);
 
     normalizeMindARCameraLayers(stage);
 
@@ -20,5 +22,6 @@ describe('normalizeMindARCameraLayers', () => {
     expect(video.style.pointerEvents).toBe('none');
     expect(webglCanvas.style.zIndex).toBe('1');
     expect(cssRenderer.style.zIndex).toBe('2');
+    expect(scannerGuide.style.zIndex).toBe('3');
   });
 });

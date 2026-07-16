@@ -20,7 +20,7 @@ export function normalizeMindARCameraLayers(container: HTMLElement): void {
   }
 
   for (const layer of rendererLayers) {
-    layer.style.zIndex = '2';
+    layer.style.zIndex = layer.hasAttribute('data-scanner-guide') ? '3' : '2';
     layer.style.pointerEvents = 'none';
   }
 }

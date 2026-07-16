@@ -682,6 +682,56 @@ h1 {
   font-weight: 900;
 }
 
+.scanner-guide {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.scanner-guide[hidden] {
+  display: none;
+}
+
+.scanner-guide-frame {
+  position: absolute;
+  inset: 9% 7%;
+  overflow: hidden;
+  opacity: 0.88;
+  background:
+    linear-gradient(#ffffff 0 0) left top / 38px 4px no-repeat,
+    linear-gradient(#ffffff 0 0) left top / 4px 38px no-repeat,
+    linear-gradient(#ffffff 0 0) right top / 38px 4px no-repeat,
+    linear-gradient(#ffffff 0 0) right top / 4px 38px no-repeat,
+    linear-gradient(#ffffff 0 0) left bottom / 38px 4px no-repeat,
+    linear-gradient(#ffffff 0 0) left bottom / 4px 38px no-repeat,
+    linear-gradient(#ffffff 0 0) right bottom / 38px 4px no-repeat,
+    linear-gradient(#ffffff 0 0) right bottom / 4px 38px no-repeat;
+  filter: drop-shadow(0 2px 8px rgba(2, 7, 11, 0.28));
+}
+
+.scanner-guide-line {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 12px rgba(94, 234, 212, 0.72);
+  animation: scanner-guide-sweep 2s ease-in-out infinite;
+}
+
+@keyframes scanner-guide-sweep {
+  0%,
+  100% {
+    top: 0;
+  }
+
+  50% {
+    top: calc(100% - 4px);
+  }
+}
+
 .scanner-controls {
   position: relative;
   z-index: 5;
@@ -2658,6 +2708,11 @@ button:disabled,
   }
 
   .auth-spinner {
+    animation: none;
+  }
+
+  .scanner-guide-line {
+    top: 50%;
     animation: none;
   }
 
