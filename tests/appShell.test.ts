@@ -101,6 +101,7 @@ describe('renderAppShell', () => {
     const markerStage = container.querySelector('#ar-stage');
     const floorStage = container.querySelector('#floor-ar-stage');
     const floorOverlay = container.querySelector('#floor-ar-overlay');
+    const floorBack = container.querySelector<HTMLButtonElement>('#floor-ar-back');
     expect(container.querySelectorAll('#floor-ar-stage')).toHaveLength(1);
     expect(container.querySelectorAll('#floor-ar-overlay')).toHaveLength(1);
     expect(scannerStageStack?.parentElement).toBe(scannerPanel);
@@ -109,10 +110,15 @@ describe('renderAppShell', () => {
     expect(floorStage?.parentElement).toBe(scannerStageStack);
     expect(floorOverlay?.parentElement).toBe(scannerStageStack);
     expect([...(scannerStageStack?.children ?? [])]).toEqual([markerStage, floorStage, floorOverlay]);
+    expect(floorOverlay?.firstElementChild).toBe(floorBack);
     expect(scannerStageStack?.contains(scannerControls)).toBe(false);
     expect(floorOverlay?.closest('#ar-stage')).toBeNull();
     expect(floorStage?.hasAttribute('hidden')).toBe(true);
     expect(floorOverlay?.hasAttribute('hidden')).toBe(true);
+    expect(floorBack).toMatchObject({
+      hidden: true,
+      textContent: 'Back to image scan',
+    });
     expect(container.querySelector('#floor-ar-toggle')?.textContent?.trim()).toBe('Place on floor');
     expect(container.querySelector('#floor-ar-toggle')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('#start-ar')?.closest('.scanner-actions')).toBeTruthy();

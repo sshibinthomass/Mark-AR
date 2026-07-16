@@ -18,6 +18,7 @@ export function applyFloorPlacementUi(
   const floorOverlay = required<HTMLElement>(root, '#floor-ar-overlay');
   const startMarkerButton = required<HTMLButtonElement>(root, '#start-ar');
   const toggle = required<HTMLButtonElement>(root, '#floor-ar-toggle');
+  const back = required<HTMLButtonElement>(root, '#floor-ar-back');
   const place = required<HTMLButtonElement>(root, '#floor-ar-place');
   const reset = required<HTMLButtonElement>(root, '#floor-ar-reset');
   const restart = required<HTMLButtonElement>(root, '#floor-ar-restart');
@@ -25,6 +26,7 @@ export function applyFloorPlacementUi(
   const rotationControl = rotation.closest<HTMLLabelElement>('.floor-ar-rotation-control');
   const message = required<HTMLElement>(root, '#floor-ar-message');
   const floorStatus = required<HTMLElement>(root, '#floor-ar-status');
+  const scannerControls = required<HTMLElement>(root, '.scanner-controls');
 
   if (!rotationControl) {
     throw new Error('Missing floor placement UI element: .floor-ar-rotation-control');
@@ -41,9 +43,12 @@ export function applyFloorPlacementUi(
   floorStage.hidden = !floorVisible;
   floorOverlay.hidden = !floorVisible;
 
-  toggle.hidden = state.state === 'hidden';
+  back.hidden = !floorVisible;
+  back.disabled = !floorVisible;
+  toggle.hidden = state.state === 'hidden' || floorVisible;
   toggle.disabled = state.state === 'preparing' || state.state === 'unsupported';
-  toggle.textContent = floorVisible ? 'Scan image' : 'Place on floor';
+  toggle.textContent = 'Place on floor';
+  scannerControls.hidden = floorVisible;
 
   place.hidden = !floorVisible;
   place.disabled = !placeEnabled;

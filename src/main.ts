@@ -151,6 +151,7 @@ if (!app) {
 app.innerHTML = renderAppShell();
 const shell = queryRequired<HTMLElement>('[data-app-shell]');
 setupResponsiveLayout(shell);
+setScanSessionState('idle');
 const targetInspectorTabs = setupTargetInspectorTabs(app);
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');
@@ -159,6 +160,7 @@ const floorStage = queryRequired<HTMLDivElement>('#floor-ar-stage');
 const floorOverlay = queryRequired<HTMLDivElement>('#floor-ar-overlay');
 const floorGestureSurface = queryRequired<HTMLDivElement>('#floor-ar-gesture-surface');
 const floorToggle = queryRequired<HTMLButtonElement>('#floor-ar-toggle');
+const floorBack = queryRequired<HTMLButtonElement>('#floor-ar-back');
 const floorPlace = queryRequired<HTMLButtonElement>('#floor-ar-place');
 const floorRotation = queryRequired<HTMLInputElement>('#floor-ar-rotation');
 const floorReset = queryRequired<HTMLButtonElement>('#floor-ar-reset');
@@ -315,18 +317,17 @@ startButton.addEventListener('click', async () => {
 });
 
 floorToggle.addEventListener('click', () => {
-  if (returningToMarker) {
-    return;
-  }
-  if (activeSharedLinkMode === 'floor') {
-    void returnToFocusedMarkerScan();
-    return;
-  }
-  if (!floorController || !focusedScanTarget) {
+  if (
+    returningToMarker
+    || activeSharedLinkMode === 'floor'
+    || !floorController
+    || !focusedScanTarget
+  ) {
     return;
   }
 
   activeSharedLinkMode = 'floor';
+  setScanSessionState('idle');
   invalidateMarkerStart();
   session?.stop();
   session = undefined;
@@ -335,6 +336,10 @@ floorToggle.addEventListener('click', () => {
     message: 'Move your phone until the floor ring appears.',
   });
   launchFocusedFloorPlacement(floorController);
+});
+
+floorBack.addEventListener('click', () => {
+  void returnToFocusedMarkerScan();
 });
 
 floorPlace.addEventListener('click', () => {
@@ -375,6 +380,7 @@ floorRestart.addEventListener('click', () => {
 
 async function startCurrentArSession(): Promise<void> {
   const startVersion = ++markerStartVersion;
+  setScanSessionState('starting');
   markerStartAbort?.abort();
   const abortController = new AbortController();
   markerStartAbort = abortController;
@@ -423,6 +429,7 @@ async function startCurrentArSession(): Promise<void> {
       return;
     }
     session = startedSession;
+    setScanSessionState('active');
     startButton.textContent = startTarget ? 'Restart camera' : 'Restart AR';
   } catch (error) {
     if (
@@ -434,6 +441,7 @@ async function startCurrentArSession(): Promise<void> {
       return;
     }
     const message = error instanceof Error ? error.message : 'Unable to start AR';
+    setScanSessionState('idle');
     status.textContent = message;
     startButton.textContent = 'Start camera';
   } finally {
@@ -1139,6 +1147,12 @@ function setFloorPlacementUi(state: FloorPlacementUiState): void {
   applyFloorPlacementUi(shell, state);
 }
 
+type ScanSessionState = 'idle' | 'starting' | 'active';
+
+function setScanSessionState(state: ScanSessionState): void {
+  shell.dataset.scanSession = state;
+}
+
 function clearTargetSpecificScan(): void {
   if (!activeScanId) {
     return;
@@ -1152,6 +1166,7 @@ function clearTargetSpecificScan(): void {
 }
 
 function stopActiveArSession(): void {
+  setScanSessionState('idle');
   invalidateMarkerStart();
   session?.stop();
   session = undefined;

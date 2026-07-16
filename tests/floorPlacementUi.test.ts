@@ -54,6 +54,7 @@ describe('applyFloorPlacementUi', () => {
     const floorOverlay = required<HTMLElement>(root, '#floor-ar-overlay');
     const markerStart = required<HTMLButtonElement>(root, '#start-ar');
     const toggle = required<HTMLButtonElement>(root, '#floor-ar-toggle');
+    const back = required<HTMLButtonElement>(root, '#floor-ar-back');
     const place = required<HTMLButtonElement>(root, '#floor-ar-place');
     const reset = required<HTMLButtonElement>(root, '#floor-ar-reset');
     const restart = required<HTMLButtonElement>(root, '#floor-ar-restart');
@@ -62,6 +63,7 @@ describe('applyFloorPlacementUi', () => {
     const markerStatus = required<HTMLElement>(root, '#ar-status');
     const floorMessage = required<HTMLElement>(root, '#floor-ar-message');
     const floorStatus = required<HTMLElement>(root, '#floor-ar-status');
+    const scannerControls = required<HTMLElement>(root, '.scanner-controls');
 
     applyFloorPlacementUi(root, state);
 
@@ -74,9 +76,13 @@ describe('applyFloorPlacementUi', () => {
     expect(markerStart.hidden).toBe(floorVisible);
     expect(floorStage.hidden).toBe(!floorVisible);
     expect(floorOverlay.hidden).toBe(!floorVisible);
-    expect(toggle.hidden).toBe(state.state === 'hidden');
+    expect(back.hidden).toBe(!floorVisible);
+    expect(back.disabled).toBe(!floorVisible);
+    expect(back.textContent?.trim()).toBe('Back to image scan');
+    expect(toggle.hidden).toBe(state.state === 'hidden' || floorVisible);
     expect(toggle.disabled).toBe(state.state === 'preparing' || state.state === 'unsupported');
-    expect(toggle.textContent).toBe(floorVisible ? 'Scan image' : 'Place on floor');
+    expect(toggle.textContent).toBe('Place on floor');
+    expect(scannerControls.hidden).toBe(floorVisible);
     expect(place.hidden).toBe(!floorVisible);
     expect(place.disabled).toBe(!placeEnabled);
     expect(reset.hidden).toBe(!placed);
@@ -100,6 +106,7 @@ function renderFloorUiFixture(): HTMLElement {
       <div id="ar-stage"></div>
       <div id="floor-ar-stage" hidden></div>
       <div id="floor-ar-overlay" hidden>
+        <button id="floor-ar-back" type="button" hidden>Back to image scan</button>
         <div id="floor-ar-gesture-surface"></div>
         <div class="floor-ar-controls">
           <p id="floor-ar-status" role="status">Preparing floor placement...</p>

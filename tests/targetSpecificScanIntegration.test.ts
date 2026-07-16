@@ -208,6 +208,22 @@ describe('target-specific scan route integration', () => {
     expect(document.querySelector('[data-app-shell]')?.getAttribute('data-active-page')).toBe('home');
   });
 
+  it('tracks marker startup for immersive mobile navigation and clears it on departure', async () => {
+    const markerStart = deferred<{ stop(): void }>();
+    markerArMocks.startMarkerAR.mockReturnValueOnce(markerStart.promise);
+    cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
+
+    await import('../src/main');
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+    expect(required('[data-app-shell]').getAttribute('data-scan-session')).toBe('starting');
+
+    markerStart.resolve({ stop: markerArMocks.sessionStop });
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-scan-session') === 'active');
+
+    window.location.hash = '#/';
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-scan-session') === 'idle');
+  });
+
   it('never prepares or exposes floor placement on the generic Scan route', async () => {
     window.history.replaceState(null, '', '#/scan');
 
@@ -317,7 +333,12 @@ describe('target-specific scan route integration', () => {
     expect(required('#floor-ar-status').textContent).toBe(
       'Move your phone until the floor ring appears.',
     );
-    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-back')).toMatchObject({
+      hidden: false,
+      textContent: 'Back to image scan',
+    });
+    expect(required<HTMLElement>('.scanner-controls').hidden).toBe(true);
   });
 
   it('delegates Place, rotation, and Reset to the prepared controller and applies exact lifecycle statuses', async () => {
@@ -384,11 +405,11 @@ describe('target-specific scan route integration', () => {
     expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
   });
 
-  it('stops floor AR and restarts MindAR with the same focused target when Scan image is clicked', async () => {
+  it('stops floor AR and restarts MindAR with the same focused target when Back to image scan is clicked', async () => {
     await openFocusedScan();
     required<HTMLButtonElement>('#floor-ar-toggle').click();
 
-    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    required<HTMLButtonElement>('#floor-ar-back').click();
     await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
 
     expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
@@ -400,14 +421,14 @@ describe('target-specific scan route integration', () => {
     expect(required('#floor-ar-message').textContent).toBe('Floor placement is ready.');
   });
 
-  it('ignores a re-entrant Scan image click while floor stop is pending', async () => {
+  it('ignores a re-entrant Back to image scan click while floor stop is pending', async () => {
     const floorStop = deferred<void>();
     floorRuntimeMocks.stop.mockReturnValueOnce(floorStop.promise);
     await openFocusedScan();
     required<HTMLButtonElement>('#floor-ar-toggle').click();
 
-    required<HTMLButtonElement>('#floor-ar-toggle').click();
-    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    required<HTMLButtonElement>('#floor-ar-back').click();
+    required<HTMLButtonElement>('#floor-ar-back').click();
 
     expect(floorRuntimeMocks.stop).toHaveBeenCalledTimes(1);
     expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(1);
@@ -429,7 +450,11 @@ describe('target-specific scan route integration', () => {
     expect(required('#floor-ar-status').textContent).toBe(
       'Floor AR ended. Scan the image or place it again.',
     );
-    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-back')).toMatchObject({
+      hidden: false,
+      disabled: false,
+      textContent: 'Back to image scan',
+    });
     expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(false);
   });
 
@@ -624,7 +649,7 @@ describe('target-specific scan route integration', () => {
     expect(required('#floor-ar-message').textContent).toBe('');
   });
 
-  it('catches a floor launch rejection and keeps Scan image plus Restart floor AR available', async () => {
+  it('catches a floor launch rejection and keeps Back to image scan plus Restart floor AR available', async () => {
     floorRuntimeMocks.launch.mockRejectedValueOnce(new Error('XR permission denied'));
     await openFocusedScan();
 
@@ -632,7 +657,11 @@ describe('target-specific scan route integration', () => {
     await waitFor(() => required<HTMLButtonElement>('#floor-ar-restart').hidden === false);
 
     expect(required('#floor-ar-status').textContent).toContain('XR permission denied');
-    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-back')).toMatchObject({
+      hidden: false,
+      disabled: false,
+      textContent: 'Back to image scan',
+    });
     expect(required<HTMLButtonElement>('#floor-ar-restart')).toMatchObject({
       hidden: false,
       disabled: false,
@@ -652,7 +681,11 @@ describe('target-specific scan route integration', () => {
     expect(required('#floor-ar-status').textContent).toBe(
       'Floor scene failed to load: model unavailable',
     );
-    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-back')).toMatchObject({
+      hidden: false,
+      disabled: false,
+      textContent: 'Back to image scan',
+    });
   });
 
   it('catches a Restart floor AR rejection without leaving recovery mode', async () => {
@@ -665,7 +698,11 @@ describe('target-specific scan route integration', () => {
     await waitFor(() => required('#floor-ar-status').textContent?.includes('second launch failed') === true);
 
     expect(floorRuntimeMocks.launch).toHaveBeenCalledTimes(2);
-    expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Scan image');
+    expect(required<HTMLButtonElement>('#floor-ar-back')).toMatchObject({
+      hidden: false,
+      disabled: false,
+      textContent: 'Back to image scan',
+    });
     expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(false);
   });
 
@@ -673,7 +710,7 @@ describe('target-specific scan route integration', () => {
     await openFocusedScan();
     required<HTMLButtonElement>('#floor-ar-toggle').click();
     const staleHooks = floorRuntimeMocks.hooks;
-    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    required<HTMLButtonElement>('#floor-ar-back').click();
     await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
 
     staleHooks?.onSessionEnd();

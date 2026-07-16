@@ -109,6 +109,7 @@ export function renderAppShell(): string {
             </div>
             <div id="floor-ar-stage" class="ar-stage floor-ar-stage" hidden aria-label="Floor AR camera stage"></div>
             <div id="floor-ar-overlay" class="floor-ar-overlay" hidden>
+              <button id="floor-ar-back" class="floor-ar-back action-control action-control--inverse" type="button" hidden><svg class="action-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Back to image scan</span></button>
               <div id="floor-ar-gesture-surface" class="floor-ar-gesture-surface" aria-label="Move and scale the placed scene"></div>
               <div class="floor-ar-controls">
                 <p id="floor-ar-status" role="status">Preparing floor placement...</p>
