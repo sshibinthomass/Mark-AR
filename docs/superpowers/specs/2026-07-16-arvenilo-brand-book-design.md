@@ -25,6 +25,40 @@ The central brand idea is:
 
 The company will lead with the human and commercial outcome - intelligent experiences that connect physical and digital environments - and explain Agentic AI, XR, and Web3 as the enabling technologies.
 
+## Decision Option System
+
+The brand book must support deliberate optimization rather than presenting every recommendation as the only possible answer.
+
+Wherever a brand decision has more than one credible solution, the document will provide:
+
+1. **Recommended** - the strongest choice for Arvenilo's current B2B and B2C strategy;
+2. **Alternative A** - a viable choice that shifts the brand toward a stated strategic advantage;
+3. **Alternative B** - a viable choice that shifts the brand toward a different stated advantage;
+4. **Selection guidance** - the conditions under which each option should be chosen;
+5. **Trade-off** - what becomes weaker when an alternative is selected.
+
+This system applies wherever useful, including:
+
+- category language;
+- purpose, vision, and mission wording;
+- values and personality emphasis;
+- archetype;
+- taglines;
+- company pitches;
+- audience-specific messages;
+- brand architecture;
+- product naming;
+- logo routes;
+- colour palettes;
+- typography;
+- graphic and image direction;
+- website headlines;
+- calls to action;
+- campaign concepts;
+- launch sequence.
+
+Options must be meaningfully different strategic routes, not superficial rewordings. The recommendation must remain visually unmistakable so that the document still functions as a coherent brand guide.
+
 ## Naming Meaning and Pronunciation
 
 Arvenilo is an invented, ownable brand name pronounced:
@@ -365,6 +399,8 @@ Intermediate render files will be kept under `tmp/pdfs/` during production and r
 The brand book is complete when:
 
 - all strategy sections are internally consistent;
+- major brand decisions provide one clearly marked recommendation and credible alternatives wherever alternatives would help optimization;
+- every option includes a concise strategic use case or trade-off;
 - Arvenilo is clearly positioned as the parent brand;
 - AnchorAR is clearly positioned as the first active product;
 - B2B and B2C messages remain connected to one central promise;
