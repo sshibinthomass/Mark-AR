@@ -114,7 +114,7 @@ describe('target QR integration', () => {
     browserMocks.revokeObjectURL.mockClear();
     browserMocks.share.mockReset();
     browserMocks.canShare.mockReset();
-    browserMocks.writeText.mockClear();
+    browserMocks.writeText.mockReset();
 
     cloudMocks.listImageTargets.mockImplementation(async () => (
       cloudMocks.currentTarget ? [cloudMocks.currentTarget] : []
@@ -141,6 +141,7 @@ describe('target QR integration', () => {
     ));
     browserMocks.share.mockResolvedValue(undefined);
     browserMocks.canShare.mockReturnValue(true);
+    browserMocks.writeText.mockResolvedValue(undefined);
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
       value: browserMocks.createObjectURL,
