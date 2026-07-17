@@ -195,6 +195,22 @@ describe('target-specific scan route integration', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+  it('explains camera permission before a direct generic Scan starts', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+
+    expect(required('[data-app-shell]').getAttribute('data-active-page')).toBe('scan');
+    expect(required('#ar-status').textContent).toBe(
+      'Camera access starts only after you choose Start camera.',
+    );
+    expect(required<HTMLButtonElement>('#start-ar')).toMatchObject({
+      disabled: false,
+      textContent: 'Start camera',
+    });
+    expect(markerArMocks.startMarkerAR).not.toHaveBeenCalled();
+  });
+
   it('stops a generic scanner session when navigating away from Scan', async () => {
     window.history.replaceState(null, '', '#/scan');
 
@@ -276,6 +292,62 @@ describe('target-specific scan route integration', () => {
     markerStart.resolve({ stop: lateStop });
     await waitFor(() => lateStop.mock.calls.length === 1);
     expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
+  });
+
+  it('exits a pending marker start and stops its late session safely', async () => {
+    const markerStart = deferred<{ stop(): void }>();
+    const lateStop = vi.fn();
+    markerArMocks.startMarkerAR.mockReturnValueOnce(markerStart.promise);
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    required<HTMLButtonElement>('#start-ar').click();
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-scan-session') === 'starting');
+
+    const exit = required<HTMLButtonElement>('#marker-session-exit');
+    expect(exit.hidden).toBe(false);
+    exit.click();
+
+    expect(required('[data-app-shell]').getAttribute('data-scan-session')).toBe('idle');
+    expect(exit.hidden).toBe(true);
+    expect(required('#ar-status').textContent).toBe(
+      'Camera access starts only after you choose Start camera.',
+    );
+    expect(required<HTMLButtonElement>('#start-ar')).toMatchObject({
+      disabled: false,
+      textContent: 'Start camera',
+    });
+    expect(document.activeElement).toBe(required<HTMLButtonElement>('#start-ar'));
+    expect(required('#ar-stage').querySelector('.stage-idle')).toBeTruthy();
+
+    markerStart.resolve({ stop: lateStop });
+    await waitFor(() => lateStop.mock.calls.length === 1);
+    expect(required('[data-app-shell]').getAttribute('data-scan-session')).toBe('idle');
+  });
+
+  it('exits an active marker session and restores route navigation state', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    required<HTMLButtonElement>('#start-ar').click();
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-scan-session') === 'active');
+
+    const exit = required<HTMLButtonElement>('#marker-session-exit');
+    expect(exit.hidden).toBe(false);
+    exit.click();
+
+    expect(markerArMocks.sessionStop).toHaveBeenCalledTimes(1);
+    expect(required('[data-app-shell]').getAttribute('data-scan-session')).toBe('idle');
+    expect(exit.hidden).toBe(true);
+    expect(required('#ar-stage').querySelector('.stage-idle')?.textContent).toBe('Scan an experience');
+    expect(required('#ar-status').textContent).toBe(
+      'Camera access starts only after you choose Start camera.',
+    );
+    expect(required<HTMLButtonElement>('#start-ar')).toMatchObject({
+      disabled: false,
+      textContent: 'Start camera',
+    });
+    expect(document.activeElement).toBe(required<HTMLButtonElement>('#start-ar'));
   });
 
   it('tracks marker startup for immersive mobile navigation and clears it on departure', async () => {
@@ -409,6 +481,7 @@ describe('target-specific scan route integration', () => {
       textContent: 'Back to image scan',
     });
     expect(required<HTMLElement>('.scanner-controls').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#marker-session-exit').hidden).toBe(true);
     expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
     expect(required('#ar-stage').querySelector('.stage-idle')).toBeTruthy();
   });

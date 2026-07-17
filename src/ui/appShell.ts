@@ -55,7 +55,10 @@ export function renderAppShell(): string {
     <main class="app-shell" data-app-shell>
       <nav class="shell-nav" aria-label="AnchorAR pages">
         <a class="brand-link" href="${hrefForRoute('home')}" aria-label="AnchorAR by Arvenilo home">
-          <img src="${brandAssets.productLockup}" alt="AnchorAR by Arvenilo" />
+          <picture>
+            <source media="(max-width: 767px)" srcset="${brandAssets.productMark}" />
+            <img src="${brandAssets.productLockup}" alt="AnchorAR by Arvenilo" />
+          </picture>
         </a>
         <div class="shell-nav-actions">
           <div class="shell-story-links" aria-label="Product information">
@@ -172,14 +175,15 @@ export function renderAppShell(): string {
               </div>
             </div>
           </div>
+          <button id="marker-session-exit" class="marker-session-exit action-control action-control--inverse" type="button" hidden>Exit camera</button>
           <div class="scanner-controls" data-layout-role="scanner-controls" aria-live="polite">
             <div>
               <span class="status-label">Status</span>
-              <p id="ar-status">Camera waiting</p>
+              <p id="ar-status">Camera access starts only after you choose Start camera.</p>
               <p id="floor-ar-message"></p>
             </div>
             <div class="scanner-actions">
-              <button id="start-ar" class="action-control action-control--primary" type="button">Start AR</button>
+              <button id="start-ar" class="action-control action-control--primary" type="button">Start camera</button>
               <button id="floor-ar-toggle" class="action-control action-control--secondary" type="button" hidden>Place on floor</button>
             </div>
           </div>

@@ -26,6 +26,7 @@ function cssRule(source: string, selector: string): string {
 
 describe('responsive navigation styles', () => {
   const mobile = mediaBlock('(max-width: 767px)');
+  const compactAccount = mediaBlock('(max-width: 359px)');
 
   it('uses a compact brand bar and fixed four-item bottom navigation', () => {
     expect(cssRule(mobile, '.shell-nav')).toContain('min-height: 52px');
@@ -35,6 +36,8 @@ describe('responsive navigation styles', () => {
     expect(cssRule(mobile, '.route-tabs')).toContain('bottom: 0');
     expect(cssRule(mobile, '.app-shell')).toContain('env(safe-area-inset-bottom)');
     expect(cssRule(mobile, '.route-tabs a')).toContain('min-height: 56px');
+    expect(cssRule(mobile, '.brand-link img')).toContain('width: 40px');
+    expect(cssRule(mobile, '.brand-link img')).toContain('height: 40px');
   });
 
   it('restores the vertical Home gateway card flow after the legacy mobile rules', () => {
@@ -62,6 +65,26 @@ describe('responsive navigation styles', () => {
     expect(mobile).toContain('display: none');
   });
 
+  it('keeps a safe-area marker exit visible only for mobile marker sessions', () => {
+    expect(cssRule(css, '.marker-session-exit')).toContain('display: none');
+    expect(mobile).toContain(
+      '[data-active-page="scan"][data-scan-session="starting"][data-ar-mode="marker"] .marker-session-exit',
+    );
+    expect(mobile).toContain(
+      '[data-active-page="scan"][data-scan-session="active"][data-ar-mode="marker"] .marker-session-exit',
+    );
+    expect(mobile).toMatch(
+      /\[data-active-page="scan"\]\[data-scan-session="starting"\]\[data-ar-mode="marker"\] \.marker-session-exit,\s*\[data-active-page="scan"\]\[data-scan-session="active"\]\[data-ar-mode="marker"\] \.marker-session-exit\s*\{[^}]*display:\s*inline-flex/s,
+    );
+    const exitRule = cssRule(mobile, '.marker-session-exit');
+    expect(exitRule).toContain('position: fixed');
+    expect(exitRule).toContain('min-width: 48px');
+    expect(exitRule).toContain('min-height: 48px');
+    expect(exitRule).toContain('env(safe-area-inset-top)');
+    expect(exitRule).toContain('env(safe-area-inset-right)');
+    expect(mobile).not.toContain('[data-ar-mode="floor"] .marker-session-exit');
+  });
+
   it('keeps page Home controls compact instead of full width', () => {
     const homeLink = cssRule(mobile, '.page-home-link');
     expect(homeLink).toContain('width: fit-content');
@@ -77,6 +100,28 @@ describe('responsive navigation styles', () => {
     expect(cssRule(mobile, '.floor-ar-back')).toContain('env(safe-area-inset-top)');
     expect(cssRule(mobile, '.auth-orbit')).toContain('display: none');
     expect(cssRule(mobile, '.auth-access-copy')).toContain('max-width: 100%');
+  });
+
+  it('compacts only the narrow Account stack while preserving full-size controls', () => {
+    expect(compactAccount).not.toBe('');
+    expect(cssRule(compactAccount, '[data-page="account"] .page-header')).toContain(
+      'margin-bottom: var(--space-3)',
+    );
+    expect(cssRule(compactAccount, '[data-page="account"] .auth-control-card')).toContain(
+      'padding: var(--space-4)',
+    );
+    expect(cssRule(compactAccount, '[data-page="account"] .auth-card-head')).toContain(
+      'padding-bottom: var(--space-3)',
+    );
+    expect(cssRule(compactAccount, '[data-page="account"] .auth-form-shell')).toContain(
+      'gap: var(--space-3)',
+    );
+    expect(cssRule(compactAccount, '[data-page="account"] .login-form input')).toContain(
+      'min-height: 44px',
+    );
+    expect(cssRule(compactAccount, '[data-page="account"] #worker-login')).toContain(
+      'min-height: 44px',
+    );
   });
 
   it('makes the save strip sticky only for an active target draft', () => {

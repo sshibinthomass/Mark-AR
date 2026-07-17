@@ -162,6 +162,11 @@ p {
   text-decoration: none;
 }
 
+.brand-link picture {
+  display: block;
+  line-height: 0;
+}
+
 .brand-link img {
   display: block;
   width: clamp(150px, 15vw, 224px);
@@ -838,6 +843,10 @@ p {
 
 .scanner-actions {
   gap: var(--space-3);
+}
+
+.marker-session-exit {
+  display: none;
 }
 
 .floor-ar-overlay {
@@ -1742,8 +1751,9 @@ button:disabled,
   }
 
   .brand-link img {
-    width: clamp(132px, 50vw, 176px);
-    height: 36px;
+    width: 40px;
+    height: 40px;
+    object-position: center;
   }
 
   .shell-story-links {
@@ -1780,6 +1790,24 @@ button:disabled,
   [data-active-page="scan"][data-scan-session="active"] .route-tabs,
   [data-ar-mode="floor"] .route-tabs {
     display: none;
+  }
+
+  .marker-session-exit {
+    position: fixed;
+    top: max(14px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+    z-index: 50;
+    min-width: 48px;
+    min-height: 48px;
+    border: 1px solid var(--color-mist-slate);
+    padding: 0 var(--space-4);
+    color: var(--color-interface-white);
+    background: var(--color-spatial-ink);
+  }
+
+  [data-active-page="scan"][data-scan-session="starting"][data-ar-mode="marker"] .marker-session-exit,
+  [data-active-page="scan"][data-scan-session="active"][data-ar-mode="marker"] .marker-session-exit {
+    display: inline-flex;
   }
 
   .page {
@@ -2086,6 +2114,51 @@ button:disabled,
 
   .target-qr-actions > * {
     flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 359px) {
+  [data-page="account"] .page-header {
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  [data-page="account"] .page-heading-copy {
+    gap: var(--space-1);
+  }
+
+  [data-page="account"] .auth-control-card {
+    gap: 10px;
+    padding: var(--space-4);
+  }
+
+  [data-page="account"] .auth-card-head {
+    gap: 6px;
+    padding-bottom: var(--space-3);
+  }
+
+  [data-page="account"] .auth-control-card [data-auth-panel] {
+    margin-top: var(--space-1);
+  }
+
+  [data-page="account"] .auth-form-shell {
+    gap: var(--space-3);
+  }
+
+  [data-page="account"] .login-form {
+    gap: 6px;
+  }
+
+  [data-page="account"] .login-form label {
+    gap: 6px;
+  }
+
+  [data-page="account"] .login-form input {
+    min-height: 44px;
+  }
+
+  [data-page="account"] #worker-login {
+    min-height: 44px;
   }
 }
 

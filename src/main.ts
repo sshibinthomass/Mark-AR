@@ -171,7 +171,6 @@ app.innerHTML = renderAppShell();
 const shell = queryRequired<HTMLElement>('[data-app-shell]');
 setupHomeSectionNavigation(shell);
 setupResponsiveLayout(shell);
-setScanSessionState('idle');
 const targetInspectorTabs = setupTargetInspectorTabs(app);
 const targetPage = queryRequired<HTMLElement>('[data-page="targets"]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
@@ -195,6 +194,7 @@ function setScannerStatus(message: string, tone?: 'error'): void {
 }
 const floorReset = queryRequired<HTMLButtonElement>('#floor-ar-reset');
 const floorRestart = queryRequired<HTMLButtonElement>('#floor-ar-restart');
+const markerSessionExit = queryRequired<HTMLButtonElement>('#marker-session-exit');
 const workerLoginForm = queryRequired<HTMLFormElement>('#worker-login-form');
 const workerNameInput = queryRequired<HTMLInputElement>('#worker-name');
 const workerEmailInput = queryRequired<HTMLInputElement>('#worker-email');
@@ -349,7 +349,9 @@ const animationTrackEditor = targetAnimationTracks
 
 applyAuthUi(shell, authUiState);
 applyAuthFormMode(shell, authFormMode);
+setScanSessionState('idle');
 setFloorPlacementUi({ state: 'hidden' });
+resetScanControls();
 activateRequestedLocation(locationFromHash(window.location.hash));
 void initializeCloudflareControls();
 
@@ -394,6 +396,15 @@ authModeButtons.forEach((button) => {
 
 startButton.addEventListener('click', async () => {
   await startCurrentArSession();
+});
+
+markerSessionExit.addEventListener('click', () => {
+  if (shell.dataset.scanSession === 'idle' || shell.dataset.arMode === 'floor') {
+    return;
+  }
+  stopActiveArSession();
+  resetScanControls();
+  startButton.focus();
 });
 
 floorToggle.addEventListener('click', () => {
@@ -1246,6 +1257,7 @@ type ScanSessionState = 'idle' | 'starting' | 'active';
 
 function setScanSessionState(state: ScanSessionState): void {
   shell.dataset.scanSession = state;
+  markerSessionExit.hidden = state === 'idle';
 }
 
 function clearTargetSpecificScan(): void {

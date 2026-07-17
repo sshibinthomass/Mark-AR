@@ -23,7 +23,15 @@ describe('renderAppShell', () => {
     expect(container.querySelector<HTMLImageElement>('.brand-link img')).toMatchObject({
       alt: 'AnchorAR by Arvenilo',
     });
+    const shellIdentity = container.querySelector<HTMLPictureElement>('.brand-link picture');
+    const compactIdentity = shellIdentity?.querySelector<HTMLSourceElement>('source');
+    expect(shellIdentity).toBeTruthy();
+    expect(compactIdentity?.media).toBe('(max-width: 767px)');
+    expect(compactIdentity?.getAttribute('srcset')).toContain('brand/anchorar/anchorar-mark.png');
     expect(container.querySelector('.brand-link img')?.getAttribute('src')).toContain(
+      'brand/qr/04-anchorar-platform-transparent-QR.png',
+    );
+    expect(container.querySelector('.story-hero-lockup')?.getAttribute('src')).toContain(
       'brand/qr/04-anchorar-platform-transparent-QR.png',
     );
     expect([...container.querySelectorAll('[data-home-section-link]')].map((link) => [
@@ -145,6 +153,7 @@ describe('renderAppShell', () => {
     const floorStage = container.querySelector('#floor-ar-stage');
     const floorOverlay = container.querySelector('#floor-ar-overlay');
     const floorBack = container.querySelector<HTMLButtonElement>('#floor-ar-back');
+    const markerExit = container.querySelector<HTMLButtonElement>('#marker-session-exit');
     expect(container.querySelectorAll('#floor-ar-stage')).toHaveLength(1);
     expect(container.querySelectorAll('#floor-ar-overlay')).toHaveLength(1);
     expect(scannerStageStack?.parentElement).toBe(scannerPanel);
@@ -155,6 +164,14 @@ describe('renderAppShell', () => {
     expect([...(scannerStageStack?.children ?? [])]).toEqual([markerStage, floorStage, floorOverlay]);
     expect(floorOverlay?.firstElementChild).toBe(floorBack);
     expect(scannerStageStack?.contains(scannerControls)).toBe(false);
+    expect(markerExit?.parentElement).toBe(scannerPanel);
+    expect(scannerStageStack?.contains(markerExit)).toBe(false);
+    expect(markerStage?.contains(markerExit)).toBe(false);
+    expect(markerExit).toMatchObject({
+      hidden: true,
+      textContent: 'Exit camera',
+      type: 'button',
+    });
     expect(floorOverlay?.closest('#ar-stage')).toBeNull();
     expect(floorStage?.hasAttribute('hidden')).toBe(true);
     expect(floorOverlay?.hasAttribute('hidden')).toBe(true);
