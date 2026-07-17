@@ -133,6 +133,7 @@ import { AuthNavigation } from './ui/authNavigation';
 import { applyAuthFormMode, type AuthFormMode } from './ui/authFormMode';
 import { renderAppShell } from './ui/appShell';
 import { createAnimationTrackEditor } from './ui/animationTrackEditor';
+import { setupHomeSectionNavigation } from './ui/homeSectionNavigation';
 import {
   applyFloorPlacementUi,
   type FloorPlacementUiState,
@@ -168,6 +169,7 @@ if (!app) {
 
 app.innerHTML = renderAppShell();
 const shell = queryRequired<HTMLElement>('[data-app-shell]');
+setupHomeSectionNavigation(shell);
 setupResponsiveLayout(shell);
 setScanSessionState('idle');
 const targetInspectorTabs = setupTargetInspectorTabs(app);
