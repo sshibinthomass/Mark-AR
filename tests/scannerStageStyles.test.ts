@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/style.css', 'utf8');
+const redesignCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
 
 function cssRule(source: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -36,10 +37,47 @@ describe('scanner stage styles', () => {
     expect(cssRule(css, '.scanner-guide-line')).toContain('animation: scanner-guide-sweep');
   });
 
+  it('uses a solid Spatial Void stage with a single mint scanner line', () => {
+    expect(cssRule(redesignCss, '[data-page="scan"] .scanner-stage-stack')).toContain(
+      'border-radius: var(--radius-stage)',
+    );
+    expect(cssRule(redesignCss, '[data-page="scan"] .scanner-stage-stack')).toContain(
+      'background: var(--color-spatial-void)',
+    );
+    expect(cssRule(redesignCss, '.scanner-guide-line')).toContain(
+      'background: var(--color-signal-mint)',
+    );
+  });
+
+  it('keeps active scanner and floor controls explicit on dark surfaces', () => {
+    expect(cssRule(redesignCss, '[data-scan-session="active"] [data-page="scan"] .scanner-stage-stack'))
+      .toContain('border-color: var(--color-signal-mint)');
+    expect(cssRule(redesignCss, '.floor-ar-overlay')).toContain('background: transparent');
+    expect(cssRule(redesignCss, '.floor-ar-controls')).toContain(
+      'background: var(--color-spatial-surface)',
+    );
+  });
+
   it('stops the scan-line animation when reduced motion is requested', () => {
     const reducedMotion = mediaBlock('(prefers-reduced-motion: reduce)');
     const guideLine = cssRule(reducedMotion, '.scanner-guide-line');
 
     expect(guideLine).toContain('animation: none');
+
+    const redesignReducedMotion = mediaBlockFrom(redesignCss, '(prefers-reduced-motion: reduce)');
+    expect(cssRule(redesignReducedMotion, '.scanner-guide-line')).toContain('animation: none');
   });
 });
+
+function mediaBlockFrom(source: string, query: string): string {
+  const start = source.lastIndexOf(`@media ${query}`);
+  if (start < 0) return '';
+  const open = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') depth -= 1;
+    if (depth === 0) return source.slice(open + 1, index);
+  }
+  return '';
+}

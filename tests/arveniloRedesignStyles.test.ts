@@ -23,6 +23,24 @@ describe('AnchorAR redesign styles', () => {
     expect(css).not.toMatch(/\.action-control--primary\s*\{[^}]*var\(--color-anchor-gold\)/s);
   });
 
+  it('defines the AnchorAR route surface contracts after legacy CSS', () => {
+    expect(css).toMatch(/\[data-page="scan"\]\s+\.scanner-stage-stack\s*\{[^}]*border-radius:\s*var\(--radius-stage\)/s);
+    expect(css).toMatch(/\.target-preview-stage\s*\{[^}]*background:\s*var\(--color-spatial-void\)/s);
+    expect(css).toMatch(/\.target-inspector-tabs button\[aria-selected="true"\]\s*\{[^}]*var\(--color-signal-mint\)/s);
+    expect(css).toMatch(/\.target-model-card\[aria-selected="true"\]\s*\{[^}]*var\(--color-anchor-gold\)/s);
+    expect(css).toMatch(/\.auth-control-card\s*\{[^}]*background:\s*var\(--color-interface-white\)/s);
+    expect(css).toMatch(/\.target-qr-dialog\s*\{[^}]*background:\s*var\(--color-reality-mist\)/s);
+    expect(css).toMatch(/\[data-tone="error"\]\s*\{[^}]*var\(--color-error-dark\)/s);
+  });
+
+  it('makes busy, disabled, error, and loading states explicit', () => {
+    expect(css).toMatch(/\[aria-busy="true"\]\s*\{[^}]*cursor:\s*progress/s);
+    expect(css).toMatch(/button:disabled,\s*\[aria-disabled="true"\]\s*\{[^}]*cursor:\s*not-allowed/s);
+    expect(css).toMatch(/\.target-preview-loader\s*\{[^}]*background:\s*var\(--color-spatial-surface\)/s);
+    expect(css).toMatch(/\.target-model-card-loader\s*\{[^}]*color:\s*var\(--color-interface-white\)/s);
+    expect(css).toMatch(/\.is-error\s*\{[^}]*color:\s*var\(--color-error-dark\)/s);
+  });
+
   it('overrides legacy protected-link decoration without introducing gold', () => {
     expect(css).toMatch(
       /\.mode-card\[data-auth-locked="true"\]\s*\{[^}]*border-style:\s*solid;[^}]*background:\s*var\(--color-interface-white\)/s,

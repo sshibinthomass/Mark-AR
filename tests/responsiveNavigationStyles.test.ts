@@ -73,12 +73,17 @@ describe('responsive navigation styles', () => {
     expect(cssRule(mobile, '.ar-stage')).toContain('min-height: min(58svh, 520px)');
     expect(cssRule(mobile, '.target-preview-stage')).toContain('height: clamp(300px, 48svh, 420px)');
     expect(cssRule(mobile, '.auth-control-card')).toContain('min-height: 0');
+    expect(cssRule(mobile, '.scanner-actions button')).toContain('width: 100%');
+    expect(cssRule(mobile, '.floor-ar-back')).toContain('env(safe-area-inset-top)');
   });
 
   it('makes the save strip sticky only for an active target draft', () => {
     expect(mobile).toContain('[data-has-target-draft="true"] .target-save-strip');
     expect(cssRule(mobile, '[data-has-target-draft="true"] .target-save-strip')).toContain(
       'position: sticky',
+    );
+    expect(cssRule(mobile, '[data-has-target-draft="true"] .target-save-strip')).toContain(
+      'bottom: calc(72px + env(safe-area-inset-bottom))',
     );
   });
 });

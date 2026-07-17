@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/style.css', 'utf8');
+const redesignCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
 
 function cssRule(selector: string, source = css): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -115,5 +116,30 @@ describe('target inspector styles', () => {
     expect(open).toContain('text-align: left');
     expect(active).toContain('border-color: rgba(15, 118, 110');
     expect(focus).toContain('outline: 3px solid');
+  });
+
+  it('distinguishes selected systems from the selected spatial object', () => {
+    expect(cssRule('.target-inspector-tabs button[aria-selected="true"]', redesignCss)).toContain(
+      'background: var(--color-signal-mint)',
+    );
+    expect(cssRule('.target-transform-toolbar button[aria-pressed="true"]', redesignCss)).toContain(
+      'border-color: var(--color-signal-mint)',
+    );
+    expect(cssRule('.target-model-card[aria-selected="true"]', redesignCss)).toContain(
+      'border-color: var(--color-anchor-gold)',
+    );
+    expect(cssRule('.saved-target-row.is-active', redesignCss)).toContain(
+      'border-color: var(--color-anchor-gold)',
+    );
+  });
+
+  it('styles preview and model loading without translucent blur', () => {
+    expect(cssRule('.target-preview-stage[aria-busy="true"]', redesignCss)).toContain(
+      'cursor: progress',
+    );
+    expect(cssRule('.target-preview-loader', redesignCss)).toContain('backdrop-filter: none');
+    expect(cssRule('.target-model-card-loader', redesignCss)).toContain(
+      'background: var(--color-spatial-surface-raised)',
+    );
   });
 });
