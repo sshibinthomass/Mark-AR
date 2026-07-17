@@ -78,6 +78,14 @@ describe('renderAppShell', () => {
     expect([...container.querySelectorAll('.use-case-card h3')].map((node) => node.textContent)).toEqual([
       'Packaging and products', 'Retail visualization', 'Campaigns and events', 'Learning and storytelling',
     ]);
+    expect(container.querySelector('#anchorar-proof.spatial-proof .spatial-proof-inner')).toBeTruthy();
+    expect(container.querySelector('#anchorar-gateway.product-gateway')).toBeTruthy();
+    expect(container.querySelector('#use-cases.use-cases-section')).toBeTruthy();
+    expect(container.querySelector('#capabilities.capability-section')).toBeTruthy();
+    expect(container.querySelectorAll('#capabilities .capability-grid > .capability-item')).toHaveLength(6);
+    expect(container.querySelector('#trust.trust-section')).toBeTruthy();
+    expect(container.querySelector('#arvenilo.home-endorsement')).toBeTruthy();
+    expect(container.querySelector('.mode-picker[role="group"]')).toBeTruthy();
     expect(
       [...container.querySelectorAll<HTMLElement>('.mode-card strong')].map((title) => title.textContent?.trim()),
     ).toEqual(['Scan an experience', 'Create in AnchorAR Studio', 'Access your account']);

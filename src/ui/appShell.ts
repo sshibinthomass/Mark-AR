@@ -83,32 +83,34 @@ export function renderAppShell(): string {
           </div>
         </section>
 
-        <section id="anchorar-proof" class="story-proof" data-home-section tabindex="-1" aria-labelledby="anchorar-proof-title">
-          <div>
-            <p class="eyebrow">How it works</p>
-            <h2 id="anchorar-proof-title">From a physical signal to an immersive layer.</h2>
-            <ol class="proof-steps">
-              <li class="proof-step"><strong>Anchor</strong><span>Choose the real-world trigger.</span></li>
-              <li class="proof-step"><strong>Compose</strong><span>Place objects, text, and motion.</span></li>
-              <li class="proof-step"><strong>Share</strong><span>Publish one link or branded QR.</span></li>
-            </ol>
-          </div>
-          <div class="spatial-aperture-demo" aria-hidden="true">
-            <span class="aperture-frame"></span>
-            <span class="aperture-object"></span>
-            <span class="aperture-signal"></span>
+        <section id="anchorar-proof" class="story-proof spatial-proof" data-home-section tabindex="-1" aria-labelledby="anchorar-proof-title">
+          <div class="spatial-proof-inner">
+            <div>
+              <p class="eyebrow">How it works</p>
+              <h2 id="anchorar-proof-title">From a physical signal to an immersive layer.</h2>
+              <ol class="proof-steps">
+                <li class="proof-step"><strong>Anchor</strong><span>Choose the real-world trigger.</span></li>
+                <li class="proof-step"><strong>Compose</strong><span>Place objects, text, and motion.</span></li>
+                <li class="proof-step"><strong>Share</strong><span>Publish one link or branded QR.</span></li>
+              </ol>
+            </div>
+            <div class="spatial-aperture-demo" aria-hidden="true">
+              <span class="aperture-frame"></span>
+              <span class="aperture-object"></span>
+              <span class="aperture-signal"></span>
+            </div>
           </div>
         </section>
 
-        <section id="anchorar-gateway" class="story-gateway" data-home-section tabindex="-1" aria-labelledby="anchorar-gateway-title">
+        <section id="anchorar-gateway" class="story-gateway product-gateway" data-home-section tabindex="-1" aria-labelledby="anchorar-gateway-title">
           <p class="eyebrow">Choose a path</p>
           <h2 id="anchorar-gateway-title">Start where you are.</h2>
-          <div class="mode-picker" aria-label="AnchorAR destinations">
+          <div class="mode-picker" role="group" aria-label="AnchorAR destinations">
             ${modeCards.map(renderModeCard).join('')}
           </div>
         </section>
 
-        <section id="use-cases" class="story-use-cases" data-home-section tabindex="-1" aria-labelledby="use-cases-title">
+        <section id="use-cases" class="story-use-cases use-cases-section" data-home-section tabindex="-1" aria-labelledby="use-cases-title">
           <p class="eyebrow">Built for the visible world</p>
           <h2 id="use-cases-title">Built for the moments people can already see.</h2>
           <div class="use-case-grid">
@@ -119,26 +121,26 @@ export function renderAppShell(): string {
           </div>
         </section>
 
-        <section id="capabilities" class="story-capabilities" data-home-section tabindex="-1" aria-labelledby="capabilities-title">
+        <section id="capabilities" class="story-capabilities capability-section" data-home-section tabindex="-1" aria-labelledby="capabilities-title">
           <p class="eyebrow">Current capabilities</p>
           <h2 id="capabilities-title">One browser-based workflow.</h2>
-          <ul>
-            <li>Browser-based target scanning.</li>
-            <li>Image-target creation and access control.</li>
-            <li>Multiple 3D models and styled 3D text.</li>
-            <li>Grouping, transforms, camera presets, and animation.</li>
-            <li>Conditional WebXR floor placement on supported hardware and browsers.</li>
-            <li>Exact share links and branded QR codes.</li>
+          <ul class="capability-grid">
+            <li class="capability-item">Browser-based target scanning.</li>
+            <li class="capability-item">Image-target creation and access control.</li>
+            <li class="capability-item">Multiple 3D models and styled 3D text.</li>
+            <li class="capability-item">Grouping, transforms, camera presets, and animation.</li>
+            <li class="capability-item">Conditional WebXR floor placement on supported hardware and browsers.</li>
+            <li class="capability-item">Exact share links and branded QR codes.</li>
           </ul>
         </section>
 
-        <section id="trust" class="story-trust" data-home-section tabindex="-1" aria-labelledby="trust-title">
+        <section id="trust" class="story-trust trust-section" data-home-section tabindex="-1" aria-labelledby="trust-title">
           <p class="eyebrow">Permissions and compatibility</p>
           <h2 id="trust-title">The camera stays in your control.</h2>
           <p>AnchorAR requests camera access only when you choose to scan or place an experience. WebXR floor placement is conditional on compatible hardware and browser support; ordinary image-target scanning remains available when floor AR is unavailable.</p>
         </section>
 
-        <section id="arvenilo" class="story-arvenilo" data-home-section tabindex="-1" aria-labelledby="arvenilo-title">
+        <section id="arvenilo" class="story-arvenilo home-endorsement" data-home-section tabindex="-1" aria-labelledby="arvenilo-title">
           <h2 id="arvenilo-title">Where Intelligence Meets Reality.</h2>
           <img class="arvenilo-lockup" src="${brandAssets.companyLockup}" alt="Arvenilo" />
           <p>AnchorAR is an Arvenilo product.</p>
