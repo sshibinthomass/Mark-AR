@@ -21,22 +21,22 @@ const modeCards: ModeCard[] = [
   {
     route: 'scan',
     badge: 'AR',
-    title: 'Scan target',
-    text: 'Open the camera and place saved target objects in AR.',
+    title: 'Scan an experience',
+    text: 'Open the camera and view a shared AnchorAR target.',
     action: 'Open scanner',
   },
   {
     route: 'targets',
     badge: 'IMG+3D',
-    title: 'Image targets',
-    text: 'Upload a target image, bind it to Cloudflare models, and save it to the cloud.',
-    action: 'Create target',
+    title: 'Create in AnchorAR Studio',
+    text: 'Build, arrange, publish, and manage an experience.',
+    action: 'Create an experience',
   },
   {
     route: 'account',
     badge: 'ID',
-    title: 'Account',
-    text: 'Sign in to the Web-AR Worker for protected image processing routes.',
+    title: 'Access your account',
+    text: 'Sign in or create an account for protected studio tools.',
     action: 'Sign in',
   },
 ];
@@ -71,42 +71,78 @@ export function renderAppShell(): string {
         </div>
       </nav>
 
-      <section class="page landing-page" data-page="home" aria-label="Marker AR studio home">
-        <div class="landing-inner">
-          <div class="landing-copy" data-layout-role="landing-copy">
-            <p class="landing-kicker">Marker Web AR</p>
-            <h1 id="home-page-title" data-page-heading tabindex="-1">Marker AR studio</h1>
-            <p>Create cloud image targets, place Cloudflare models above them, and scan the saved target in AR.</p>
+      <section class="page landing-page" data-page="home" aria-label="AnchorAR by Arvenilo home">
+        <section id="product" class="story-hero" data-home-section tabindex="-1">
+          <img class="story-hero-lockup" src="${brandAssets.productLockup}" alt="AnchorAR by Arvenilo" />
+          <p class="eyebrow" data-product-status>ANCHORAR BY ARVENILO · AVAILABLE NOW</p>
+          <h1 id="home-page-title" data-page-heading tabindex="-1">Interactive stories, anchored in reality.</h1>
+          <p class="story-hero-lede">Use an image, product, or place to open a web-based AR experience—no app required.</p>
+          <div class="story-hero-actions">
+            <a class="action-control action-control--primary" href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}">Create an experience</a>
+            <a class="action-control action-control--secondary" href="${hrefForRoute('scan')}">Open scanner</a>
           </div>
-          <div class="landing-flow" data-layout-role="landing-flow" aria-label="Marker AR workflow">
-            <div class="landing-flow-step">
-              <span>01</span>
-              <strong>Target</strong>
-              <small>Upload image</small>
-            </div>
-            <div class="landing-flow-step">
-              <span>02</span>
-              <strong>Objects</strong>
-              <small>Place GLB</small>
-            </div>
-            <div class="landing-flow-step">
-              <span>03</span>
-              <strong>AR</strong>
-              <small>Scan target</small>
-            </div>
+        </section>
+
+        <section id="anchorar-proof" class="story-proof" data-home-section tabindex="-1" aria-labelledby="anchorar-proof-title">
+          <div>
+            <p class="eyebrow">How it works</p>
+            <h2 id="anchorar-proof-title">From a physical signal to an immersive layer.</h2>
+            <ol class="proof-steps">
+              <li class="proof-step"><strong>Anchor</strong><span>Choose the real-world trigger.</span></li>
+              <li class="proof-step"><strong>Compose</strong><span>Place objects, text, and motion.</span></li>
+              <li class="proof-step"><strong>Share</strong><span>Publish one link or branded QR.</span></li>
+            </ol>
           </div>
-          <div class="landing-preview" data-layout-role="landing-preview" aria-hidden="true">
-            <div class="preview-stage">
-              <span class="preview-floor"></span>
-              <span class="preview-marker"></span>
-              <span class="preview-object"></span>
-            </div>
-            <p><strong>Cloudflare ready</strong><span>Models load from the Web-AR Worker.</span></p>
+          <div class="spatial-aperture-demo" aria-hidden="true">
+            <span class="aperture-frame"></span>
+            <span class="aperture-object"></span>
+            <span class="aperture-signal"></span>
           </div>
-          <div class="mode-picker" data-layout-role="mode-picker" aria-label="Workflow options">
+        </section>
+
+        <section id="anchorar-gateway" class="story-gateway" data-home-section tabindex="-1" aria-labelledby="anchorar-gateway-title">
+          <p class="eyebrow">Choose a path</p>
+          <h2 id="anchorar-gateway-title">Start where you are.</h2>
+          <div class="mode-picker" aria-label="AnchorAR destinations">
             ${modeCards.map(renderModeCard).join('')}
           </div>
-        </div>
+        </section>
+
+        <section id="use-cases" class="story-use-cases" data-home-section tabindex="-1" aria-labelledby="use-cases-title">
+          <p class="eyebrow">Built for the visible world</p>
+          <h2 id="use-cases-title">Built for the moments people can already see.</h2>
+          <div class="use-case-grid">
+            <article class="use-case-card"><h3>Packaging and products</h3><p>Let a product surface open a useful, immersive layer at the moment of discovery.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
+            <article class="use-case-card"><h3>Retail visualization</h3><p>Help shoppers explore a placed scene from the product or display already in front of them.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
+            <article class="use-case-card"><h3>Campaigns and events</h3><p>Connect a printed moment to a shareable experience with one scan link or branded QR code.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
+            <article class="use-case-card"><h3>Learning and storytelling</h3><p>Add objects, styled text, and motion to the stories people can encounter in the real world.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
+          </div>
+        </section>
+
+        <section id="capabilities" class="story-capabilities" data-home-section tabindex="-1" aria-labelledby="capabilities-title">
+          <p class="eyebrow">Current capabilities</p>
+          <h2 id="capabilities-title">One browser-based workflow.</h2>
+          <ul>
+            <li>Browser-based target scanning.</li>
+            <li>Image-target creation and access control.</li>
+            <li>Multiple 3D models and styled 3D text.</li>
+            <li>Grouping, transforms, camera presets, and animation.</li>
+            <li>Conditional WebXR floor placement on supported hardware and browsers.</li>
+            <li>Exact share links and branded QR codes.</li>
+          </ul>
+        </section>
+
+        <section id="trust" class="story-trust" data-home-section tabindex="-1" aria-labelledby="trust-title">
+          <p class="eyebrow">Permissions and compatibility</p>
+          <h2 id="trust-title">The camera stays in your control.</h2>
+          <p>AnchorAR requests camera access only when you choose to scan or place an experience. WebXR floor placement is conditional on compatible hardware and browser support; ordinary image-target scanning remains available when floor AR is unavailable.</p>
+        </section>
+
+        <section id="arvenilo" class="story-arvenilo" data-home-section tabindex="-1" aria-labelledby="arvenilo-title">
+          <h2 id="arvenilo-title">Where Intelligence Meets Reality.</h2>
+          <img class="arvenilo-lockup" src="${brandAssets.companyLockup}" alt="Arvenilo" />
+          <p>AnchorAR is an Arvenilo product.</p>
+        </section>
       </section>
 
       <section class="page" data-page="scan" hidden aria-label="Marker scanner">

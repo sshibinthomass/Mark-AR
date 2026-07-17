@@ -1,9 +1,6 @@
-const MOBILE_QUERY = '(max-width: 760px)';
+const MOBILE_QUERY = '(max-width: 767px)';
 
 export function applyResponsiveLayout(root: HTMLElement, mobile: boolean): void {
-  arrange(root, '.landing-inner', mobile
-    ? ['landing-copy', 'mode-picker', 'landing-flow', 'landing-preview']
-    : ['landing-copy', 'landing-flow', 'landing-preview', 'mode-picker']);
   arrange(root, '.scanner-panel', mobile
     ? ['scanner-controls', 'scanner-stage']
     : ['scanner-stage', 'scanner-controls']);

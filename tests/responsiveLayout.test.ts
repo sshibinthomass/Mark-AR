@@ -4,15 +4,12 @@ import { applyResponsiveLayout, setupResponsiveLayout } from '../src/ui/responsi
 describe('responsive layout coordinator', () => {
   it('puts task controls before large supporting surfaces on mobile', () => {
     const root = renderFixture();
+    const before = [...root.querySelectorAll('[data-home-section]')];
 
     applyResponsiveLayout(root, true);
 
-    expect(layoutOrder(root, '.landing-inner')).toEqual([
-      'landing-copy',
-      'mode-picker',
-      'landing-flow',
-      'landing-preview',
-    ]);
+    expect([...root.querySelectorAll('[data-home-section]')]).toEqual(before);
+    expect(root.dataset.layoutViewport).toBe('mobile');
     expect(layoutOrder(root, '.scanner-panel')).toEqual([
       'scanner-controls',
       'scanner-stage',
@@ -33,12 +30,6 @@ describe('responsive layout coordinator', () => {
 
     applyResponsiveLayout(root, false);
 
-    expect(layoutOrder(root, '.landing-inner')).toEqual([
-      'landing-copy',
-      'landing-flow',
-      'landing-preview',
-      'mode-picker',
-    ]);
     expect(layoutOrder(root, '.scanner-panel')).toEqual([
       'scanner-stage',
       'scanner-controls',
@@ -78,12 +69,15 @@ function layoutOrder(root: ParentNode, selector: string): string[] {
 function renderFixture(): HTMLElement {
   const root = document.createElement('main');
   root.innerHTML = `
-    <div class="landing-inner">
-      <div data-layout-role="landing-copy"></div>
-      <div data-layout-role="landing-flow"></div>
-      <div data-layout-role="landing-preview"></div>
-      <div data-layout-role="mode-picker"></div>
-    </div>
+    <section class="landing-page">
+      <section id="product" data-home-section></section>
+      <section id="anchorar-proof" data-home-section></section>
+      <section id="anchorar-gateway" data-home-section></section>
+      <section id="use-cases" data-home-section></section>
+      <section id="capabilities" data-home-section></section>
+      <section id="trust" data-home-section></section>
+      <section id="arvenilo" data-home-section></section>
+    </section>
     <div class="scanner-panel">
       <div data-layout-role="scanner-stage"></div>
       <div data-layout-role="scanner-controls"></div>
@@ -104,7 +98,7 @@ function fakeMediaQuery(initial: boolean): MediaQueryList & { setMatches(value: 
   let matches = initial;
   const listeners = new Set<(event: MediaQueryListEvent) => void>();
   return {
-    media: '(max-width: 760px)',
+    media: '(max-width: 767px)',
     get matches() {
       return matches;
     },

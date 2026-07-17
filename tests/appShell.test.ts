@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderAppShell } from '../src/ui/appShell';
 
 describe('renderAppShell', () => {
-  it('renders the target-focused workflow', () => {
+  it('renders the story-first homepage and target-focused workflow', () => {
     const container = document.createElement('div');
     container.innerHTML = renderAppShell();
     const html = container.innerHTML;
@@ -43,7 +43,7 @@ describe('renderAppShell', () => {
         tabIndex: heading.tabIndex,
       })),
     ).toEqual([
-      { id: 'home-page-title', text: 'Marker AR studio', tabIndex: -1 },
+      { id: 'home-page-title', text: 'Interactive stories, anchored in reality.', tabIndex: -1 },
       { id: 'scan-page-title', text: 'Scan target', tabIndex: -1 },
       { id: 'targets-page-title', text: 'Image targets', tabIndex: -1 },
       { id: 'account-page-title', text: 'Account', tabIndex: -1 },
@@ -58,18 +58,32 @@ describe('renderAppShell', () => {
       { href: '#/', text: 'Home' },
       { href: '#/', text: 'Home' },
     ]);
+    expect([...container.querySelectorAll<HTMLElement>('.landing-page [data-home-section]')].map((section) => section.id)).toEqual([
+      'product',
+      'anchorar-proof',
+      'anchorar-gateway',
+      'use-cases',
+      'capabilities',
+      'trust',
+      'arvenilo',
+    ]);
+    expect(container.querySelector('#home-page-title')?.textContent).toBe('Interactive stories, anchored in reality.');
+    expect(container.querySelector('[data-product-status]')?.textContent).toContain('AVAILABLE NOW');
+    expect(container.querySelector('.story-hero-actions [data-unlocked-href="#/targets"]')?.textContent).toContain('Create an experience');
+    expect(container.querySelector('.story-hero-actions [href="#/account"]')?.textContent).toContain('Create an experience');
+    expect(container.querySelector('.story-hero-actions [href="#/scan"]')?.textContent).toContain('Open scanner');
+    expect([...container.querySelectorAll('.proof-step strong')].map((node) => node.textContent)).toEqual([
+      'Anchor', 'Compose', 'Share',
+    ]);
+    expect([...container.querySelectorAll('.use-case-card h3')].map((node) => node.textContent)).toEqual([
+      'Packaging and products', 'Retail visualization', 'Campaigns and events', 'Learning and storytelling',
+    ]);
     expect(
       [...container.querySelectorAll<HTMLElement>('.mode-card strong')].map((title) => title.textContent?.trim()),
-    ).toEqual(['Scan target', 'Image targets', 'Account']);
+    ).toEqual(['Scan an experience', 'Create in AnchorAR Studio', 'Access your account']);
     expect(
       [...container.querySelectorAll<HTMLElement>('[data-page]')].map((page) => page.dataset.page),
     ).toEqual(['home', 'scan', 'targets', 'account']);
-    expect(layoutOrder(container, '.landing-inner')).toEqual([
-      'landing-copy',
-      'landing-flow',
-      'landing-preview',
-      'mode-picker',
-    ]);
     expect(layoutOrder(container, '.scanner-panel')).toEqual([
       'scanner-stage',
       'scanner-controls',
@@ -85,7 +99,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('[data-page="targets"]')).toBeTruthy();
     expect(container.querySelector('[data-page="targets"]')?.getAttribute('data-has-target-draft')).toBe('false');
     const protectedLinks = [...container.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]')];
-    expect(protectedLinks).toHaveLength(2);
+    expect(protectedLinks).toHaveLength(3);
     expect(protectedLinks.every((link) => link.dataset.unlockedHref === '#/targets')).toBe(true);
     expect(protectedLinks.every((link) => link.getAttribute('href') === '#/account')).toBe(true);
     expect(protectedLinks.every((link) => !link.hasAttribute('aria-disabled'))).toBe(true);
@@ -340,8 +354,12 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#new-image-target')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')?.closest('[data-target-inspector-panel="target"]')).toBeTruthy();
-    expect(html).toContain('Marker AR studio');
-    expect(html).toContain('Web-AR Worker');
+    const homeHtml = container.querySelector('[data-page="home"]')?.innerHTML ?? '';
+    expect(homeHtml).not.toContain('Marker AR studio');
+    expect(homeHtml).not.toContain('Web-AR Worker');
+    expect(homeHtml).not.toContain('Cloudflare ready');
+    expect(homeHtml).not.toContain('landing-flow');
+    expect(homeHtml).not.toContain('landing-preview');
   });
 });
 
