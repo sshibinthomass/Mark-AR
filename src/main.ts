@@ -1,4 +1,6 @@
+import './styles/arvenilo-tokens.css';
 import './style.css';
+import './styles/arvenilo-redesign.css';
 import {
   prepareFloorPlacement,
   type FloorPlacementController,

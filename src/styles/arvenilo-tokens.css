@@ -1,0 +1,47 @@
+@font-face { font-family: "Sora Variable"; src: url("../assets/fonts/sora-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 100 800; font-display: swap; }
+@font-face { font-family: "Inter Variable"; src: url("../assets/fonts/inter-latin-wght-normal.woff2") format("woff2"); font-style: normal; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Inter Variable"; src: url("../assets/fonts/inter-latin-wght-italic.woff2") format("woff2"); font-style: italic; font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("../assets/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("../assets/fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); font-style: normal; font-weight: 500; font-display: swap; }
+
+:root {
+  color-scheme: light;
+  --color-spatial-void: #020a0c;
+  --color-spatial-ink: #081d21;
+  --color-spatial-surface: #0d2a2e;
+  --color-spatial-surface-raised: #12363a;
+  --color-reality-mist: #f4fbfa;
+  --color-interface-white: #ffffff;
+  --color-signal-mint: #5eead4;
+  --color-digital-violet: #7456f1;
+  --color-anchor-gold: #f4b942;
+  --color-context-slate: #4d6265;
+  --color-mist-slate: #a8b9bb;
+  --color-border-dark: #1d454a;
+  --color-border-light: #c9dada;
+  --color-mint-wash: #d8f8f2;
+  --color-violet-wash: #e9e5ff;
+  --color-gold-wash: #fff1cf;
+  --color-error-dark: #b83e4b;
+  --color-error-light: #ff9099;
+  --font-display: "Sora Variable", "Sora", "Avenir Next", "Segoe UI", sans-serif;
+  --font-text: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --font-utility: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", monospace;
+  --text-display-xl: clamp(3.35rem, 6.7vw, 7.3rem);
+  --text-display-lg: clamp(2.7rem, 5vw, 5.2rem);
+  --text-heading-1: clamp(2.3rem, 4vw, 4rem);
+  --text-heading-2: clamp(1.8rem, 3vw, 3rem);
+  --text-heading-3: clamp(1.25rem, 2vw, 1.75rem);
+  --text-body-lg: clamp(1.0625rem, 1.3vw, 1.25rem);
+  --text-body: 1rem;
+  --text-small: 0.875rem;
+  --text-label: 0.75rem;
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.5rem;
+  --space-6: 2rem; --space-7: 3rem; --space-8: 4rem; --space-9: 6rem; --space-10: 8rem;
+  --radius-control: 10px; --radius-card: 16px; --radius-stage: 24px; --radius-status: 999px;
+  --content-reading: 720px; --content-standard: 1200px; --content-wide: 1440px; --content-max: 1600px;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --section-space: clamp(4.5rem, 8vw, 8rem);
+}
