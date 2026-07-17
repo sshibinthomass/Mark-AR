@@ -97,6 +97,36 @@ describe('applyFloorPlacementUi', () => {
     expect(root.dataset.arMode).toBe(floorVisible ? 'floor' : 'marker');
     expect(root.getAttribute('aria-busy')).toBe(String(state.state === 'preparing'));
   });
+
+  it('marks only floor failures as errors and clears the tone on recovery', () => {
+    const root = renderFloorUiFixture();
+    const floorMessage = required<HTMLElement>(root, '#floor-ar-message');
+    const floorStatus = required<HTMLElement>(root, '#floor-ar-status');
+
+    applyFloorPlacementUi(root, {
+      state: 'floor-error',
+      message: 'Floor scene failed to load: model unavailable',
+    });
+
+    expect(floorStatus.dataset.tone).toBe('error');
+    expect(floorMessage.textContent).toBe('');
+    expect(floorMessage.hasAttribute('data-tone')).toBe(false);
+
+    applyFloorPlacementUi(root, { state: 'floor-ready', message: 'Floor found. Tap Place.' });
+
+    expect(floorStatus.textContent).toBe('Floor found. Tap Place.');
+    expect(floorStatus.hasAttribute('data-tone')).toBe(false);
+
+    applyFloorPlacementUi(root, {
+      state: 'unsupported',
+      message: 'Floor placement needs WebXR. Image scanning is still available.',
+    });
+
+    expect(floorStatus.textContent).toBe('');
+    expect(floorStatus.hasAttribute('data-tone')).toBe(false);
+    expect(floorMessage.textContent).toContain('Image scanning is still available.');
+    expect(floorMessage.hasAttribute('data-tone')).toBe(false);
+  });
 });
 
 function renderFloorUiFixture(): HTMLElement {

@@ -61,6 +61,12 @@ export function applyFloorPlacementUi(
 
   message.textContent = floorVisible ? '' : statusMessage;
   floorStatus.textContent = floorVisible ? statusMessage : '';
+  message.removeAttribute('data-tone');
+  if (state.state === 'floor-error') {
+    floorStatus.dataset.tone = 'error';
+  } else {
+    floorStatus.removeAttribute('data-tone');
+  }
   root.dataset.arMode = floorVisible ? 'floor' : 'marker';
   root.setAttribute('aria-busy', String(state.state === 'preparing'));
 }

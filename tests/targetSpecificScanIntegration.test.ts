@@ -584,6 +584,7 @@ describe('target-specific scan route integration', () => {
     await import('../src/main');
     await waitFor(() => document.querySelector('#ar-status')?.textContent === message);
 
+    expect(required('#ar-status').dataset.tone).toBe('error');
     expect(markerArMocks.startMarkerAR).not.toHaveBeenCalled();
     expect(floorRuntimeMocks.prepareFloorPlacement).not.toHaveBeenCalled();
     expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
@@ -811,17 +812,22 @@ describe('target-specific scan route integration', () => {
 
   it('leaves a manual Start camera retry when automatic startup is blocked', async () => {
     cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
-    markerArMocks.startMarkerAR.mockRejectedValue(new Error('Camera permission was blocked'));
+    markerArMocks.startMarkerAR.mockRejectedValueOnce(new Error('Camera permission was blocked'));
 
     await import('../src/main');
     await waitFor(() => document.querySelector('#ar-status')?.textContent === 'Camera permission was blocked');
 
+    expect(required('#ar-status').dataset.tone).toBe('error');
     expect(document.querySelector<HTMLButtonElement>('#start-ar')).toMatchObject({
       disabled: false,
       textContent: 'Start camera',
     });
     expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
     expect(required('#ar-stage').querySelector('.stage-idle')?.textContent).toBe('Scan an experience');
+
+    required<HTMLButtonElement>('#start-ar').click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
+    expect(required('#ar-status').hasAttribute('data-tone')).toBe(false);
   });
 
   it('remembers the exact scan URL across sign-in after a 401 response', async () => {

@@ -41,6 +41,17 @@ describe('AnchorAR redesign styles', () => {
     expect(css).toMatch(/\.is-error\s*\{[^}]*color:\s*var\(--color-error-dark\)/s);
   });
 
+  it('closes post-legacy route typography leaks with canonical families', () => {
+    expect(css).toMatch(/\.auth-access-copy h3,\s*\.auth-card-head h3\s*\{[^}]*font-family:\s*var\(--font-display\);[^}]*font-weight:\s*650;[^}]*line-height:\s*1\.08;[^}]*letter-spacing:\s*-0\.035em/s);
+    expect(css).toMatch(/\.target-qr-dialog-copy h2\s*\{[^}]*font-family:\s*var\(--font-display\);[^}]*font-weight:\s*650/s);
+    expect(css).toMatch(/\.target-qr-dialog-copy > p:not\(\.eyebrow, \.target-qr-target\)\s*\{[^}]*font-family:\s*var\(--font-text\)/s);
+    expect(css).toMatch(/\.page \.eyebrow,\s*\.status-label,\s*\.marker-index,[^}]*\{[^}]*font-family:\s*var\(--font-utility\);[^}]*font-weight:\s*500;[^}]*letter-spacing:\s*0\.08em/s);
+  });
+
+  it('restores exact Mint primary controls after legacy ID rules', () => {
+    expect(css).toMatch(/#start-ar,\s*#worker-login,\s*#save-image-target,\s*#add-target-text,\s*button\.primary\s*\{[^}]*background:\s*var\(--color-signal-mint\);[^}]*box-shadow:\s*none/s);
+  });
+
   it('overrides legacy protected-link decoration without introducing gold', () => {
     expect(css).toMatch(
       /\.mode-card\[data-auth-locked="true"\]\s*\{[^}]*border-style:\s*solid;[^}]*background:\s*var\(--color-interface-white\)/s,

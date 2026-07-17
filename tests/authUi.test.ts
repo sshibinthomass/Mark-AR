@@ -174,6 +174,27 @@ describe('auth UI state', () => {
     expect(root.querySelector('[data-auth-email]')?.textContent).toBe('artist@example.com');
     expect(root.querySelector('[data-auth-protected-label]')?.textContent).toBe('Create target');
   });
+
+  it('publishes an account error tone and clears it with the next normal state', () => {
+    const root = renderAuthFixture();
+    const status = root.querySelector<HTMLElement>('#worker-status');
+
+    applyAuthUi(root, {
+      status: 'signed-out',
+      message: 'Sign-in service is unavailable.',
+      tone: 'error',
+    });
+
+    expect(status?.textContent).toBe('Sign-in service is unavailable.');
+    expect(status?.dataset.tone).toBe('error');
+
+    applyAuthUi(root, checking);
+    expect(status?.textContent).toBe(checking.message);
+    expect(status?.hasAttribute('data-tone')).toBe(false);
+
+    applyAuthUi(root, signedOut);
+    expect(status?.hasAttribute('data-tone')).toBe(false);
+  });
 });
 
 function renderAuthFixture(): HTMLElement {

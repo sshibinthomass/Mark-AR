@@ -184,6 +184,15 @@ const floorToggle = queryRequired<HTMLButtonElement>('#floor-ar-toggle');
 const floorBack = queryRequired<HTMLButtonElement>('#floor-ar-back');
 const floorPlace = queryRequired<HTMLButtonElement>('#floor-ar-place');
 const floorRotation = queryRequired<HTMLInputElement>('#floor-ar-rotation');
+
+function setScannerStatus(message: string, tone?: 'error'): void {
+  status.textContent = message;
+  if (tone) {
+    status.dataset.tone = tone;
+  } else {
+    status.removeAttribute('data-tone');
+  }
+}
 const floorReset = queryRequired<HTMLButtonElement>('#floor-ar-reset');
 const floorRestart = queryRequired<HTMLButtonElement>('#floor-ar-restart');
 const workerLoginForm = queryRequired<HTMLFormElement>('#worker-login-form');
@@ -356,6 +365,7 @@ shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link
     authNavigation.remember('targets');
     setAuthUiState({
       ...authUiState,
+      tone: undefined,
       message: authUiState.status === 'checking'
         ? 'Checking your session before opening AnchorAR Studio…'
         : protectedTargetsMessage,
@@ -454,7 +464,7 @@ async function startCurrentArSession(): Promise<void> {
   const startTarget = focusedScanTarget;
   const visibleMarkerIds = new Set<string>();
   startButton.disabled = true;
-  status.textContent = 'Preparing experiences';
+  setScannerStatus('Preparing experiences');
   session?.stop();
   session = undefined;
   prepareScannerStage(stage);
@@ -475,7 +485,7 @@ async function startCurrentArSession(): Promise<void> {
       targets: runtimeTargets,
       onCompileProgress: (percent) => {
         if (isCurrentStart()) {
-          status.textContent = `Compiling targets ${Math.round(percent)}%`;
+          setScannerStatus(`Compiling targets ${Math.round(percent)}%`);
         }
       },
       onMarkerVisibility: ({ marker, visible }) => {
@@ -488,13 +498,13 @@ async function startCurrentArSession(): Promise<void> {
           visibleMarkerIds.delete(marker.id);
         }
         setScannerGuideVisible(stage, visibleMarkerIds.size === 0);
-        status.textContent = visible ? `${marker.label} active` : `${marker.label} lost`;
+        setScannerStatus(visible ? `${marker.label} active` : `${marker.label} lost`);
       },
       onReady: () => {
         if (isCurrentStart()) {
-          status.textContent = startTarget
+          setScannerStatus(startTarget
             ? `Camera active. Scan ${startTarget.label}.`
-            : 'Camera active. Scan a saved experience.';
+            : 'Camera active. Scan a saved experience.');
         }
       },
       signal: abortController.signal,
@@ -518,7 +528,7 @@ async function startCurrentArSession(): Promise<void> {
     const message = error instanceof Error ? error.message : 'Unable to start AR';
     setScanSessionState('idle');
     resetScannerStage(stage);
-    status.textContent = message;
+    setScannerStatus(message, 'error');
     startButton.textContent = 'Start camera';
   } finally {
     if (
@@ -563,6 +573,7 @@ async function signInToWorker(message = 'Signing in…'): Promise<void> {
     setAuthUiState({
       status: 'signed-out',
       message: userFacingAuthErrorMessage(error, 'login'),
+      tone: 'error',
     });
   }
 }
@@ -614,13 +625,18 @@ async function createWorkerAccount(): Promise<void> {
   } catch (error) {
     if (await recoverExistingAccount(error, {
       setFormMode: setAuthFormMode,
-      setSignedOutMessage: (message) => setAuthUiState({ status: 'signed-out', message }),
+      setSignedOutMessage: (message) => setAuthUiState({
+        status: 'signed-out',
+        message,
+        tone: 'error',
+      }),
     })) {
       return;
     }
     setAuthUiState({
       status: 'signed-out',
       message: userFacingAuthErrorMessage(error, 'signup'),
+      tone: 'error',
     });
   }
 }
@@ -836,6 +852,7 @@ async function initializeCloudflareControls(): Promise<void> {
       setAuthUiState({
         status: 'signed-out',
         message: errorMessage(error, 'Could not verify saved session'),
+        tone: 'error',
       });
     }
   }
@@ -882,6 +899,7 @@ function activateRequestedRoute(requestedRoute: AppRoute): void {
 
   setAuthUiState({
     ...authUiState,
+    tone: undefined,
     message: authUiState.status === 'checking'
       ? 'Checking your session before opening AnchorAR Studio…'
       : protectedTargetsMessage,
@@ -914,7 +932,7 @@ async function openTargetSpecificScan(scanId: string): Promise<void> {
   focusedScanTarget = undefined;
   startButton.disabled = true;
   startButton.textContent = 'Loading target';
-  status.textContent = 'Loading target...';
+  setScannerStatus('Loading target...');
 
   try {
     const target = await getImageTargetForScan({
@@ -939,22 +957,22 @@ async function openTargetSpecificScan(scanId: string): Promise<void> {
     startButton.disabled = true;
     if (error instanceof ImageTargetRequestError && error.status === 401) {
       authNavigation.rememberHref(hrefForTargetScan(scanId));
-      status.textContent = 'Sign in to open this target.';
-      setAuthUiState({ ...authUiState, message: 'Sign in to open this target.' });
+      setScannerStatus('Sign in to open this target.');
+      setAuthUiState({ ...authUiState, message: 'Sign in to open this target.', tone: undefined });
       if (window.location.hash !== hrefForRoute('account')) {
         window.location.hash = hrefForRoute('account');
       }
       return;
     }
     if (error instanceof ImageTargetRequestError && error.status === 403) {
-      status.textContent = "You don't have access to this target.";
+      setScannerStatus("You don't have access to this target.", 'error');
       return;
     }
     if (error instanceof ImageTargetRequestError && error.status === 404) {
-      status.textContent = 'Target not found.';
+      setScannerStatus('Target not found.', 'error');
       return;
     }
-    status.textContent = errorMessage(error, 'Unable to load target.');
+    setScannerStatus(errorMessage(error, 'Unable to load target.'), 'error');
   }
 }
 
@@ -1253,7 +1271,7 @@ function stopActiveArSession(): void {
 function resetScanControls(): void {
   startButton.textContent = 'Start camera';
   startButton.disabled = false;
-  status.textContent = 'Camera access starts only after you choose Start camera.';
+  setScannerStatus('Camera access starts only after you choose Start camera.');
 }
 
 function restorePendingProtectedRoute(): void {

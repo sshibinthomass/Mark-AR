@@ -56,6 +56,9 @@ describe('scanner stage styles', () => {
     expect(cssRule(redesignCss, '.floor-ar-controls')).toContain(
       'background: var(--color-spatial-surface)',
     );
+    expect(cssRule(redesignCss, '.floor-ar-controls [data-tone="error"]')).toContain(
+      'color: var(--color-error-light)',
+    );
   });
 
   it('stops the scan-line animation when reduced motion is requested', () => {

@@ -3,10 +3,17 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/style.css', 'utf8');
 const redesignCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
+const combinedCss = `${css}\n${redesignCss}`;
 
 function cssRule(selector: string, source = css): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+}
+
+function lastCssRule(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = [...combinedCss.matchAll(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'gm'))];
+  return matches.at(-1)?.groups?.body ?? '';
 }
 
 function mediaBlock(query: string): string {
@@ -141,5 +148,71 @@ describe('target inspector styles', () => {
     expect(cssRule('.target-model-card-loader', redesignCss)).toContain(
       'background: var(--color-spatial-surface-raised)',
     );
+  });
+
+  it('resets higher-specificity legacy inspector components to solid surfaces', () => {
+    const button = lastCssRule('.target-page button');
+    expect(button).toContain('background: var(--color-interface-white)');
+    expect(button).toContain('font-weight: 600');
+    expect(button).toContain('box-shadow: none');
+    expect(button).toContain('backdrop-filter: none');
+
+    const danger = lastCssRule('.target-page .icon-delete-button');
+    expect(danger).toContain('border-color: var(--color-error-dark)');
+    expect(danger).toContain('background: var(--color-interface-white)');
+    expect(danger).toContain('box-shadow: none');
+    expect(lastCssRule('.target-page .icon-delete-button:hover')).toContain(
+      'background: var(--color-error-dark)',
+    );
+
+    for (const selector of [
+      '.target-object-group',
+      '.target-object-group-summary',
+      '.target-object-group-select',
+      '.target-object-ungroup',
+      '.animation-track-card',
+      '.animation-track-empty',
+      '.saved-target-link-actions button',
+      '.saved-target-link-actions a',
+    ]) {
+      expect(lastCssRule(selector), selector).toMatch(/background:\s*var\(--color-(?:interface-white|reality-mist)\)/);
+      expect(lastCssRule(selector), selector).toContain('box-shadow: none');
+    }
+
+    expect(lastCssRule('.animation-track-remove')).toContain(
+      'color: var(--color-error-dark)',
+    );
+    for (const axis of ['x', 'y', 'z']) {
+      expect(lastCssRule(`.target-page [data-reset-axis="${axis}"]`)).toContain(
+        'background: var(--color-interface-white)',
+      );
+    }
+  });
+
+  it('adds persistent non-color selected indicators without absolute overlap', () => {
+    const saved = cssRule('.saved-target-row.is-active .saved-target-open::after', redesignCss);
+    expect(saved).toContain('content: "Selected"');
+    expect(saved).toContain('grid-column: 2');
+    expect(saved).not.toContain('position: absolute');
+
+    const object = cssRule('.target-object-row[aria-selected="true"] .target-object-select::after', redesignCss);
+    const group = cssRule('.target-object-group[aria-selected="true"] .target-object-group-select::after', redesignCss);
+    expect(object).toContain('content: "✓ Selected"');
+    expect(group).toContain('content: "✓ Selected"');
+    expect(object).toContain('grid-column: 1 / -1');
+    expect(group).toContain('grid-column: 1 / -1');
+  });
+
+  it('restores the qualified shared Mint focus ring', () => {
+    for (const selector of [
+      '.target-page .target-object-select:focus-visible',
+      '.target-page .target-object-group-select:focus-visible',
+      '.target-page .target-object-ungroup:focus-visible',
+      '.target-page .saved-target-open:focus-visible',
+    ]) {
+      const rule = lastCssRule(selector);
+      expect(rule, selector).toContain('outline: 3px solid var(--color-signal-mint)');
+      expect(rule, selector).toContain('outline-offset: 3px');
+    }
   });
 });

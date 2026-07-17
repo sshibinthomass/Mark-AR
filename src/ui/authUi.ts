@@ -2,10 +2,12 @@ import type { AuthSession } from '../app/webArAuth';
 import { pendingApprovalMessage, protectedTargetsMessage, signupPendingMessage } from '../app/authMessages';
 import type { AppRoute } from './pageRoutes';
 
+type AuthUiMessage = { message: string; tone?: 'error' };
+
 export type AuthUiState =
-  | { status: 'checking'; message: string }
-  | { status: 'signed-out'; message: string }
-  | { status: 'signed-in'; message: string; email: string };
+  | ({ status: 'checking' } & AuthUiMessage)
+  | ({ status: 'signed-out' } & AuthUiMessage)
+  | ({ status: 'signed-in'; email: string } & AuthUiMessage);
 
 export type SignupResult =
   | { kind: 'pending'; email: string; message: string }
@@ -72,6 +74,11 @@ export function applyAuthUi(root: HTMLElement, state: AuthUiState): void {
   const status = root.querySelector<HTMLElement>('#worker-status');
   if (status) {
     status.textContent = state.message;
+    if (state.tone) {
+      status.dataset.tone = state.tone;
+    } else {
+      status.removeAttribute('data-tone');
+    }
   }
 
   setText(root, '[data-auth-account-label]', authenticated ? 'Account' : 'Sign in');

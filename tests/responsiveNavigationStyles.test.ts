@@ -75,6 +75,8 @@ describe('responsive navigation styles', () => {
     expect(cssRule(mobile, '.auth-control-card')).toContain('min-height: 0');
     expect(cssRule(mobile, '.scanner-actions button')).toContain('width: 100%');
     expect(cssRule(mobile, '.floor-ar-back')).toContain('env(safe-area-inset-top)');
+    expect(cssRule(mobile, '.auth-orbit')).toContain('display: none');
+    expect(cssRule(mobile, '.auth-access-copy')).toContain('max-width: 100%');
   });
 
   it('makes the save strip sticky only for an active target draft', () => {

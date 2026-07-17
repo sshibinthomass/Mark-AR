@@ -34,6 +34,19 @@ describe('target QR prompt styles', () => {
     );
   });
 
+  it('uses canonical QR typography and one meaningful Gold target detail', () => {
+    const heading = cssRuleFrom(redesignCss, '.target-qr-dialog-copy h2');
+    expect(heading).toContain('font-family: var(--font-display)');
+    expect(heading).toContain('font-weight: 650');
+    expect(cssRuleFrom(redesignCss, '.target-qr-target span')).toContain(
+      'background: var(--color-anchor-gold)',
+    );
+    const decoration = cssRuleFrom(redesignCss, '.target-qr-dialog::before');
+    expect(decoration).toContain('content: none');
+    expect(decoration).toContain('display: none');
+    expect(decoration).not.toContain('var(--color-anchor-gold)');
+  });
+
   it('shows QR errors and busy sharing with explicit semantic colors', () => {
     expect(cssRuleFrom(redesignCss, '.target-qr-error')).toContain(
       'color: var(--color-error-dark)',
