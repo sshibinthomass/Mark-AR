@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync('src/style.css', 'utf8');
+const css = [
+  readFileSync('src/style.css', 'utf8'),
+  readFileSync('src/styles/arvenilo-redesign.css', 'utf8'),
+].join('\n');
 
 function mediaBlock(query: string): string {
   const start = css.indexOf(`@media ${query}`);
@@ -22,7 +25,7 @@ function cssRule(source: string, selector: string): string {
 }
 
 describe('responsive navigation styles', () => {
-  const mobile = mediaBlock('(max-width: 760px)');
+  const mobile = mediaBlock('(max-width: 767px)');
 
   it('uses a compact brand bar and fixed four-item bottom navigation', () => {
     expect(cssRule(mobile, '.shell-nav')).toContain('min-height: 52px');
