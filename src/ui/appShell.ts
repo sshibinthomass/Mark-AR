@@ -6,6 +6,7 @@ import {
   TEXT_LANGUAGE_OPTIONS,
   TEXT_STYLE_PRESETS,
 } from '../app/targetEditorObjects';
+import { brandAssetUrls } from '../app/brandAssets';
 import { hrefForRoute, type AppRoute } from './pageRoutes';
 
 type ModeCard = {
@@ -48,15 +49,25 @@ const routeIconPaths: Record<AppRoute, string> = {
 };
 
 export function renderAppShell(): string {
+  const brandAssets = brandAssetUrls();
+
   return `
     <main class="app-shell" data-app-shell>
-      <nav class="shell-nav" aria-label="Marker AR pages">
-        <a class="brand-link" href="${hrefForRoute('home')}">Marker AR studio</a>
-        <div class="route-tabs">
-          ${renderRouteLink('home', 'Home')}
-          ${renderRouteLink('scan', 'Scan')}
-          ${renderRouteLink('targets', 'Targets')}
-          ${renderRouteLink('account', '<span data-auth-account-label>Sign in</span>')}
+      <nav class="shell-nav" aria-label="AnchorAR pages">
+        <a class="brand-link" href="${hrefForRoute('home')}" aria-label="AnchorAR by Arvenilo home">
+          <img src="${brandAssets.productLockup}" alt="AnchorAR by Arvenilo" />
+        </a>
+        <div class="shell-nav-actions">
+          <div class="shell-story-links" aria-label="Product information">
+            <a href="${hrefForRoute('home')}" data-home-section-link="product">Product</a>
+            <a href="${hrefForRoute('home')}" data-home-section-link="use-cases">Use cases</a>
+          </div>
+          <div class="route-tabs">
+            ${renderRouteLink('home', 'Home')}
+            ${renderRouteLink('scan', 'Scan')}
+            ${renderRouteLink('targets', 'Studio')}
+            ${renderRouteLink('account', '<span data-auth-account-label>Sign in</span>')}
+          </div>
         </div>
       </nav>
 
@@ -515,7 +526,7 @@ export function renderAppShell(): string {
 
 function renderRouteLink(route: AppRoute, label: string): string {
   if (route === 'targets') {
-    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-label="Targets — sign in required" title="Sign in with an approved account to use Image Targets">${renderRouteLabel(route, label)}</a>`;
+    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-label="Studio — sign in required" title="Sign in with an approved account to use Image Targets">${renderRouteLabel(route, label)}</a>`;
   }
   return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${renderRouteLabel(route, label)}</a>`;
 }

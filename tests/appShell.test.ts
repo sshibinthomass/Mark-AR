@@ -17,8 +17,24 @@ describe('renderAppShell', () => {
     ).toEqual([
       { route: 'home', href: '#/', text: 'Home', hasIcon: true },
       { route: 'scan', href: '#/scan', text: 'Scan', hasIcon: true },
-      { route: 'targets', href: '#/account', text: 'Targets', hasIcon: true },
+      { route: 'targets', href: '#/account', text: 'Studio', hasIcon: true },
       { route: 'account', href: '#/account', text: 'Sign in', hasIcon: true },
+    ]);
+    expect(container.querySelector<HTMLImageElement>('.brand-link img')).toMatchObject({
+      alt: 'AnchorAR by Arvenilo',
+    });
+    expect(container.querySelector('.brand-link img')?.getAttribute('src')).toContain(
+      'brand/qr/04-anchorar-platform-transparent-QR.png',
+    );
+    expect([...container.querySelectorAll('[data-home-section-link]')].map((link) => [
+      link.textContent?.trim(),
+      (link as HTMLElement).dataset.homeSectionLink,
+    ])).toEqual([
+      ['Product', 'product'],
+      ['Use cases', 'use-cases'],
+    ]);
+    expect([...container.querySelectorAll('.route-tabs a')].map((link) => link.textContent?.trim())).toEqual([
+      'Home', 'Scan', 'Studio', 'Sign in',
     ]);
     expect(
       [...container.querySelectorAll<HTMLElement>('[data-page-heading]')].map((heading) => ({
@@ -74,7 +90,7 @@ describe('renderAppShell', () => {
     expect(protectedLinks.every((link) => link.getAttribute('href') === '#/account')).toBe(true);
     expect(protectedLinks.every((link) => !link.hasAttribute('aria-disabled'))).toBe(true);
     expect(container.querySelector('[data-route-link="targets"]')?.getAttribute('aria-label')).toBe(
-      'Targets — sign in required',
+      'Studio — sign in required',
     );
     expect(container.querySelector('[data-auth-account-label]')?.textContent).toBe('Sign in');
     expect(container.querySelector('[data-auth-access-label]')?.textContent).toBe('Locked');
