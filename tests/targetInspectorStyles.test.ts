@@ -179,7 +179,7 @@ describe('target inspector styles', () => {
       expect(lastCssRule(selector), selector).toContain('box-shadow: none');
     }
 
-    expect(lastCssRule('.animation-track-remove')).toContain(
+    expect(lastCssRule('.target-page .animation-track-remove')).toContain(
       'color: var(--color-error-dark)',
     );
     for (const axis of ['x', 'y', 'z']) {

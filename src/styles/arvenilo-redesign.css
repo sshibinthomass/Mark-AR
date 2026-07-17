@@ -749,6 +749,17 @@ p {
   letter-spacing: 0.08em;
 }
 
+.target-page .transform-control-summary,
+.target-page .target-text-advanced summary,
+.target-page .animation-track-label output,
+.target-page .saved-target-url {
+  color: var(--color-context-slate);
+}
+
+.target-qr-share-link code {
+  color: var(--color-spatial-ink);
+}
+
 .page-home-link {
   align-self: start;
   min-width: 44px;
@@ -1150,14 +1161,14 @@ p {
   box-shadow: none;
 }
 
-.animation-track-remove {
+.target-page .animation-track-remove {
   border-color: var(--color-error-dark);
   color: var(--color-error-dark);
   background: var(--color-interface-white);
   box-shadow: none;
 }
 
-.animation-track-remove:hover {
+.target-page .animation-track-remove:hover {
   color: var(--color-interface-white);
   background: var(--color-error-dark);
 }
@@ -1335,6 +1346,34 @@ p {
   color: var(--color-spatial-ink);
   background: var(--color-interface-white);
   box-shadow: none;
+}
+
+.target-page input[type="range"] {
+  accent-color: var(--color-signal-mint);
+}
+
+.target-page input[type="color"] {
+  min-height: 44px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-control);
+  padding: 4px;
+  background: var(--color-interface-white);
+  box-shadow: none;
+}
+
+.target-page .file-control input[type="file"]::file-selector-button {
+  min-height: 44px;
+  margin-right: var(--space-2);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--color-border-light);
+  border-radius: var(--radius-control);
+  padding: 8px 11px;
+  color: var(--color-spatial-ink);
+  background: var(--color-mint-wash);
+  box-shadow: none;
+  font-family: var(--font-text);
+  font-weight: 600;
 }
 
 .target-page textarea {
@@ -1548,6 +1587,22 @@ button.primary {
 .target-preview-stage .is-error,
 .ar-stage .is-error,
 .floor-ar-overlay .is-error {
+  color: var(--color-error-light);
+}
+
+#ar-status[data-tone="error"] {
+  color: var(--color-error-dark);
+}
+
+#worker-status[data-tone="error"] {
+  color: var(--color-error-dark);
+}
+
+#image-target-status.is-error {
+  color: var(--color-error-dark);
+}
+
+#floor-ar-status[data-tone="error"] {
   color: var(--color-error-light);
 }
 
