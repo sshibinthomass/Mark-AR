@@ -9,6 +9,7 @@ import {
 } from '../src/ui/authUi';
 import { pendingApprovalMessage } from '../src/app/authMessages';
 import { loginIntroMessage, protectedTargetsMessage, signupPendingMessage } from '../src/app/authMessages';
+import { renderAppShell } from '../src/ui/appShell';
 
 const signedOut: AuthUiState = {
   status: 'signed-out',
@@ -145,6 +146,18 @@ describe('auth UI state', () => {
     expect(root.querySelector('[data-auth-account-label]')?.textContent).toBe('Sign in');
     expect(root.querySelector('[data-auth-access-label]')?.textContent).toBe('Locked');
     expect(root.querySelector('[data-auth-protected-label]')?.textContent).toBe('Sign in to unlock');
+  });
+
+  it.each([
+    [signedOut, 'Studio — sign in required'],
+    [checking, 'Studio — checking access'],
+  ] as const)('keeps the Studio accessible label after applying %s auth UI', (state, accessibleLabel) => {
+    const root = document.createElement('div');
+    root.innerHTML = renderAppShell();
+
+    applyAuthUi(root, state);
+
+    expect(root.querySelector('[data-route-link="targets"]')?.getAttribute('aria-label')).toBe(accessibleLabel);
   });
 
   it('unlocks protected links and displays the verified user while signed in', () => {

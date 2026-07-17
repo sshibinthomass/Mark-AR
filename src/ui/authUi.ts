@@ -96,7 +96,7 @@ export function applyAuthUi(root: HTMLElement, state: AuthUiState): void {
     if (link.dataset.routeLink === 'targets') {
       link.setAttribute(
         'aria-label',
-        state.status === 'checking' ? 'Targets — checking access' : 'Targets — sign in required',
+        state.status === 'checking' ? 'Studio — checking access' : 'Studio — sign in required',
       );
     }
     link.title = state.status === 'checking' ? 'Checking your session' : protectedTargetsMessage;
