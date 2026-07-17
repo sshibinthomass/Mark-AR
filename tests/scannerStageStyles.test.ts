@@ -61,6 +61,14 @@ describe('scanner stage styles', () => {
     );
   });
 
+  it('constrains the mobile camera stage to its responsive container', () => {
+    const mobile = mediaBlockFrom(redesignCss, '(max-width: 767px)');
+    const stage = cssRule(mobile, '.ar-stage');
+
+    expect(stage).toContain('width: 100%');
+    expect(stage).toContain('min-width: 0');
+  });
+
   it('stops the scan-line animation when reduced motion is requested', () => {
     const reducedMotion = mediaBlock('(prefers-reduced-motion: reduce)');
     const guideLine = cssRule(reducedMotion, '.scanner-guide-line');
