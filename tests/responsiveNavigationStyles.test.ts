@@ -37,6 +37,24 @@ describe('responsive navigation styles', () => {
     expect(cssRule(mobile, '.route-tabs a')).toContain('min-height: 56px');
   });
 
+  it('restores the vertical Home gateway card flow after the legacy mobile rules', () => {
+    const modeCard = cssRule(mobile, '.mode-card');
+
+    expect(modeCard).toContain('grid-template-columns: 1fr');
+    expect(modeCard).toContain('grid-template-rows: auto auto 1fr auto');
+    expect(modeCard).toContain('gap: var(--space-3)');
+    expect(modeCard).toContain('align-items: stretch');
+    expect(mobile).toMatch(
+      /\.mode-card > span,\s*\.mode-card > strong,\s*\.mode-card > small,\s*\.mode-card > em\s*\{[^}]*grid-column:\s*auto;[^}]*grid-row:\s*auto/s,
+    );
+  });
+
+  it('keeps anchored Home sections clear of the safe-area-aware compact header', () => {
+    expect(cssRule(mobile, '[data-home-section]')).toContain(
+      'scroll-margin-top: calc(52px + var(--space-5) + env(safe-area-inset-top))',
+    );
+  });
+
   it('hides global navigation during marker startup and floor mode', () => {
     expect(mobile).toContain('[data-active-page="scan"][data-scan-session="starting"] .route-tabs');
     expect(mobile).toContain('[data-active-page="scan"][data-scan-session="active"] .route-tabs');

@@ -23,6 +23,21 @@ describe('AnchorAR redesign styles', () => {
     expect(css).not.toMatch(/\.action-control--primary\s*\{[^}]*var\(--color-anchor-gold\)/s);
   });
 
+  it('overrides legacy protected-link decoration without introducing gold', () => {
+    expect(css).toMatch(
+      /\.mode-card\[data-auth-locked="true"\]\s*\{[^}]*border-style:\s*solid;[^}]*background:\s*var\(--color-interface-white\)/s,
+    );
+    expect(css).toMatch(
+      /\.route-tabs a\[data-auth-locked="true"\]::after\s*\{[^}]*content:\s*none;[^}]*display:\s*none/s,
+    );
+  });
+
+  it('keeps anchored Home sections clear of the desktop sticky header', () => {
+    expect(css).toMatch(
+      /\[data-home-section\]\s*\{[^}]*scroll-margin-top:\s*calc\(64px \+ var\(--space-6\)\)/s,
+    );
+  });
+
   it('provides the 767px mobile shell and reduced motion', () => {
     expect(css).toContain('@media (max-width: 767px)');
     expect(css).toMatch(/@media \(max-width: 767px\)[\s\S]*\.route-tabs\s*\{[\s\S]*position:\s*fixed/);
