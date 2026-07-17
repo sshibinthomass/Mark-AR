@@ -147,13 +147,13 @@ export function renderAppShell(): string {
         </section>
       </section>
 
-      <section class="page" data-page="scan" hidden aria-label="Marker scanner">
-        ${renderPageHeader('scan', 'Scan target', 'Use saved cloud image targets to anchor placed objects in AR.')}
+      <section class="page" data-page="scan" hidden aria-label="AnchorAR scanner">
+        ${renderPageHeader('scan', 'Scan an experience', 'Use a saved image target to anchor placed objects in AR.')}
         <div class="scanner-panel">
           <div class="scanner-stage-stack" data-layout-role="scanner-stage">
             <div id="ar-stage" class="ar-stage" aria-label="AR camera stage">
               <div class="stage-idle">
-                <span>Scan target</span>
+                <span>Scan an experience</span>
               </div>
             </div>
             <div id="floor-ar-stage" class="ar-stage floor-ar-stage" hidden aria-label="Floor AR camera stage"></div>
@@ -186,8 +186,8 @@ export function renderAppShell(): string {
         </div>
       </section>
 
-      <section class="page target-page" data-page="targets" data-has-target-draft="false" hidden aria-label="Cloud image targets">
-        ${renderPageHeader('targets', 'Image targets', 'Upload a scan image, place models above it, and save the pairing to Cloudflare.')}
+      <section class="page target-page" data-page="targets" data-has-target-draft="false" hidden aria-label="AnchorAR Studio">
+        ${renderPageHeader('targets', 'AnchorAR Studio', 'Upload a scan image, place 3D models above it, and save the experience to AnchorAR Studio.')}
         <section class="target-workspace">
           <div class="target-preview-shell" data-layout-role="target-preview">
             <div class="target-preview-controls">
@@ -216,15 +216,15 @@ export function renderAppShell(): string {
               </div>
             </div>
             <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
-            <div id="target-model-rail" class="target-model-rail" role="listbox" aria-label="Cloudflare models">
-              <p class="target-model-rail-empty">Loading models...</p>
+            <div id="target-model-rail" class="target-model-rail" role="listbox" aria-label="Model library">
+              <p class="target-model-rail-empty">Loading 3D models...</p>
             </div>
           </div>
 
           <section class="tool-card target-inspector-card target-setup-card" data-layout-role="target-inspector">
             <div class="tool-card-head target-inspector-head">
-              <p class="eyebrow">Cloud target</p>
-              <p id="image-target-status">Sign in, choose an image, and select a model.</p>
+              <p class="eyebrow">Experience</p>
+              <p id="image-target-status">Sign in, choose an image, and select a 3D model.</p>
             </div>
             <div class="target-inspector-tabs" role="tablist" aria-label="Target editor sections">
               <button type="button" id="target-tab-target" role="tab" data-target-inspector-tab="target" aria-selected="true" aria-controls="target-inspector-target">Target</button>
@@ -244,9 +244,9 @@ export function renderAppShell(): string {
                     <input id="target-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
                   </label>
                   <label class="target-model-select-sentinel" hidden aria-hidden="true">
-                    <span>Cloudflare model</span>
+                    <span>3D model</span>
                     <select id="target-model-select">
-                      <option value="">Loading models...</option>
+                      <option value="">Loading 3D models...</option>
                     </select>
                   </label>
                 </div>
@@ -279,7 +279,7 @@ export function renderAppShell(): string {
                 <div class="saved-target-compact">
                   <div class="tool-card-head">
                     <p class="eyebrow">Saved</p>
-                    <p>Cloud image targets</p>
+                    <p>Saved experiences</p>
                   </div>
                   <div id="saved-image-target-list" class="saved-target-list"></div>
                 </div>
@@ -480,18 +480,18 @@ export function renderAppShell(): string {
         </section>
       </section>
 
-      <section class="page" data-page="account" hidden aria-label="Web AR Worker login">
-        ${renderPageHeader('account', 'Account', 'Sign in to create and manage cloud image targets.')}
+      <section class="page" data-page="account" hidden aria-label="AnchorAR account">
+        ${renderPageHeader('account', 'Your account', 'Sign in to create and manage saved experiences.')}
         <section class="auth-layout">
-          <aside class="auth-access-card" data-layout-role="auth-access" aria-label="Image Targets access status">
+          <aside class="auth-access-card" data-layout-role="auth-access" aria-label="AnchorAR Studio access status">
             <div class="auth-orbit" aria-hidden="true">
               <span></span>
               <i></i>
             </div>
             <div class="auth-access-copy">
-              <p class="eyebrow">Image Targets access</p>
-              <h3>Your cloud workspace stays protected.</h3>
-              <p>Sign in with your Web-AR account to upload target images, place 3D objects, and save the result.</p>
+              <p class="eyebrow">AnchorAR Studio access</p>
+              <h3>Your saved experiences stay protected.</h3>
+              <p>Sign in with your AnchorAR account to upload image targets, place 3D objects, and save an experience.</p>
             </div>
             <div class="auth-access-state">
               <span class="auth-access-dot" aria-hidden="true"></span>
@@ -504,9 +504,9 @@ export function renderAppShell(): string {
 
           <section class="tool-card worker-card auth-control-card" data-layout-role="auth-controls">
             <div class="tool-card-head auth-card-head">
-              <p class="eyebrow">Web-AR account</p>
-              <h3 data-auth-form-heading>Continue to Marker AR studio</h3>
-              <p id="worker-status" data-auth-mode-help aria-live="polite">Sign in with an approved account to use Image Targets.</p>
+              <p class="eyebrow">AnchorAR account</p>
+              <h3 data-auth-form-heading>Continue to AnchorAR</h3>
+              <p id="worker-status" data-auth-mode-help aria-live="polite">Sign in with an approved account to use AnchorAR Studio.</p>
             </div>
 
             <div data-auth-panel="signed-out">
@@ -548,7 +548,7 @@ export function renderAppShell(): string {
                 </span>
               </div>
               <a class="auth-primary-action primary-link" href="${hrefForRoute('targets')}" data-auth-open-targets>
-                Open Image Targets
+                Open AnchorAR Studio
               </a>
               <div class="auth-signout-row">
                 <span>Finished on this device?</span>
@@ -564,7 +564,7 @@ export function renderAppShell(): string {
 
 function renderRouteLink(route: AppRoute, label: string): string {
   if (route === 'targets') {
-    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-label="Studio — sign in required" title="Sign in with an approved account to use Image Targets">${renderRouteLabel(route, label)}</a>`;
+    return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-label="AnchorAR Studio — sign in required" title="Sign in with an approved account to use AnchorAR Studio">${renderRouteLabel(route, label)}</a>`;
   }
   return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${renderRouteLabel(route, label)}</a>`;
 }
@@ -588,7 +588,7 @@ function renderPageHeader(route: Exclude<AppRoute, 'home'>, title: string, text:
         <span>Home</span>
       </a>
       <div class="page-heading-copy">
-        <p class="eyebrow">Marker Web AR</p>
+        <p class="eyebrow">AnchorAR by Arvenilo</p>
         <h2 id="${route}-page-title" data-page-heading tabindex="-1">${title}</h2>
         <p>${text}</p>
       </div>
@@ -598,7 +598,7 @@ function renderPageHeader(route: Exclude<AppRoute, 'home'>, title: string, text:
 
 function renderModeCard(card: ModeCard): string {
   const protectedAttributes = card.route === 'targets'
-    ? `href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" title="Sign in with an approved account to use Image Targets"`
+    ? `href="${hrefForRoute('account')}" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" title="Sign in with an approved account to use AnchorAR Studio"`
     : `href="${hrefForRoute(card.route)}"`;
   const actionAttribute = card.route === 'targets'
     ? ' data-auth-protected-label'

@@ -268,7 +268,7 @@ describe('saved target editing integration', () => {
         }),
       ],
     }));
-    await waitFor(() => document.querySelector('#image-target-status')?.textContent === 'Image target updated in Cloudflare.');
+    await waitFor(() => document.querySelector('#image-target-status')?.textContent === 'Target updated in AnchorAR Studio.');
 
     document.querySelector<HTMLButtonElement>('[data-select-target-object="text-1"]')?.click();
     await waitFor(() => document.querySelector<HTMLSelectElement>('#target-animation-preset')?.value === 'custom');

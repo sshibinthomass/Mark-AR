@@ -30,7 +30,7 @@ export function resetScannerStage(stage: HTMLElement): void {
   idle.className = 'stage-idle';
 
   const label = document.createElement('span');
-  label.textContent = 'Scan target';
+  label.textContent = 'Scan an experience';
 
   idle.append(label);
   stage.replaceChildren(idle);

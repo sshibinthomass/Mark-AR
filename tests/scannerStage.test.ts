@@ -8,7 +8,7 @@ import {
 describe('scanner stage', () => {
   it('creates one decorative scanner guide inside the camera stage', () => {
     const stage = document.createElement('div');
-    stage.innerHTML = '<div class="stage-idle"><span>Scan target</span></div>';
+    stage.innerHTML = '<div class="stage-idle"><span>Scan an experience</span></div>';
 
     const guide = prepareScannerStage(stage);
     prepareScannerStage(stage);
@@ -41,6 +41,6 @@ describe('scanner stage', () => {
     expect(stage.querySelector('[data-scanner-guide]')).toBeNull();
     expect(stage.querySelector('video')).toBeNull();
     expect(stage.querySelector('canvas')).toBeNull();
-    expect(stage.querySelector('.stage-idle')?.textContent).toBe('Scan target');
+    expect(stage.querySelector('.stage-idle')?.textContent).toBe('Scan an experience');
   });
 });

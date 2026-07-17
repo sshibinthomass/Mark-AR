@@ -19,7 +19,7 @@ export function renderSavedTargetList(
 ): void {
   container.replaceChildren();
   if (options.targets.length === 0) {
-    container.textContent = 'No cloud image targets saved yet.';
+    container.textContent = 'No saved experiences yet.';
     return;
   }
 

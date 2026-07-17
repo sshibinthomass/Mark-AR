@@ -44,9 +44,9 @@ describe('renderAppShell', () => {
       })),
     ).toEqual([
       { id: 'home-page-title', text: 'Interactive stories, anchored in reality.', tabIndex: -1 },
-      { id: 'scan-page-title', text: 'Scan target', tabIndex: -1 },
-      { id: 'targets-page-title', text: 'Image targets', tabIndex: -1 },
-      { id: 'account-page-title', text: 'Account', tabIndex: -1 },
+      { id: 'scan-page-title', text: 'Scan an experience', tabIndex: -1 },
+      { id: 'targets-page-title', text: 'AnchorAR Studio', tabIndex: -1 },
+      { id: 'account-page-title', text: 'Your account', tabIndex: -1 },
     ]);
     expect(
       [...container.querySelectorAll<HTMLAnchorElement>('.page-home-link')].map((link) => ({
@@ -112,7 +112,7 @@ describe('renderAppShell', () => {
     expect(protectedLinks.every((link) => link.getAttribute('href') === '#/account')).toBe(true);
     expect(protectedLinks.every((link) => !link.hasAttribute('aria-disabled'))).toBe(true);
     expect(container.querySelector('[data-route-link="targets"]')?.getAttribute('aria-label')).toBe(
-      'Studio — sign in required',
+      'AnchorAR Studio — sign in required',
     );
     expect(container.querySelector('[data-auth-account-label]')?.textContent).toBe('Sign in');
     expect(container.querySelector('[data-auth-access-label]')?.textContent).toBe('Locked');
@@ -135,6 +135,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#worker-logout')?.closest('#worker-login-form')).toBeNull();
     expect(container.querySelector('[data-auth-email]')).toBeTruthy();
     expect(container.querySelector('[data-auth-open-targets]')?.getAttribute('href')).toBe('#/targets');
+    expect(container.querySelector('[data-auth-open-targets]')?.textContent).toContain('Open AnchorAR Studio');
     expect(html).toContain('id="ar-stage"');
     expect(html).toContain('id="start-ar"');
     const scannerPanel = container.querySelector('.scanner-panel');
@@ -363,9 +364,7 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#saved-image-target-list')).toBeTruthy();
     expect(container.querySelector('#saved-image-target-list')?.closest('[data-target-inspector-panel="target"]')).toBeTruthy();
     const homeHtml = container.querySelector('[data-page="home"]')?.innerHTML ?? '';
-    expect(homeHtml).not.toContain('Marker AR studio');
-    expect(homeHtml).not.toContain('Web-AR Worker');
-    expect(homeHtml).not.toContain('Cloudflare ready');
+    expect(html).not.toMatch(/Marker AR|Marker Web AR|Web-AR Worker|Cloudflare ready/);
     expect(homeHtml).not.toContain('landing-flow');
     expect(homeHtml).not.toContain('landing-preview');
   });

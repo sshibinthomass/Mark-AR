@@ -3,6 +3,17 @@ import type { CloudflareModelOption } from '../src/app/cloudflareModels';
 import { renderTargetModelRail } from '../src/ui/modelRail';
 
 describe('renderTargetModelRail', () => {
+  it('uses 3D model language for an empty model library', () => {
+    const container = document.createElement('div');
+
+    renderTargetModelRail(container, {
+      models: [],
+      onSelect: () => undefined,
+    });
+
+    expect(container.textContent).toBe('No 3D models loaded.');
+  });
+
   it('renders selectable model thumbnail tiles and marks the selected model', () => {
     const models: CloudflareModelOption[] = [
       {

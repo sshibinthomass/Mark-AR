@@ -208,7 +208,7 @@ describe('target-specific scan route integration', () => {
     expect(document.querySelector('[data-app-shell]')?.getAttribute('data-active-page')).toBe('home');
     const stage = required('#ar-stage');
     expect(stage.querySelector('[data-scanner-guide]')).toBeNull();
-    expect(stage.querySelector('.stage-idle')?.textContent).toBe('Scan target');
+    expect(stage.querySelector('.stage-idle')?.textContent).toBe('Scan an experience');
     expect(document.querySelectorAll('[data-scanner-guide]')).toHaveLength(0);
   });
 
@@ -821,7 +821,7 @@ describe('target-specific scan route integration', () => {
       textContent: 'Start camera',
     });
     expect(required('#ar-stage').querySelector('[data-scanner-guide]')).toBeNull();
-    expect(required('#ar-stage').querySelector('.stage-idle')?.textContent).toBe('Scan target');
+    expect(required('#ar-stage').querySelector('.stage-idle')?.textContent).toBe('Scan an experience');
   });
 
   it('remembers the exact scan URL across sign-in after a 401 response', async () => {

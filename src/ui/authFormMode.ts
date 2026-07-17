@@ -32,7 +32,7 @@ export function applyAuthFormMode(root: HTMLElement, mode: AuthFormMode): void {
     passwordInput.minLength = 8;
   }
 
-  setText(root, '[data-auth-form-heading]', isSignup ? 'Create your Marker AR account' : 'Continue to Marker AR studio');
+  setText(root, '[data-auth-form-heading]', isSignup ? 'Create your AnchorAR account' : 'Continue to AnchorAR');
   if (!root.dataset.authState || root.dataset.authState === 'signed-out') {
     setText(root, '[data-auth-mode-help]', isSignup ? signupIntroMessage : loginIntroMessage);
   }

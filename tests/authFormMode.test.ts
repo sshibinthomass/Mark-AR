@@ -17,7 +17,7 @@ describe('applyAuthFormMode', () => {
     expect(nameInput?.required).toBe(false);
     expect(password?.autocomplete).toBe('current-password');
     expect(root.querySelector('[data-auth-submit-label]')?.textContent).toBe('Sign in');
-    expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Continue to Marker AR studio');
+    expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Continue to AnchorAR');
     expect(root.querySelector('[data-auth-mode-help]')?.textContent).toBe(loginIntroMessage);
     const loginMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="login"]');
     const signupMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="signup"]');
@@ -42,7 +42,7 @@ describe('applyAuthFormMode', () => {
     expect(password?.autocomplete).toBe('new-password');
     expect(password?.minLength).toBe(8);
     expect(root.querySelector('[data-auth-submit-label]')?.textContent).toBe('Create account');
-    expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Create your Marker AR account');
+    expect(root.querySelector('[data-auth-form-heading]')?.textContent).toBe('Create your AnchorAR account');
     expect(root.querySelector('[data-auth-mode-help]')?.textContent).toBe(signupIntroMessage);
     const loginMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="login"]');
     const signupMode = root.querySelector<HTMLButtonElement>('[data-auth-mode="signup"]');
@@ -89,7 +89,7 @@ function renderFormFixture(): HTMLElement {
   root.innerHTML = `
     <button data-auth-mode="login" aria-pressed="true">Sign in</button>
     <button data-auth-mode="signup" aria-pressed="false">Create account</button>
-    <h3 data-auth-form-heading>Continue to Marker AR studio</h3>
+    <h3 data-auth-form-heading>Continue to AnchorAR</h3>
     <p id="worker-status" data-auth-mode-help></p>
     <label data-auth-name-field hidden><input id="worker-name" disabled /></label>
     <input id="worker-email" />

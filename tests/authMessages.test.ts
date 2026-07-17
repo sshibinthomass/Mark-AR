@@ -11,9 +11,9 @@ import {
 
 describe('auth user-facing messages', () => {
   it('keeps the account entry-point copy action-oriented', () => {
-    expect(loginIntroMessage).toBe('Sign in with an approved account to use Image Targets.');
-    expect(signupIntroMessage).toBe('Create an account for administrator approval. You can sign in after approval.');
-    expect(protectedTargetsMessage).toBe('Sign in with an approved account to open Image Targets.');
+    expect(loginIntroMessage).toBe('Sign in with an approved account to use AnchorAR Studio.');
+    expect(signupIntroMessage).toBe('Create an account for approval. You can open AnchorAR Studio after approval.');
+    expect(protectedTargetsMessage).toBe('Sign in with an approved account to open AnchorAR Studio.');
   });
 
   it('explains duplicate signup as an existing account, not a broken create flow', () => {
@@ -21,6 +21,7 @@ describe('auth user-facing messages', () => {
       new AuthRequestError('Account already exists.', 409),
       'signup',
     )).toBe(duplicateAccountMessage);
+    expect(duplicateAccountMessage).toBe('That email already has an AnchorAR account. Sign in instead, or use another email.');
   });
 
   it('explains pending approval when a login response identifies the account state', () => {

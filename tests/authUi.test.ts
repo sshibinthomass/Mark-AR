@@ -23,7 +23,7 @@ const checking: AuthUiState = {
 
 const signedIn: AuthUiState = {
   status: 'signed-in',
-  message: 'Image Targets unlocked.',
+  message: 'AnchorAR Studio unlocked.',
   email: 'artist@example.com',
 };
 
@@ -52,7 +52,7 @@ describe('auth UI state', () => {
       state: {
         status: 'signed-in',
         email: 'maker@example.com',
-        message: 'Image Targets unlocked.',
+        message: 'AnchorAR Studio unlocked.',
       },
     });
   });
@@ -102,12 +102,12 @@ describe('auth UI state', () => {
       state: {
         status: 'signed-in',
         email: 'admin@example.com',
-        message: 'Image Targets unlocked.',
+        message: 'AnchorAR Studio unlocked.',
       },
     });
   });
 
-  it('allows Image Targets only for a verified signed-in user', () => {
+  it('allows AnchorAR Studio only for a verified signed-in user', () => {
     expect(resolveAccessibleRoute('targets', signedOut)).toBe('account');
     expect(resolveAccessibleRoute('targets', checking)).toBe('account');
     expect(resolveAccessibleRoute('targets', signedIn)).toBe('targets');
@@ -149,8 +149,8 @@ describe('auth UI state', () => {
   });
 
   it.each([
-    [signedOut, 'Studio — sign in required'],
-    [checking, 'Studio — checking access'],
+    [signedOut, 'AnchorAR Studio — sign in required'],
+    [checking, 'AnchorAR Studio — checking access'],
   ] as const)('keeps the Studio accessible label after applying %s auth UI', (state, accessibleLabel) => {
     const root = document.createElement('div');
     root.innerHTML = renderAppShell();

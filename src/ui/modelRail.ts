@@ -16,7 +16,7 @@ export function renderTargetModelRail(
   if (models.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'target-model-rail-empty';
-    empty.textContent = 'No models loaded';
+    empty.textContent = 'No 3D models loaded.';
     container.append(empty);
     return;
   }

@@ -357,7 +357,7 @@ shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link
     setAuthUiState({
       ...authUiState,
       message: authUiState.status === 'checking'
-        ? 'Checking your session before opening Image Targets…'
+        ? 'Checking your session before opening AnchorAR Studio…'
         : protectedTargetsMessage,
     });
   });
@@ -454,7 +454,7 @@ async function startCurrentArSession(): Promise<void> {
   const startTarget = focusedScanTarget;
   const visibleMarkerIds = new Set<string>();
   startButton.disabled = true;
-  status.textContent = 'Preparing marker targets';
+  status.textContent = 'Preparing experiences';
   session?.stop();
   session = undefined;
   prepareScannerStage(stage);
@@ -494,7 +494,7 @@ async function startCurrentArSession(): Promise<void> {
         if (isCurrentStart()) {
           status.textContent = startTarget
             ? `Camera active. Scan ${startTarget.label}.`
-            : 'Camera active. Scan a saved cloud image target.';
+            : 'Camera active. Scan a saved experience.';
         }
       },
       signal: abortController.signal,
@@ -817,7 +817,7 @@ async function initializeCloudflareControls(): Promise<void> {
         setAuthUiState({
           status: 'signed-in',
           email: user.email,
-          message: 'Image Targets unlocked.',
+          message: 'AnchorAR Studio unlocked.',
         });
         restorePendingProtectedRoute();
       } else {
@@ -858,7 +858,7 @@ async function refreshCloudflareModels(): Promise<void> {
   } catch {
     cloudflareModels = [];
     if (targetModelSelect) {
-      targetModelSelect.innerHTML = '<option value="">Unable to load models</option>';
+      targetModelSelect.innerHTML = '<option value="">Unable to load 3D models</option>';
     }
     renderTargetModelRailOptions([]);
   }
@@ -883,7 +883,7 @@ function activateRequestedRoute(requestedRoute: AppRoute): void {
   setAuthUiState({
     ...authUiState,
     message: authUiState.status === 'checking'
-      ? 'Checking your session before opening Image Targets…'
+      ? 'Checking your session before opening AnchorAR Studio…'
       : protectedTargetsMessage,
   });
   if (window.location.hash !== hrefForRoute(result.activeRoute)) {
@@ -1287,7 +1287,7 @@ function renderTargetModelOptions(models: CloudflareModelOption[]): void {
 
   const emptyOption = document.createElement('option');
   emptyOption.value = '';
-  emptyOption.textContent = models.length ? 'Choose a Cloudflare model' : 'No models loaded';
+  emptyOption.textContent = models.length ? 'Choose a 3D model' : 'No 3D models loaded';
   targetModelSelect.append(emptyOption);
 
   for (const model of models) {
@@ -1448,7 +1448,7 @@ function getSelectedTargetModel(): CloudflareModelOption | undefined {
 function addTargetObjectFromSelection(): void {
   const model = getSelectedTargetModel();
   if (!model) {
-    updateImageTargetStatus('Choose a Cloudflare model before adding an object.', true);
+    updateImageTargetStatus('Choose a 3D model before adding an object.', true);
     return;
   }
 
@@ -2115,7 +2115,7 @@ function renderTargetPreviewLoader(modelLabel?: string): void {
 
 async function saveCurrentImageTarget(): Promise<void> {
   if (!authToken) {
-    updateImageTargetStatus('Sign in before saving an image target.', true);
+    updateImageTargetStatus('Sign in before saving an experience.', true);
     return;
   }
   if (!editingTarget && !targetImagePayload) {
@@ -2172,11 +2172,11 @@ async function saveCurrentImageTarget(): Promise<void> {
   });
   targetAccess = accessToSave;
   syncTargetAccessInputs();
-  updateImageTargetStatus('Saving image target...', false);
+  updateImageTargetStatus('Saving experience...', false);
 
   try {
     const wasEditing = Boolean(editingTarget);
-    const label = targetLabelInput?.value.trim() || 'Image target';
+    const label = targetLabelInput?.value.trim() || 'New experience';
     let savedTarget: CloudImageTarget;
     if (editingTarget) {
       savedTarget = await updateImageTarget({
@@ -2216,8 +2216,8 @@ async function saveCurrentImageTarget(): Promise<void> {
     } catch (error) {
       await loadSavedImageTarget(savedTarget);
       const savedMessage = wasEditing
-        ? 'Image target update was saved in Cloudflare'
-        : 'Image target was saved in Cloudflare';
+        ? 'Target update was saved to AnchorAR Studio'
+        : 'Target was saved to AnchorAR Studio';
       updateImageTargetStatus(
         `${savedMessage}, but the saved-target list could not refresh. ${errorMessage(error, 'Refresh failed.')}`,
         true,
@@ -2241,12 +2241,12 @@ async function saveCurrentImageTarget(): Promise<void> {
     cloudImageTargets = refreshedTargets;
     renderSavedImageTargets();
     await loadSavedImageTarget(refreshedTarget);
-    updateImageTargetStatus(wasEditing ? 'Image target updated in Cloudflare.' : 'Image target saved to Cloudflare.', false);
+    updateImageTargetStatus(wasEditing ? 'Target updated in AnchorAR Studio.' : 'Target saved to AnchorAR Studio.', false);
     if (!wasEditing) {
       void openCreatedTargetQrPrompt(refreshedTarget);
     }
   } catch (error) {
-    updateImageTargetStatus(errorMessage(error, 'Unable to save image target'), true);
+    updateImageTargetStatus(errorMessage(error, 'Unable to save experience'), true);
   }
 }
 
@@ -2279,14 +2279,14 @@ async function refreshImageTargets(options?: {
       renderSavedImageTargets();
       updateImageTargetStatus(
         cloudImageTargets.length > 0
-          ? `${cloudImageTargets.length} cloud image target${cloudImageTargets.length === 1 ? '' : 's'} loaded.`
-          : 'No cloud image targets saved yet.',
+          ? `${cloudImageTargets.length} saved experience${cloudImageTargets.length === 1 ? '' : 's'} loaded.`
+          : 'No saved experiences yet.',
         false,
       );
     }
     return refreshedTargets;
   } catch (error) {
-    updateImageTargetStatus(errorMessage(error, 'Unable to load image targets'), true);
+    updateImageTargetStatus(errorMessage(error, 'Unable to load saved experiences'), true);
     if (options?.rethrowOnError) {
       throw error;
     }
@@ -2322,7 +2322,7 @@ function renderSavedImageTargets(): void {
         }
         await refreshImageTargets();
       } catch (error) {
-        updateImageTargetStatus(errorMessage(error, 'Unable to delete image target'), true);
+        updateImageTargetStatus(errorMessage(error, 'Unable to delete saved experience'), true);
       }
     },
   });
@@ -2494,7 +2494,7 @@ function resetImageTargetEditor(): void {
   renderTargetObjectList();
   syncTargetSaveMode();
   renderSavedImageTargets();
-  updateImageTargetStatus('New image target ready.', false);
+  updateImageTargetStatus('New experience ready.', false);
   void updateTargetPreview();
 }
 

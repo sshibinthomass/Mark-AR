@@ -317,7 +317,7 @@ describe('target QR integration', () => {
     await waitFor(() => document.querySelector('[data-target-qr-error]')?.textContent === 'QR renderer offline');
 
     expect(document.querySelector('#image-target-status')?.textContent).toBe(
-      'Image target saved to Cloudflare.',
+      'Target saved to AnchorAR Studio.',
     );
     document.querySelector<HTMLButtonElement>('[data-target-qr-retry]')?.click();
     await waitFor(() => qrMocks.createTargetQrArtifact.mock.calls.length === 2);
@@ -359,7 +359,7 @@ describe('target QR integration', () => {
     await waitFor(() => isQrDialogOpen());
 
     expect(document.querySelector('#image-target-status')?.textContent).toContain(
-      'saved in Cloudflare',
+      'saved to AnchorAR Studio',
     );
     expect(document.querySelector('#image-target-status')?.textContent).toContain(
       'Refresh offline',

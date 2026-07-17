@@ -2,12 +2,12 @@ import { isAuthRequestError } from './webArAuth';
 
 export type AuthAction = 'login' | 'signup';
 
-export const loginIntroMessage = 'Sign in with an approved account to use Image Targets.';
-export const signupIntroMessage = 'Create an account for administrator approval. You can sign in after approval.';
-export const protectedTargetsMessage = 'Sign in with an approved account to open Image Targets.';
-export const duplicateAccountMessage = 'That email already has a Marker AR account. Sign in instead, or use another email to create a new account.';
-export const pendingApprovalMessage = 'This account is waiting for administrator approval. Image Targets unlock after approval.';
-export const signupPendingMessage = 'Account created. It is waiting for administrator approval. You can sign in after approval.';
+export const loginIntroMessage = 'Sign in with an approved account to use AnchorAR Studio.';
+export const signupIntroMessage = 'Create an account for approval. You can open AnchorAR Studio after approval.';
+export const protectedTargetsMessage = 'Sign in with an approved account to open AnchorAR Studio.';
+export const duplicateAccountMessage = 'That email already has an AnchorAR account. Sign in instead, or use another email.';
+export const pendingApprovalMessage = 'This account is waiting for administrator approval. AnchorAR Studio unlocks after approval.';
+export const signupPendingMessage = 'Account created. It is waiting for approval. You can open AnchorAR Studio after approval.';
 export const loginRejectedMessage = 'We could not sign you in. Check your password, or wait for administrator approval if this account is new.';
 export const signupValidationMessage = 'Check the name, email, and password, then try creating the account again.';
 

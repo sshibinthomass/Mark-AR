@@ -21,14 +21,14 @@ export function resolveLoginResult(session: AuthSession): LoginResult {
     throw new Error(pendingApprovalMessage);
   }
   if (!session.token) {
-    throw new Error('Worker did not return a session token.');
+    throw new Error('The sign-in service did not return a session token.');
   }
   return {
     token: session.token,
     state: {
       status: 'signed-in',
       email: session.user.email,
-      message: 'Image Targets unlocked.',
+      message: 'AnchorAR Studio unlocked.',
     },
   };
 }
@@ -48,7 +48,7 @@ export function resolveSignupResult(session: AuthSession): SignupResult {
     state: {
       status: 'signed-in',
       email: session.user.email,
-      message: 'Image Targets unlocked.',
+      message: 'AnchorAR Studio unlocked.',
     },
   };
 }
@@ -96,7 +96,7 @@ export function applyAuthUi(root: HTMLElement, state: AuthUiState): void {
     if (link.dataset.routeLink === 'targets') {
       link.setAttribute(
         'aria-label',
-        state.status === 'checking' ? 'Studio — checking access' : 'Studio — sign in required',
+        state.status === 'checking' ? 'AnchorAR Studio — checking access' : 'AnchorAR Studio — sign in required',
       );
     }
     link.title = state.status === 'checking' ? 'Checking your session' : protectedTargetsMessage;

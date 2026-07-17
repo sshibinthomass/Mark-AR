@@ -127,6 +127,6 @@ describe('saved target list', () => {
       onDelete: vi.fn(),
     });
 
-    expect(container.textContent).toBe('No cloud image targets saved yet.');
+    expect(container.textContent).toBe('No saved experiences yet.');
   });
 });
