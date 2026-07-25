@@ -31,6 +31,26 @@ class MemoryBucket {
 }
 
 describe('Mark-AR target Worker', () => {
+  it('omits CORS access for origins outside the configured allowlist', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    env.ALLOWED_ORIGINS = 'https://allowed.example';
+
+    const requestWithOrigin = (origin: string) => ({
+      url: 'https://worker.example/missing',
+      method: 'GET',
+      headers: { get: (name: string) => name.toLowerCase() === 'origin' ? origin : null },
+    }) as unknown as Request;
+
+    const allowed = await handleRequest(requestWithOrigin('https://allowed.example'), env);
+    const disallowed = await handleRequest(requestWithOrigin('https://evil.example'), env);
+    const withoutOrigin = await handleRequest(new Request('https://worker.example/missing'), env);
+
+    expect(allowed.headers.get('Access-Control-Allow-Origin')).toBe('https://allowed.example');
+    expect(disallowed.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(withoutOrigin.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+
   it('keeps non-admin local signups pending when no legacy auth service is configured', async () => {
     const bucket = new MemoryBucket();
     const env = createEnv(bucket);

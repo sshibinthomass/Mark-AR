@@ -1030,7 +1030,9 @@ function json(value: unknown, status = 200): Response {
 function withCors(response: Response, request: Request, env: WorkerEnv): Response {
   const origin = request.headers.get('Origin');
   const allowed = (env.ALLOWED_ORIGINS ?? '*').split(',').map((value) => value.trim());
-  const allowOrigin = allowed.includes('*') ? '*' : origin && allowed.includes(origin) ? origin : allowed[0] ?? '';
+  let allowOrigin = '';
+  if (allowed.includes('*')) allowOrigin = '*';
+  else if (origin && allowed.includes(origin)) allowOrigin = origin;
   const headers = new Headers(response.headers);
   if (allowOrigin) headers.set('Access-Control-Allow-Origin', allowOrigin);
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
