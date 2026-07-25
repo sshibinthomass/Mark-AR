@@ -19,6 +19,7 @@ export interface WorkerEnv {
   AUTH_SECRET: string;
   ADMIN_EMAIL?: string;
   ALLOWED_ORIGINS?: string;
+  LEGACY_WORKER_ORIGIN?: string;
   PUBLIC_ORIGIN?: string;
   ASSET_BUCKET: R2BucketLike;
 }
@@ -110,10 +111,24 @@ export async function handleRequest(
 async function route(request: Request, env: WorkerEnv, deps: WorkerDeps): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+  if (env.LEGACY_WORKER_ORIGIN && (
+    url.pathname.startsWith('/auth/')
+    || (request.method === 'GET' && url.pathname === '/generate-3d/models')
+  )) {
+    return proxyLegacyRequest(request, env.LEGACY_WORKER_ORIGIN, url, deps.fetch);
+  }
   if (url.pathname.startsWith('/auth/')) return handleAuth(request, env, deps, url.pathname);
   if (request.method === 'GET' && url.pathname === '/generate-3d/models') {
     const index = await readJson<{ models?: unknown[] }>(env, MODELS_KEY, { models: [] });
-    return json({ models: index.models ?? [] });
+    const user = await authenticatedUser(request, env, deps);
+    const models = (index.models ?? []).filter((model) => {
+      if (!model || typeof model !== 'object') return false;
+      const candidate = model as Record<string, unknown>;
+      if (user?.role === 'admin') return true;
+      if (candidate.visibility !== 'private') return true;
+      return Boolean(user && candidate.owner_email === user.email);
+    });
+    return json({ models });
   }
   if (request.method === 'GET' && (
     url.pathname.startsWith('/image-targets/images/')
@@ -125,10 +140,10 @@ async function route(request: Request, env: WorkerEnv, deps: WorkerDeps): Promis
 
   const scanPrefix = '/generate-3d/image-targets/scan/';
   if (request.method === 'GET' && url.pathname.startsWith(scanPrefix)) {
-    return getScanTarget(request, env, url.pathname.slice(scanPrefix.length));
+    return getScanTarget(request, env, deps, url.pathname.slice(scanPrefix.length));
   }
   if (url.pathname === '/generate-3d/image-targets') {
-    if (request.method === 'GET') return listTargets(request, env);
+    if (request.method === 'GET') return listTargets(request, env, deps);
     if (request.method === 'POST') return createTarget(request, env, deps, url);
     return json({ error: 'Method not allowed.' }, 405);
   }
@@ -161,7 +176,7 @@ async function handleAuth(
     if (index.users.some((user) => user.email === email)) return json({ error: 'An account already exists for this email.' }, 409);
     const now = deps.now();
     const role = email === normalizeEmail(env.ADMIN_EMAIL) ? 'admin' : 'user';
-    const status = 'active' as const;
+    const status = role === 'admin' ? 'active' as const : 'pending' as const;
     const salt = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(16)));
     const user: User = {
       email,
@@ -190,26 +205,49 @@ async function handleAuth(
     return json({ user: publicUser(user), token: await createToken(user, env, deps) });
   }
   if (path === '/auth/session' && request.method === 'GET') {
-    const user = await authenticatedUser(request, env);
+    const user = await authenticatedUser(request, env, deps);
     return user ? json({ user: publicUser(user) }) : json({ error: 'Invalid or expired session.' }, 401);
   }
   if (path === '/auth/logout' && request.method === 'POST') return json({ ok: true });
   return json({ error: 'Auth route not found.' }, 404);
 }
 
-async function listTargets(request: Request, env: WorkerEnv): Promise<Response> {
-  const user = await authenticatedUser(request, env);
-  const targets = await targetIndex(env);
+async function proxyLegacyRequest(
+  request: Request,
+  legacyOrigin: string,
+  sourceUrl: URL,
+  fetchImpl: typeof fetch,
+): Promise<Response> {
+  const targetUrl = `${legacyOrigin.replace(/\/+$/, '')}${sourceUrl.pathname}${sourceUrl.search}`;
+  const body = request.method === 'GET' || request.method === 'HEAD'
+    ? undefined
+    : await request.clone().arrayBuffer();
+  return fetchImpl(targetUrl, {
+    method: request.method,
+    headers: request.headers,
+    ...(body ? { body } : {}),
+    redirect: 'manual',
+  });
+}
+
+async function listTargets(request: Request, env: WorkerEnv, deps: WorkerDeps): Promise<Response> {
+  const user = await authenticatedUser(request, env, deps);
+  const targets = await targetIndex(env, deps);
   return json({
     targets: targets.filter((target) => user && target.owner_email === user.email),
   });
 }
 
-async function getScanTarget(request: Request, env: WorkerEnv, scanId: string): Promise<Response> {
-  const targets = await targetIndex(env);
+async function getScanTarget(
+  request: Request,
+  env: WorkerEnv,
+  deps: WorkerDeps,
+  scanId: string,
+): Promise<Response> {
+  const targets = await targetIndex(env, deps);
   const target = targets.find((candidate) => candidate.scan_id === scanId);
   if (!target) return json({ error: 'Target not found.' }, 404);
-  const user = await authenticatedUser(request, env);
+  const user = await authenticatedUser(request, env, deps);
   if (!canScan(target, user)) return json({ error: user ? 'You do not have access to this target.' : 'Sign in to scan this target.' }, 401);
   return json({ target });
 }
@@ -220,7 +258,7 @@ async function createTarget(
   deps: WorkerDeps,
   url: URL,
 ): Promise<Response> {
-  const user = await requireUser(request, env);
+  const user = await requireUser(request, env, deps);
   if (user instanceof Response) return user;
   const body = await requestJson(request) as TargetRequest;
   const label = typeof body.label === 'string' ? body.label.trim() : '';
@@ -230,7 +268,7 @@ async function createTarget(
   if (!Array.isArray(body.objects) || body.objects.length === 0) {
     return json({ error: 'Add at least one target object.' }, 400);
   }
-  const targets = await targetIndex(env);
+  const targets = await targetIndex(env, deps);
   const id = deps.randomUUID();
   const scanId = deps.randomUUID();
   const markerKey = `image-targets/images/${safe(id)}.${extension(marker.mime)}`;
@@ -269,14 +307,17 @@ async function updateTarget(
   url: URL,
   targetId: string,
 ): Promise<Response> {
-  const user = await requireUser(request, env);
+  const user = await requireUser(request, env, deps);
   if (user instanceof Response) return user;
-  const targets = await targetIndex(env);
+  const targets = await targetIndex(env, deps);
   const index = targets.findIndex((target) => target.id === targetId);
   if (index < 0) return json({ error: 'Target not found.' }, 404);
   const existing = targets[index];
   if (existing.owner_email !== user.email) return json({ error: 'Only the target owner can edit it.' }, 403);
   const body = await requestJson(request) as TargetRequest;
+  if (Array.isArray(body.objects) && body.objects.length === 0) {
+    return json({ error: 'Add at least one target object.' }, 400);
+  }
   let markerKey = existing.image_object_key;
   let markerUrl = existing.image_url;
   let oldMarkerKey: string | undefined;
@@ -321,12 +362,12 @@ async function updateTarget(
 async function deleteTarget(
   request: Request,
   env: WorkerEnv,
-  _deps: WorkerDeps,
+  deps: WorkerDeps,
   targetId: string,
 ): Promise<Response> {
-  const user = await requireUser(request, env);
+  const user = await requireUser(request, env, deps);
   if (user instanceof Response) return user;
-  const targets = await targetIndex(env);
+  const targets = await targetIndex(env, deps);
   const target = targets.find((candidate) => candidate.id === targetId);
   if (!target) return json({ error: 'Target not found.' }, 404);
   if (target.owner_email !== user.email) return json({ error: 'Only the target owner can delete it.' }, 403);
@@ -352,7 +393,20 @@ async function persistObjects(
     const raw = value[index];
     if (!raw || typeof raw !== 'object') return cleanupError('Every target object must be an object.', createdKeys, env);
     const candidate = raw as Record<string, unknown>;
-    const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id.trim() : `object-${index + 1}`;
+    let id = `object-${index + 1}`;
+    if (candidate.id !== undefined) {
+      if (
+        typeof candidate.id !== 'string'
+        || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(candidate.id)
+      ) {
+        return cleanupError(
+          'Target object IDs must use only letters, numbers, dot, underscore, colon, or hyphen.',
+          createdKeys,
+          env,
+        );
+      }
+      id = candidate.id;
+    }
     if (seen.has(id)) return cleanupError('Target object IDs must be unique.', createdKeys, env);
     seen.add(id);
     const base = {
@@ -556,17 +610,49 @@ function canScan(target: Target, user: User | null): boolean {
   return target.access_mode === 'specific_accounts' && target.allowed_emails.includes(user.email);
 }
 
-async function authenticatedUser(request: Request, env: WorkerEnv): Promise<User | null> {
+async function authenticatedUser(
+  request: Request,
+  env: WorkerEnv,
+  deps: WorkerDeps,
+): Promise<User | null> {
   const token = request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
+  if (env.LEGACY_WORKER_ORIGIN) {
+    const response = await deps.fetch(
+      `${env.LEGACY_WORKER_ORIGIN.replace(/\/+$/, '')}/auth/session`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) return null;
+    const body = await response.json() as { user?: Partial<User> };
+    const user = body.user;
+    return user
+      && typeof user.email === 'string'
+      && (user.role === 'admin' || user.role === 'user')
+      && user.status === 'active'
+      ? {
+        email: user.email,
+        ...(typeof user.name === 'string' ? { name: user.name } : {}),
+        role: user.role,
+        status: user.status,
+        password_hash: '',
+        password_salt: '',
+        created_at: '',
+        updated_at: '',
+      }
+      : null;
+  }
   const session = await verifyToken(token, env);
   if (!session) return null;
   const index = await readJson<{ users: User[] }>(env, USERS_KEY, { users: [] });
   return index.users.find((user) => user.email === session.sub && user.status === 'active') ?? null;
 }
 
-async function requireUser(request: Request, env: WorkerEnv): Promise<User | Response> {
-  const user = await authenticatedUser(request, env);
+async function requireUser(
+  request: Request,
+  env: WorkerEnv,
+  deps: WorkerDeps,
+): Promise<User | Response> {
+  const user = await authenticatedUser(request, env, deps);
   return user ?? json({ error: 'Sign in with an active account.' }, 401);
 }
 
@@ -654,9 +740,96 @@ async function serveAsset(key: string, env: WorkerEnv): Promise<Response> {
   });
 }
 
-async function targetIndex(env: WorkerEnv): Promise<Target[]> {
-  const index = await readJson<{ targets: Target[] }>(env, TARGETS_KEY, { targets: [] });
-  return index.targets ?? [];
+async function targetIndex(env: WorkerEnv, deps: WorkerDeps): Promise<Target[]> {
+  const index = await readJson<{ targets?: unknown[] }>(env, TARGETS_KEY, { targets: [] });
+  let changed = false;
+  const targets = (index.targets ?? []).flatMap((value) => {
+    const normalized = normalizeStoredTarget(value, deps);
+    if (!normalized) return [];
+    changed ||= normalized.changed;
+    return [normalized.target];
+  });
+  if (changed) {
+    await writeTargets(env, targets);
+  }
+  return targets;
+}
+
+function normalizeStoredTarget(
+  value: unknown,
+  deps: WorkerDeps,
+): { target: Target; changed: boolean } | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  if (
+    typeof raw.id !== 'string'
+    || typeof raw.label !== 'string'
+    || typeof raw.image_url !== 'string'
+    || typeof raw.image_object_key !== 'string'
+  ) {
+    return null;
+  }
+  const visibility = raw.visibility === 'public' ? 'public' : 'private';
+  const accessMode = isAccessMode(raw.access_mode)
+    ? raw.access_mode
+    : visibility === 'public' ? 'anyone_with_link' : 'owner_only';
+  const allowedEmails = Array.isArray(raw.allowed_emails)
+    ? [...new Set(raw.allowed_emails.flatMap((email) => normalizeEmail(email) ? [normalizeEmail(email)] : []))]
+    : [];
+  const groups = Array.isArray(raw.groups)
+    ? raw.groups.filter((group): group is Record<string, unknown> => Boolean(group && typeof group === 'object'))
+    : [];
+  const storedObjects = Array.isArray(raw.objects)
+    ? raw.objects.filter((object): object is Record<string, unknown> => Boolean(object && typeof object === 'object'))
+    : [];
+  const legacyModel = raw.model && typeof raw.model === 'object'
+    ? raw.model as Record<string, unknown>
+    : undefined;
+  const objects = storedObjects.length > 0
+    ? storedObjects
+    : legacyModel
+      ? [{
+        kind: 'model',
+        id: 'object-1',
+        model: legacyModel,
+        placement: normalizePlacement(raw.placement),
+      }]
+      : [];
+  const scanId = typeof raw.scan_id === 'string' && raw.scan_id.trim()
+    ? raw.scan_id
+    : deps.randomUUID();
+  const now = deps.now().toISOString();
+  const target: Target = {
+    id: raw.id,
+    label: raw.label,
+    image_url: raw.image_url,
+    image_object_key: raw.image_object_key,
+    objects,
+    groups,
+    owner_email: typeof raw.owner_email === 'string' ? raw.owner_email.trim().toLowerCase() : '',
+    visibility,
+    scan_id: scanId,
+    access_mode: accessMode,
+    allowed_emails: accessMode === 'specific_accounts' ? allowedEmails : [],
+    created_at: typeof raw.created_at === 'string' ? raw.created_at : now,
+    updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : now,
+  };
+  return {
+    target,
+    changed:
+      raw.scan_id !== target.scan_id
+      || raw.access_mode !== target.access_mode
+      || !Array.isArray(raw.allowed_emails)
+      || !Array.isArray(raw.groups)
+      || !Array.isArray(raw.objects),
+  };
+}
+
+function isAccessMode(value: unknown): value is Target['access_mode'] {
+  return value === 'anyone_with_link'
+    || value === 'any_signed_in'
+    || value === 'owner_only'
+    || value === 'specific_accounts';
 }
 
 function writeTargets(env: WorkerEnv, targets: Target[]): Promise<void> {

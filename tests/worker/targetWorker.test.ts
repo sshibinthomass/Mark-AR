@@ -31,6 +31,168 @@ class MemoryBucket {
 }
 
 describe('Mark-AR target Worker', () => {
+  it('keeps non-admin local signups pending when no legacy auth service is configured', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const response = await handleRequest(new Request('https://worker.example/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'new-user@example.com',
+        password: 'correct horse battery staple',
+        name: 'New user',
+      }),
+    }), env);
+    const body = await response.json() as { user: { status: string }; token?: string };
+
+    expect(response.status).toBe(201);
+    expect(body.user.status).toBe('pending');
+    expect(body).not.toHaveProperty('token');
+  });
+
+  it('filters the local model fallback for anonymous, owner, and non-owner callers', async () => {
+    const bucket = new MemoryBucket();
+    const ownerEnv = createEnv(bucket);
+    await bucket.put('models/generated/index.json', JSON.stringify({
+      models: [{
+        id: 'private-1',
+        owner_email: 'owner@example.com',
+        visibility: 'private',
+      }, {
+        id: 'public-1',
+        owner_email: 'owner@example.com',
+        visibility: 'public',
+      }],
+    }));
+    const ownerToken = await signupAndLogin(ownerEnv);
+    const usersObject = await bucket.get('auth/users/index.json');
+    const usersIndex = JSON.parse(await usersObject!.text!()) as { users: any[] };
+    usersIndex.users.push({
+      email: 'other@example.com',
+      role: 'user',
+      status: 'active',
+      password_hash: '',
+      password_salt: '',
+      created_at: '2026-07-25T12:00:00Z',
+      updated_at: '2026-07-25T12:00:00Z',
+    });
+    await bucket.put('auth/users/index.json', JSON.stringify(usersIndex));
+    const otherToken = await createLocalSessionToken('other@example.com', 'user', ownerEnv.AUTH_SECRET);
+
+    const anonymous = await handleRequest(new Request(
+      'https://worker.example/generate-3d/models',
+    ), ownerEnv);
+    const owner = await handleRequest(new Request(
+      'https://worker.example/generate-3d/models',
+      { headers: { Authorization: `Bearer ${ownerToken}` } },
+    ), ownerEnv);
+    const nonOwner = await handleRequest(new Request(
+      'https://worker.example/generate-3d/models',
+      { headers: { Authorization: `Bearer ${otherToken}` } },
+    ), ownerEnv);
+
+    expect((await anonymous.json() as { models: any[] }).models.map((model) => model.id)).toEqual(['public-1']);
+    expect((await owner.json() as { models: any[] }).models.map((model) => model.id)).toEqual(['private-1', 'public-1']);
+    expect((await nonOwner.json() as { models: any[] }).models.map((model) => model.id)).toEqual(['public-1']);
+  });
+
+  it('delegates authentication and model visibility to the legacy production service', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    (env as WorkerEnv & { LEGACY_WORKER_ORIGIN: string }).LEGACY_WORKER_ORIGIN =
+      'https://legacy.example';
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === 'https://legacy.example/auth/signup') {
+        return new Response(JSON.stringify({
+          user: { email: 'pending@example.com', role: 'user', status: 'pending' },
+        }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url === 'https://legacy.example/generate-3d/models') {
+        return new Response(JSON.stringify({
+          models: [{ id: 'public-1', visibility: 'public' }],
+        }), { headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('not found', { status: 404 });
+    });
+
+    const signup = await handleRequest(new Request('https://worker.example/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'pending@example.com',
+        password: 'correct horse battery staple',
+        name: 'Pending',
+      }),
+    }), env, { fetch: fetchImpl });
+    const models = await handleRequest(new Request('https://worker.example/generate-3d/models', {
+      headers: { Authorization: 'Bearer legacy-token' },
+    }), env, { fetch: fetchImpl });
+
+    expect(signup.status).toBe(201);
+    expect(await signup.json()).toEqual({
+      user: { email: 'pending@example.com', role: 'user', status: 'pending' },
+    });
+    expect(models.status).toBe(200);
+    expect(await models.json()).toEqual({
+      models: [{ id: 'public-1', visibility: 'public' }],
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the legacy session endpoint to authorize target access', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    (env as WorkerEnv & { LEGACY_WORKER_ORIGIN: string }).LEGACY_WORKER_ORIGIN =
+      'https://legacy.example';
+    await bucket.put('image-targets/index.json', JSON.stringify({
+      targets: [{
+        id: 'owned-target',
+        label: 'Owned',
+        image_url: 'https://worker.example/image-targets/images/owned.png',
+        image_object_key: 'image-targets/images/owned.png',
+        objects: [{
+          kind: 'youtube',
+          id: 'video-1',
+          youtube: {
+            video_id: 'dQw4w9WgXcQ',
+            url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            thumbnail_url: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+          },
+          placement: placement(),
+        }],
+        groups: [],
+        owner_email: 'owner@example.com',
+        visibility: 'private',
+        scan_id: 'scan-owned',
+        access_mode: 'owner_only',
+        allowed_emails: [],
+        created_at: '2026-07-25T12:00:00Z',
+        updated_at: '2026-07-25T12:00:00Z',
+      }],
+    }));
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe('https://legacy.example/auth/session');
+      return new Response(JSON.stringify({
+        user: {
+          email: 'owner@example.com',
+          role: 'user',
+          status: 'active',
+        },
+      }), { headers: { 'Content-Type': 'application/json' } });
+    });
+
+    const response = await handleRequest(new Request(
+      'https://worker.example/generate-3d/image-targets',
+      { headers: { Authorization: 'Bearer legacy-token' } },
+    ), env, { fetch: fetchImpl });
+    const body = await response.json() as { targets: Array<{ id: string }> };
+
+    expect(response.status).toBe(200);
+    expect(body.targets.map((target) => target.id)).toEqual(['owned-target']);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('stores uploaded object images in R2 and returns durable media objects', async () => {
     const bucket = new MemoryBucket();
     const env = createEnv(bucket);
@@ -110,14 +272,19 @@ describe('Mark-AR target Worker', () => {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ objects: [] }),
     }), env, { now: () => new Date('2026-07-25T13:00:00Z'), randomUUID: crypto.randomUUID, fetch: fetchImpl });
-    expect(updated.status).toBe(200);
-    expect(bucket.values.has(originalKey)).toBe(false);
+    expect(updated.status).toBe(400);
+    expect(await updated.json()).toEqual({ error: 'Add at least one target object.' });
+    expect(bucket.values.has(originalKey)).toBe(true);
 
     const removed = await handleRequest(new Request(`https://worker.example/generate-3d/image-targets/${target.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     }), env, { now: () => new Date('2026-07-25T14:00:00Z'), randomUUID: crypto.randomUUID, fetch: fetchImpl });
-    expect(removed.status).toBe(200);
+    const removedBody = await removed.json();
+    expect({ status: removed.status, body: removedBody }).toMatchObject({
+      status: 200,
+      body: { deleted: true },
+    });
     expect(bucket.values.has(target.image_object_key)).toBe(false);
   });
 
@@ -169,6 +336,102 @@ describe('Mark-AR target Worker', () => {
         url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         thumbnail_url: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
       },
+    });
+    const scanned = await handleRequest(new Request(
+      `https://worker.example/generate-3d/image-targets/scan/${updatedTarget.scan_id}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ), env, {
+      now: () => new Date('2026-07-25T13:00:00Z'),
+      randomUUID: crypto.randomUUID,
+      fetch: fetchImpl,
+    });
+    const scannedTarget = (await scanned.json() as { target: any }).target;
+    expect(scanned.status).toBe(200);
+    expect(scannedTarget.objects.map((object: { id: string }) => object.id)).toEqual(['video-only-1']);
+  });
+
+  it('normalizes legacy public targets when their owner lists them', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const token = await signupAndLogin(env);
+    await bucket.put('image-targets/index.json', JSON.stringify({
+      targets: [{
+        id: 'legacy-public',
+        label: 'Legacy public',
+        image_url: 'https://worker.example/image-targets/images/legacy.png',
+        image_object_key: 'image-targets/images/legacy.png',
+        model: {
+          id: 'legacy-model',
+          label: 'Legacy model',
+          url: 'https://worker.example/models/generated/legacy.glb',
+        },
+        placement: placement(),
+        owner_email: 'owner@example.com',
+        visibility: 'public',
+        created_at: '2026-07-01T12:00:00Z',
+        updated_at: '2026-07-01T12:00:00Z',
+      }],
+    }));
+
+    const response = await handleRequest(new Request(
+      'https://worker.example/generate-3d/image-targets',
+      { headers: { Authorization: `Bearer ${token}` } },
+    ), env, {
+      now: () => new Date('2026-07-25T12:00:00Z'),
+      randomUUID: () => 'legacy-scan-id',
+      fetch: vi.fn(),
+    });
+    const target = (await response.json() as { targets: any[] }).targets[0];
+
+    expect(response.status).toBe(200);
+    expect(target).toMatchObject({
+      id: 'legacy-public',
+      scan_id: 'legacy-scan-id',
+      access_mode: 'anyone_with_link',
+      allowed_emails: [],
+    });
+    expect(target.objects).toEqual([{
+      kind: 'model',
+      id: 'object-1',
+      model: {
+        id: 'legacy-model',
+        label: 'Legacy model',
+        url: 'https://worker.example/models/generated/legacy.glb',
+      },
+      placement: placement(),
+    }]);
+  });
+
+  it('rejects non-canonical submitted object IDs instead of changing them', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const token = await signupAndLogin(env);
+    const response = await handleRequest(new Request(
+      'https://worker.example/generate-3d/image-targets',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: 'Invalid ID',
+          image_base64: btoa('marker'),
+          image_mime_type: 'image/png',
+          objects: [{
+            kind: 'youtube',
+            id: ' video-with-spaces ',
+            youtube: { video_id: 'dQw4w9WgXcQ' },
+            placement: placement(),
+          }],
+        }),
+      },
+    ), env, {
+      now: () => new Date('2026-07-25T12:00:00Z'),
+      randomUUID: () => 'invalid-id-target',
+      fetch: vi.fn(),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Target object IDs must use only letters, numbers, dot, underscore, colon, or hyphen.',
     });
   });
 
@@ -246,4 +509,38 @@ function placement() {
     rotation_y: 0,
     rotation_z: 0,
   };
+}
+
+async function createLocalSessionToken(
+  email: string,
+  role: 'admin' | 'user',
+  secret: string,
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = base64Url(new TextEncoder().encode(JSON.stringify({
+    sub: email,
+    role,
+    jti: 'test-session',
+    iat: now,
+    exp: now + 3600,
+  })));
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = new Uint8Array(
+    await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)),
+  );
+  return `${payload}.${base64Url(signature)}`;
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }

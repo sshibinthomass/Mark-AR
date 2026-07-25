@@ -4,7 +4,7 @@
 
 **Goal:** Make Image-only and YouTube-only targets save successfully without losing their object IDs.
 
-**Architecture:** Route the production frontend to the repository-local Mark-AR Worker, which already validates all four supported object kinds and stores image objects in R2. Bind that Worker to the existing asset bucket to preserve stored records, and add a client-boundary regression test that fails if production falls back to the legacy Worker.
+**Architecture:** Route the production frontend to the repository-local Mark-AR Worker, which validates all four supported object kinds and stores image objects in R2. Bind that Worker to the existing asset bucket, while delegating authentication/account approval and model listing to the established Worker so sessions, rate limits, administration, and private-model visibility remain unchanged.
 
 **Tech Stack:** TypeScript, Vitest, Vite, Cloudflare Workers, R2, Wrangler, GitHub Actions, GitHub Pages.
 
@@ -14,6 +14,8 @@
 - Image-only and YouTube-only targets are valid.
 - Save and update responses preserve every submitted object ID.
 - Existing R2 records use `web-ar-model-assets`.
+- Existing authentication and model-list requests remain governed by
+  `web-ar-generate-model`.
 - Do not modify or deploy the sibling `Web-AR` repository.
 
 ---
@@ -105,7 +107,8 @@ Set:
 ```json
 {
   "PUBLIC_ORIGIN": "https://mark-ar-targets.sshibinthomass.workers.dev",
-  "ALLOWED_ORIGINS": "https://sshibinthomass.github.io,http://localhost:5173,http://127.0.0.1:5173"
+  "ALLOWED_ORIGINS": "https://sshibinthomass.github.io,http://localhost:5173,http://127.0.0.1:5173",
+  "LEGACY_WORKER_ORIGIN": "https://web-ar-generate-model.sshibinthomass.workers.dev"
 }
 ```
 
@@ -129,6 +132,16 @@ git add wrangler.jsonc tests/worker/targetWorker.test.ts
 git commit -m "fix: preserve media-only targets"
 ```
 
+Before deployment, add Worker tests proving:
+
+- auth/signup and model listing proxy to the legacy origin;
+- target authorization uses the legacy session endpoint;
+- local fallback hides private models and keeps non-admin signup pending;
+- empty updates are rejected without deleting existing media;
+- legacy public targets gain scan/access metadata;
+- non-canonical IDs are rejected instead of rewritten;
+- scan responses preserve the media object ID.
+
 ### Task 3: Deploy, publish, and verify
 
 **Files:**
@@ -151,12 +164,12 @@ npm run worker:check
 
 Expected: all commands exit zero.
 
-- [ ] **Step 2: Create the Worker secret and deploy**
+- [ ] **Step 2: Deploy the Worker**
 
-Generate a cryptographically random secret without printing it, pass it to:
+Deploy the target Worker. Production authentication is delegated and does not
+require a second session-signing secret:
 
 ```powershell
-npx wrangler secret put AUTH_SECRET --name mark-ar-targets
 npx wrangler deploy
 ```
 

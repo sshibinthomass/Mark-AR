@@ -7,7 +7,8 @@
   "compatibility_date": "2026-07-25",
   "vars": {
     "PUBLIC_ORIGIN": "https://mark-ar-targets.sshibinthomass.workers.dev",
-    "ALLOWED_ORIGINS": "https://sshibinthomass.github.io,http://localhost:5173,http://127.0.0.1:5173"
+    "ALLOWED_ORIGINS": "https://sshibinthomass.github.io,http://localhost:5173,http://127.0.0.1:5173",
+    "LEGACY_WORKER_ORIGIN": "https://web-ar-generate-model.sshibinthomass.workers.dev"
   },
   "r2_buckets": [
     {

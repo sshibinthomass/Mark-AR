@@ -16,10 +16,12 @@ preserves their IDs.
 ## Design
 
 Deploy the repository-local Worker as `mark-ar-targets`, bound to the existing
-`web-ar-model-assets` R2 bucket so existing users, models, marker images, and
-target records remain available. Give the new Worker its own `AUTH_SECRET`.
-Existing passwords remain compatible, but existing sessions will need to sign
-in once against the new Worker.
+`web-ar-model-assets` R2 bucket so existing models, marker images, and target
+records remain available. Delegate authentication, account approval, rate
+limiting, administration, and generated-model listing to the established
+`web-ar-generate-model` Worker. Target CRUD and image-object storage remain
+owned by Mark-AR. Existing sessions and private-model visibility rules are
+therefore preserved.
 
 The frontend's production target API becomes:
 
@@ -44,8 +46,13 @@ invalid. Save and update responses must preserve every submitted object ID.
 
 - Add a regression test proving the default client endpoint no longer calls the
   legacy Worker.
+- Verify production authentication and model listing are delegated to the
+  established service.
+- Reject empty updates and non-canonical object IDs.
+- Normalize legacy target records before returning or updating them.
 - Retain and run Worker tests for image-only storage and media ID preservation.
 - Run the complete test suite, application build, and Worker dry-run.
-- Deploy the Worker, verify its health and media-only target lifecycle.
+- Deploy the Worker, verify its health, delegated security boundaries, and
+  media-only target lifecycle.
 - Push the configuration change to `main`, wait for GitHub Pages, and verify the
   published JavaScript uses the new Worker origin.
