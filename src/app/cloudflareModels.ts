@@ -37,7 +37,7 @@ type WorkerGeneratedModelsResponse = {
 
 export const DEFAULT_GENERATE_MODEL_API_URL =
   import.meta.env.VITE_TARGET_API_URL?.trim()
-  || 'https://web-ar-generate-model.sshibinthomass.workers.dev/generate-3d';
+  || 'https://mark-ar-targets.sshibinthomass.workers.dev/generate-3d';
 
 const CLOUDFLARE_ASSET_ORIGIN = 'https://web-ar-model-assets.pages.dev';
 

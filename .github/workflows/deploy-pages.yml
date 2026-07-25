@@ -38,6 +38,7 @@ jobs:
         run: npm run build
         env:
           GITHUB_PAGES: "true"
+          VITE_TARGET_API_URL: "https://mark-ar-targets.sshibinthomass.workers.dev/generate-3d"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

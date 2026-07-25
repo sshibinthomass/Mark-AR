@@ -4,6 +4,20 @@ import {
 } from '../src/app/cloudflareModels';
 
 describe('Cloudflare model client', () => {
+  it('uses the media-capable Mark-AR Worker by default', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ models: [] }), { status: 200 }));
+
+    await loadCloudflareModelOptions({
+      authToken: 'token-123',
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://mark-ar-targets.sshibinthomass.workers.dev/generate-3d/models',
+      { headers: { Authorization: 'Bearer token-123' } },
+    );
+  });
+
   it('uses only static public models while signed out', async () => {
     const fetchImpl = vi.fn();
 
