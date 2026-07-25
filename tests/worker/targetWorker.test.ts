@@ -45,10 +45,24 @@ describe('Mark-AR target Worker', () => {
     const allowed = await handleRequest(requestWithOrigin('https://allowed.example'), env);
     const disallowed = await handleRequest(requestWithOrigin('https://evil.example'), env);
     const withoutOrigin = await handleRequest(new Request('https://worker.example/missing'), env);
+    env.LEGACY_WORKER_ORIGIN = 'https://legacy.example';
+    env.LEGACY_WORKER = {
+      fetch: vi.fn(async () => new Response(JSON.stringify({ models: [] }), {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json',
+        },
+      })) as unknown as typeof fetch,
+    };
+    const proxiedWithoutOrigin = await handleRequest(
+      new Request('https://worker.example/generate-3d/models'),
+      env,
+    );
 
     expect(allowed.headers.get('Access-Control-Allow-Origin')).toBe('https://allowed.example');
     expect(disallowed.headers.get('Access-Control-Allow-Origin')).toBeNull();
     expect(withoutOrigin.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(proxiedWithoutOrigin.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
 
   it('keeps non-admin local signups pending when no legacy auth service is configured', async () => {

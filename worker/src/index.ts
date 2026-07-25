@@ -1034,6 +1034,7 @@ function withCors(response: Response, request: Request, env: WorkerEnv): Respons
   if (allowed.includes('*')) allowOrigin = '*';
   else if (origin && allowed.includes(origin)) allowOrigin = origin;
   const headers = new Headers(response.headers);
+  headers.delete('Access-Control-Allow-Origin');
   if (allowOrigin) headers.set('Access-Control-Allow-Origin', allowOrigin);
   headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
