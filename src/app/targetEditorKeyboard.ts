@@ -4,7 +4,7 @@ export type TargetEditorKeyboardCommand =
   | { type: 'move'; offsetX: number; offsetY: number; height: number }
   | { type: 'delete' };
 
-type KeyboardCommandEvent = Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey'>;
+type KeyboardCommandEvent = Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>;
 type TargetEditorMoveCommand = Extract<TargetEditorKeyboardCommand, { type: 'move' }>;
 
 const KEY_COMMANDS: Readonly<Record<string, TargetEditorKeyboardCommand>> = {
@@ -20,7 +20,7 @@ const KEY_COMMANDS: Readonly<Record<string, TargetEditorKeyboardCommand>> = {
 export function targetEditorKeyboardCommand(
   event: KeyboardCommandEvent,
 ): TargetEditorKeyboardCommand | undefined {
-  if (event.altKey || event.ctrlKey || event.metaKey) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
     return undefined;
   }
   return KEY_COMMANDS[event.key];

@@ -20,6 +20,7 @@ describe('target editor keyboard commands', () => {
       altKey: false,
       ctrlKey: false,
       metaKey: false,
+      shiftKey: false,
     })).toEqual(expected);
   });
 
@@ -54,12 +55,21 @@ describe('target editor keyboard commands', () => {
       altKey: false,
       ctrlKey: true,
       metaKey: false,
+      shiftKey: false,
+    })).toBeUndefined();
+    expect(targetEditorKeyboardCommand({
+      key: 'Delete',
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: true,
     })).toBeUndefined();
     expect(targetEditorKeyboardCommand({
       key: 'Home',
       altKey: false,
       ctrlKey: false,
       metaKey: false,
+      shiftKey: false,
     })).toBeUndefined();
   });
 

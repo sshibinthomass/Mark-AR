@@ -102,6 +102,46 @@ describe('target editor keyboard integration', () => {
     expect(latest().objects).toHaveLength(0);
   }, 10000);
 
+  it('ignores modified and already-consumed keyboard events', async () => {
+    await import('../src/main');
+    await waitForEditor();
+    document.querySelectorAll<HTMLButtonElement>('.target-model-card')[0].click();
+    await waitFor(() => latest().objects.length === 1);
+
+    const shiftMove = dispatchEditorKey(document.body, 'ArrowRight', { shiftKey: true });
+    const shiftDelete = dispatchEditorKey(document.body, 'Delete', { shiftKey: true });
+    const consumedMove = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+    });
+    consumedMove.preventDefault();
+    document.body.dispatchEvent(consumedMove);
+
+    expect(shiftMove.defaultPrevented).toBe(false);
+    expect(shiftDelete.defaultPrevented).toBe(false);
+    expect(latest().objects).toHaveLength(1);
+    expect(latest().objects[0].placement.offsetX).toBe(0);
+  }, 10000);
+
+  it('deletes every object in an ungrouped multi-selection', async () => {
+    await import('../src/main');
+    await waitForEditor();
+    const cards = document.querySelectorAll<HTMLButtonElement>('.target-model-card');
+    cards[0].click();
+    cards[1].click();
+    cards[2].click();
+    await waitFor(() => latest().objects.length === 3);
+
+    clickObject('chair');
+    clickObject('lamp', { ctrlKey: true });
+    dispatchEditorKey(document.body, 'Delete');
+    await waitFor(() => latest().objects.length === 1);
+
+    expect(latest().groups).toHaveLength(0);
+    expect(modelIdOf(latest().objects[0])).toBe('plant');
+  }, 10000);
+
   it('moves multi-object and group selections and deletes a selected group', async () => {
     await import('../src/main');
     await waitForEditor();
@@ -135,8 +175,12 @@ describe('target editor keyboard integration', () => {
   }, 10000);
 });
 
-function dispatchEditorKey(target: EventTarget, key: string): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+function dispatchEditorKey(
+  target: EventTarget,
+  key: string,
+  init: Omit<KeyboardEventInit, 'key'> = {},
+): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
   target.dispatchEvent(event);
   return event;
 }
