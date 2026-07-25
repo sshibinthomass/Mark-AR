@@ -20,13 +20,20 @@ import {
   type TargetEditorGroup,
 } from './targetEditorGroups';
 import {
+  isImageTargetObject,
   isModelTargetObject,
   isTextTargetObject,
+  isYouTubeTargetObject,
   normalizeTargetText,
   type ModelTargetObject,
   type TargetEditorObject,
   type TargetTextContent,
 } from './targetEditorObjects';
+import {
+  normalizeYouTubeUrl,
+  type PendingTargetImageSource,
+  type TargetImageContent,
+} from './targetMedia';
 
 export type CloudImageTargetGroup = TargetEditorGroup;
 
@@ -76,6 +83,20 @@ type WorkerImageTargetObject = {
     gloss?: number;
     style_preset?: string;
   };
+  image?: {
+    url?: string;
+    object_key?: string;
+    label?: string;
+    width?: number;
+    height?: number;
+    aspect_ratio?: number;
+    pending_source?: WorkerPendingImageSource;
+  };
+  youtube?: {
+    video_id?: string;
+    url?: string;
+    thumbnail_url?: string;
+  };
   placement?: {
     scale?: number;
     offset_x?: number;
@@ -102,6 +123,17 @@ type WorkerImageTargetObject = {
     bob_speed?: number;
   };
 };
+
+type WorkerPendingImageSource =
+  | {
+    source?: 'upload';
+    image_base64?: string;
+    image_mime_type?: string;
+  }
+  | {
+    source?: 'url';
+    source_url?: string;
+  };
 
 type WorkerImageTargetPlacement = {
   scale?: number;
@@ -169,6 +201,7 @@ type CreateImageTargetInput = ClientInput &
     objects?: TargetEditorObject[];
     groups?: CloudImageTargetGroup[];
     access?: ImageTargetAccess;
+    mediaSources?: Record<string, PendingTargetImageSource>;
   };
 
 type UpdateImageTargetInput = ClientInput & {
@@ -179,6 +212,7 @@ type UpdateImageTargetInput = ClientInput & {
   objects?: TargetEditorObject[];
   groups?: CloudImageTargetGroup[];
   access?: ImageTargetAccess;
+  mediaSources?: Record<string, PendingTargetImageSource>;
 } & Partial<ImageTargetImagePayload>;
 
 type GetImageTargetForScanInput = ClientInput & {
@@ -220,9 +254,16 @@ export async function createImageTarget({
   objects,
   groups,
   access,
+  mediaSources,
 }: CreateImageTargetInput): Promise<CloudImageTarget> {
   const normalizedGroups = normalizeCloudImageTargetGroups(groups);
-  const requestObjects = imageTargetObjectsRequestBody(objects, normalizedGroups, model, placement);
+  const requestObjects = imageTargetObjectsRequestBody(
+    objects,
+    normalizedGroups,
+    model,
+    placement,
+    mediaSources,
+  );
   const firstModel = requestObjects.find((object) => object.kind === 'model');
   const response = await fetchImpl(imageTargetsUrl(apiUrl), {
     method: 'POST',
@@ -256,6 +297,7 @@ export async function updateImageTarget({
   imageBase64,
   imageMimeType,
   access,
+  mediaSources,
 }: UpdateImageTargetInput): Promise<CloudImageTarget> {
   const body: Record<string, unknown> = {};
   if (label !== undefined) {
@@ -269,7 +311,13 @@ export async function updateImageTarget({
   }
   if (objects) {
     const normalizedGroups = normalizeCloudImageTargetGroups(groups);
-    const requestObjects = imageTargetObjectsRequestBody(objects, normalizedGroups, model, placement);
+    const requestObjects = imageTargetObjectsRequestBody(
+      objects,
+      normalizedGroups,
+      model,
+      placement,
+      mediaSources,
+    );
     const firstModel = requestObjects.find((object) => object.kind === 'model');
     body.objects = requestObjects;
     if (firstModel) {
@@ -410,6 +458,47 @@ function mapImageTargetObject(
       text: textFromWire(object.text),
     } : null;
   }
+  if (object.kind === 'image') {
+    if (
+      !object.image?.url
+      || !object.image.label
+      || !positiveNumber(object.image.width)
+      || !positiveNumber(object.image.height)
+    ) {
+      return null;
+    }
+    return {
+      ...shared,
+      kind: 'image',
+      image: {
+        url: object.image.url,
+        ...(object.image.object_key ? { objectKey: object.image.object_key } : {}),
+        label: object.image.label,
+        width: object.image.width,
+        height: object.image.height,
+        aspectRatio: positiveNumber(object.image.aspect_ratio)
+          ? object.image.aspect_ratio
+          : object.image.width / object.image.height,
+      },
+    };
+  }
+  if (object.kind === 'youtube') {
+    const normalized = normalizeYouTubeUrl(
+      object.youtube?.url
+        ?? `https://www.youtube.com/watch?v=${object.youtube?.video_id ?? ''}`,
+    );
+    if (!normalized || (object.youtube?.video_id && normalized.videoId !== object.youtube.video_id)) {
+      return null;
+    }
+    return {
+      ...shared,
+      kind: 'youtube',
+      youtube: {
+        ...normalized,
+        ...(object.youtube?.thumbnail_url ? { thumbnailUrl: object.youtube.thumbnail_url } : {}),
+      },
+    };
+  }
   if (!object.model?.id || !object.model.label || !object.model.url) {
     return null;
   }
@@ -520,11 +609,14 @@ function imageTargetObjectsRequestBody(
   groups: CloudImageTargetGroup[],
   legacyModel?: CloudflareModelOption,
   legacyPlacement?: ImageTargetPlacement,
+  mediaSources: Record<string, PendingTargetImageSource> = {},
 ): Array<{
-  kind: 'model' | 'text';
+  kind: 'model' | 'text' | 'image' | 'youtube';
   id: string;
   model?: Record<string, string>;
   text?: Record<string, string | number | undefined>;
+  image?: Record<string, unknown>;
+  youtube?: Record<string, string>;
   placement: Record<string, number>;
   animation?: WorkerAnimationRequestBody;
   group_id?: string;
@@ -555,8 +647,64 @@ function imageTargetObjectsRequestBody(
     if (isModelTargetObject(object)) {
       return { kind: 'model' as const, id, model: modelRequestBody(object.model), placement, ...groupFields, ...animationFields };
     }
-    throw new Error(`Unsupported target object kind: ${object.kind}.`);
+    if (isImageTargetObject(object)) {
+      const pendingSource = mediaSources[object.id];
+      return {
+        kind: 'image' as const,
+        id,
+        image: imageRequestBody(object.image, pendingSource),
+        placement,
+        ...groupFields,
+        ...animationFields,
+      };
+    }
+    if (isYouTubeTargetObject(object)) {
+      return {
+        kind: 'youtube' as const,
+        id,
+        youtube: {
+          video_id: object.youtube.videoId,
+          url: object.youtube.url,
+          thumbnail_url: object.youtube.thumbnailUrl,
+        },
+        placement,
+        ...groupFields,
+        ...animationFields,
+      };
+    }
+    throw new Error('Unsupported target object.');
   });
+}
+
+function imageRequestBody(
+  image: TargetImageContent,
+  pendingSource?: PendingTargetImageSource,
+): Record<string, unknown> {
+  return {
+    ...(image.objectKey ? { url: image.url, object_key: image.objectKey } : {}),
+    label: image.label,
+    width: image.width,
+    height: image.height,
+    aspect_ratio: image.aspectRatio,
+    ...(pendingSource ? { pending_source: pendingImageSourceRequestBody(pendingSource) } : {}),
+  };
+}
+
+function pendingImageSourceRequestBody(source: PendingTargetImageSource): Record<string, string> {
+  return source.source === 'upload'
+    ? {
+      source: 'upload',
+      image_base64: source.imageBase64,
+      image_mime_type: source.imageMimeType,
+    }
+    : {
+      source: 'url',
+      source_url: source.sourceUrl,
+    };
+}
+
+function positiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 export function resolveGroupedObjectsForSave(

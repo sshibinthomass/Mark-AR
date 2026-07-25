@@ -6,9 +6,167 @@ import {
   listImageTargets,
   updateImageTarget,
 } from '../src/app/cloudImageTargets';
-import { createLocalTextObject } from '../src/app/targetEditorObjects';
+import {
+  createLocalImageObject,
+  createLocalTextObject,
+  createYouTubeObject,
+} from '../src/app/targetEditorObjects';
+import { normalizeYouTubeUrl } from '../src/app/targetMedia';
 
 describe('cloud image target client', () => {
+  it('maps durable image and YouTube objects from target responses', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      targets: [{
+        id: 'target-media',
+        label: 'Media wall',
+        image_url: 'https://worker.example/image-targets/images/target-media.jpg',
+        image_object_key: 'image-targets/images/target-media.jpg',
+        objects: [
+          {
+            kind: 'image',
+            id: 'poster',
+            image: {
+              url: 'https://worker.example/image-targets/media/target-media/poster.webp',
+              object_key: 'image-targets/media/target-media/poster.webp',
+              label: 'Poster',
+              width: 1200,
+              height: 800,
+              aspect_ratio: 1.5,
+              pending_source: { source: 'upload', image_base64: 'must-not-survive' },
+            },
+            placement: { scale: 1, offset_x: 0.2, offset_y: 0, height: 0.3 },
+          },
+          {
+            kind: 'youtube',
+            id: 'trailer',
+            youtube: {
+              video_id: 'M7lc1UVf-VE',
+              url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+              thumbnail_url: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+            },
+            placement: { scale: 0.8, offset_x: -0.2, offset_y: 0, height: 0.2 },
+          },
+        ],
+      }],
+    }), { status: 200 }));
+
+    const [target] = await listImageTargets({
+      apiUrl: 'https://worker.example/generate-3d',
+      authToken: 'token',
+      fetchImpl,
+    });
+
+    expect(target.objects).toEqual([
+      expect.objectContaining({
+        kind: 'image',
+        id: 'poster',
+        image: {
+          url: 'https://worker.example/image-targets/media/target-media/poster.webp',
+          objectKey: 'image-targets/media/target-media/poster.webp',
+          label: 'Poster',
+          width: 1200,
+          height: 800,
+          aspectRatio: 1.5,
+        },
+      }),
+      expect.objectContaining({
+        kind: 'youtube',
+        id: 'trailer',
+        youtube: {
+          videoId: 'M7lc1UVf-VE',
+          url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+          thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+        },
+      }),
+    ]);
+    expect(JSON.stringify(target)).not.toContain('must-not-survive');
+  });
+
+  it('serializes pending image sources without adding them to YouTube objects', async () => {
+    const youtube = normalizeYouTubeUrl('https://youtu.be/M7lc1UVf-VE')!;
+    const imageObject = createLocalImageObject({
+      id: 'poster',
+      image: {
+        url: 'blob:poster',
+        label: 'Poster',
+        width: 1200,
+        height: 800,
+        aspectRatio: 1.5,
+      },
+    });
+    const youtubeObject = createYouTubeObject({ id: 'trailer', youtube });
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      id: 'target-media',
+      label: 'Media wall',
+      image_url: 'https://worker.example/image-targets/images/target-media.jpg',
+      image_object_key: 'image-targets/images/target-media.jpg',
+      objects: [{
+        kind: 'image',
+        id: 'poster',
+        image: {
+          url: 'https://worker.example/image-targets/media/target-media/poster.webp',
+          object_key: 'image-targets/media/target-media/poster.webp',
+          label: 'Poster',
+          width: 1200,
+          height: 800,
+          aspect_ratio: 1.5,
+        },
+        placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+      }, {
+        kind: 'youtube',
+        id: 'trailer',
+        youtube: {
+          video_id: 'M7lc1UVf-VE',
+          url: youtube.url,
+          thumbnail_url: youtube.thumbnailUrl,
+        },
+        placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.12 },
+      }],
+    }), { status: 201 }));
+
+    await createImageTarget({
+      apiUrl: 'https://worker.example/generate-3d',
+      authToken: 'token',
+      fetchImpl,
+      label: 'Media wall',
+      imageBase64: 'bWFya2Vy',
+      imageMimeType: 'image/png',
+      objects: [imageObject, youtubeObject],
+      mediaSources: {
+        poster: {
+          source: 'upload',
+          imageBase64: 'cG9zdGVy',
+          imageMimeType: 'image/webp',
+        },
+      },
+    });
+
+    const request = JSON.parse((fetchImpl.mock.calls[0][1] as RequestInit).body as string);
+    expect(request.objects[0]).toMatchObject({
+      kind: 'image',
+      image: {
+        label: 'Poster',
+        width: 1200,
+        height: 800,
+        aspect_ratio: 1.5,
+        pending_source: {
+          source: 'upload',
+          image_base64: 'cG9zdGVy',
+          image_mime_type: 'image/webp',
+        },
+      },
+    });
+    expect(request.objects[1]).toMatchObject({
+      kind: 'youtube',
+      youtube: {
+        video_id: 'M7lc1UVf-VE',
+        url: youtube.url,
+        thumbnail_url: youtube.thumbnailUrl,
+      },
+    });
+    expect(request.objects[1].youtube).not.toHaveProperty('pending_source');
+  });
+
   it('loads exactly one scan target without auth and maps its access fields', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
       id: 'target-1',

@@ -161,4 +161,41 @@ describe('saved target authoring acknowledgement', () => {
     targetWithDuplicate.objects.push(structuredClone(targetWithDuplicate.objects[0]));
     expect(savedTargetAuthoringMismatch(objects, groups, targetWithDuplicate)).toContain('model-1');
   });
+
+  it('accepts the Worker replacing a draft image URL with durable R2 metadata', () => {
+    const expectedObjects: TargetEditorObject[] = [{
+      kind: 'image',
+      id: 'poster',
+      image: {
+        url: 'blob:draft-poster',
+        label: 'Poster',
+        width: 1200,
+        height: 800,
+        aspectRatio: 1.5,
+      },
+      placement,
+    }];
+    const savedTarget: CloudImageTarget = {
+      ...structuredClone(completeTarget),
+      objects: [{
+        ...expectedObjects[0],
+        kind: 'image',
+        image: {
+          url: 'https://worker.example/image-targets/media/target-1/poster.webp',
+          objectKey: 'image-targets/media/target-1/poster.webp',
+          label: 'Poster',
+          width: 1200,
+          height: 800,
+          aspectRatio: 1.5,
+        },
+      }],
+      groups: [],
+    };
+
+    expect(savedTargetAuthoringMismatch(expectedObjects, [], savedTarget)).toBeUndefined();
+    if (savedTarget.objects[0].kind === 'image') {
+      savedTarget.objects[0].image.aspectRatio = 2;
+    }
+    expect(savedTargetAuthoringMismatch(expectedObjects, [], savedTarget)).toContain('poster');
+  });
 });

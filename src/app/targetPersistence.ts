@@ -128,7 +128,16 @@ function canonicalObject(object: TargetEditorObject): unknown {
     };
   }
   if (isImageTargetObject(object)) {
-    return { ...shared, kind: 'image', image: object.image };
+    return {
+      ...shared,
+      kind: 'image',
+      image: {
+        label: object.image.label,
+        width: object.image.width,
+        height: object.image.height,
+        aspectRatio: object.image.aspectRatio,
+      },
+    };
   }
   if (isYouTubeTargetObject(object)) {
     return { ...shared, kind: 'youtube', youtube: object.youtube };
