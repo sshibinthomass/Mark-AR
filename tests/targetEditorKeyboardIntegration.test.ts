@@ -12,8 +12,12 @@ type PreviewUpdate = {
   objects: TargetEditorObject[];
   groups: TargetEditorGroup[];
   selection: TargetEditorSelection;
+  hiddenObjectIds?: string[];
+  selectionLocked?: boolean;
 };
 const previewUpdates: PreviewUpdate[] = [];
+const previewTransformModes: string[] = [];
+const previewAnimationStates: boolean[] = [];
 
 vi.mock('../src/app/cloudflareModels', () => ({
   DEFAULT_GENERATE_MODEL_API_URL: 'https://worker.example/generate-3d',
@@ -37,6 +41,8 @@ vi.mock('../src/ar/mindarRuntime', () => ({ startMarkerAR: vi.fn() }));
 vi.mock('../src/scene/ImageTargetPreview', () => ({
   ImageTargetPreview: class {
     update = vi.fn(async (state: PreviewUpdate) => previewUpdates.push(structuredClone(state)));
+    setTransformMode = vi.fn((mode: string) => previewTransformModes.push(mode));
+    setAnimationPlaying = vi.fn((playing: boolean) => previewAnimationStates.push(playing));
     dispose = vi.fn();
   },
 }));
@@ -45,6 +51,8 @@ describe('target editor keyboard integration', () => {
   beforeEach(() => {
     vi.resetModules();
     previewUpdates.length = 0;
+    previewTransformModes.length = 0;
+    previewAnimationStates.length = 0;
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
     window.history.replaceState(null, '', '#/targets');
@@ -173,6 +181,127 @@ describe('target editor keyboard integration', () => {
     expect(latest().groups).toHaveLength(0);
     expect(modelIdOf(latest().objects[0])).toBe('plant');
   }, 10000);
+
+  it('supports fine movement, direct transforms, reset, and transform modes', async () => {
+    await import('../src/main');
+    await waitForEditor();
+    document.querySelectorAll<HTMLButtonElement>('.target-model-card')[0].click();
+    await waitFor(() => latest().objects.length === 1);
+
+    dispatchEditorKey(document.body, 'ArrowRight', { shiftKey: true });
+    dispatchEditorKey(document.body, 'PageUp', { shiftKey: true });
+    dispatchEditorKey(document.body, '+', { shiftKey: true });
+    dispatchEditorKey(document.body, ']');
+    await waitFor(() => latest().objects[0]?.placement.rotationY === 5);
+
+    expect(latest().objects[0].placement).toMatchObject({
+      offsetX: 0.01,
+      height: 0.125,
+      scale: 1.05,
+      rotationY: 5,
+    });
+
+    dispatchEditorKey(document.body, 'e');
+    dispatchEditorKey(document.body, 'r');
+    dispatchEditorKey(document.body, 'w');
+    expect(previewTransformModes.slice(-3)).toEqual(['rotate', 'scale', 'translate']);
+
+    dispatchEditorKey(document.body, 'Home');
+    await waitFor(() => latest().objects[0]?.placement.rotationY === 0);
+    expect(latest().objects[0].placement).toMatchObject({
+      offsetX: 0,
+      offsetY: 0,
+      height: 0.12,
+      scale: 1,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+    });
+  }, 10000);
+
+  it('cycles, duplicates, undoes, and redoes editor changes', async () => {
+    await import('../src/main');
+    await waitForEditor();
+    const cards = document.querySelectorAll<HTMLButtonElement>('.target-model-card');
+    cards[0].click();
+    cards[1].click();
+    cards[2].click();
+    await waitFor(() => latest().objects.length === 3);
+
+    const tabEvent = dispatchEditorKey(document.body, 'Tab');
+    expect(tabEvent.defaultPrevented).toBe(true);
+    expect(modelIdOf(selectedObject())).toBe('chair');
+
+    dispatchEditorKey(document.body, 'Tab', { shiftKey: true });
+    expect(modelIdOf(selectedObject())).toBe('plant');
+
+    const plantOffset = selectedObject().placement.offsetX;
+    dispatchEditorKey(document.body, 'd', { ctrlKey: true });
+    await waitFor(() => latest().objects.length === 4);
+    expect(modelIdOf(selectedObject())).toBe('plant');
+    expect(selectedObject().placement.offsetX).toBeCloseTo(plantOffset + 0.05);
+
+    dispatchEditorKey(document.body, 'ArrowRight');
+    await waitFor(() => Math.abs(selectedObject().placement.offsetX - (plantOffset + 0.1)) < 0.0001);
+    dispatchEditorKey(document.body, 'z', { ctrlKey: true });
+    await waitFor(() => Math.abs(selectedObject().placement.offsetX - (plantOffset + 0.05)) < 0.0001);
+    dispatchEditorKey(document.body, 'z', { ctrlKey: true, shiftKey: true });
+    await waitFor(() => Math.abs(selectedObject().placement.offsetX - (plantOffset + 0.1)) < 0.0001);
+  }, 10000);
+
+  it('temporarily hides and locks a selection and rejects locked edits', async () => {
+    await import('../src/main');
+    await waitForEditor();
+    document.querySelectorAll<HTMLButtonElement>('.target-model-card')[0].click();
+    await waitFor(() => latest().objects.length === 1);
+
+    dispatchEditorKey(document.body, 'h');
+    await waitFor(() => latest().hiddenObjectIds?.length === 1);
+    expect(latest().hiddenObjectIds).toEqual([latest().objects[0].id]);
+    expect(document.querySelector('[data-object-state="hidden"]')?.textContent).toBe('Hidden');
+
+    dispatchEditorKey(document.body, 'l');
+    await waitFor(() => latest().selectionLocked === true);
+    expect(document.querySelector('[data-object-state="locked"]')?.textContent).toBe('Locked');
+    const lockedMove = dispatchEditorKey(document.body, 'ArrowRight');
+    const lockedDelete = dispatchEditorKey(document.body, 'Delete');
+    expect(lockedMove.defaultPrevented).toBe(true);
+    expect(lockedDelete.defaultPrevented).toBe(true);
+    expect(latest().objects).toHaveLength(1);
+    expect(latest().objects[0].placement.offsetX).toBe(0);
+    expect(document.querySelector('#image-target-status')?.textContent).toContain('locked');
+
+    dispatchEditorKey(document.body, 'l');
+    dispatchEditorKey(document.body, 'ArrowRight');
+    await waitFor(() => latest().objects[0]?.placement.offsetX === 0.05);
+  }, 10000);
+
+  it('runs camera, animation, and save shortcuts without an object selection', async () => {
+    await import('../src/main');
+    await waitForEditor();
+
+    const cameraEvent = dispatchEditorKey(document.body, '7');
+    expect(cameraEvent.defaultPrevented).toBe(true);
+    expect(document.querySelector<HTMLInputElement>('#target-camera-distance')?.value).toBe('0.9');
+    expect(document.querySelector<HTMLInputElement>('#target-camera-height')?.value).toBe('3');
+
+    const animationEvent = dispatchEditorKey(document.body, ' ');
+    expect(animationEvent.defaultPrevented).toBe(true);
+    expect(previewAnimationStates.at(-1)).toBe(false);
+
+    const helpEvent = dispatchEditorKey(document.body, '?', { shiftKey: true });
+    expect(helpEvent.defaultPrevented).toBe(true);
+    expect(document.querySelector<HTMLElement>('#target-keyboard-help')?.hidden).toBe(false);
+    dispatchEditorKey(document.body, 'Escape');
+    expect(document.querySelector<HTMLElement>('#target-keyboard-help')?.hidden).toBe(true);
+
+    let saveClicks = 0;
+    document.querySelector<HTMLButtonElement>('#save-image-target')!
+      .addEventListener('click', () => saveClicks += 1);
+    const saveEvent = dispatchEditorKey(document.body, 's', { ctrlKey: true });
+    expect(saveEvent.defaultPrevented).toBe(true);
+    expect(saveClicks).toBe(1);
+  }, 10000);
 });
 
 function dispatchEditorKey(
@@ -201,6 +330,15 @@ function objectForModel(modelId: string): TargetEditorObject {
 
 function modelIdOf(object: TargetEditorObject): string {
   return 'model' in object ? object.model.id : '';
+}
+
+function selectedObject(): TargetEditorObject {
+  const selectedId = latest().selection.objectIds.at(-1);
+  const object = latest().objects.find((candidate) => candidate.id === selectedId);
+  if (!object) {
+    throw new Error('Selected object not found');
+  }
+  return object;
 }
 
 function latest(): PreviewUpdate {

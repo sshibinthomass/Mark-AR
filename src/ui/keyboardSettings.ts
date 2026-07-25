@@ -5,22 +5,23 @@ import {
 
 export function renderKeyboardSettings(
   sections: readonly KeyboardShortcutSection[] = keyboardShortcutSections,
+  headingPrefix = 'keyboard-shortcuts',
 ): string {
   return `
     <div class="keyboard-settings">
       <p class="keyboard-settings-intro">
-        Studio-wide selection shortcuts work across Studio when an object is selected.
-        Tool and camera shortcuts work while the 3D preview has focus.
+        These shortcuts work throughout Studio whenever their required selection exists.
+        They stay inactive while you are typing or editing a form.
       </p>
       <div class="keyboard-settings-grid">
-        ${sections.map(renderSection).join('')}
+        ${sections.map((section) => renderSection(section, headingPrefix)).join('')}
       </div>
     </div>
   `;
 }
 
-function renderSection(section: KeyboardShortcutSection): string {
-  const headingId = `keyboard-shortcuts-${section.id}`;
+function renderSection(section: KeyboardShortcutSection, headingPrefix: string): string {
+  const headingId = `${headingPrefix}-${section.id}`;
   return `
     <section class="keyboard-shortcut-card" aria-labelledby="${headingId}">
       <header>

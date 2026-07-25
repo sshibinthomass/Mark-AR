@@ -47,6 +47,14 @@ import {
   type PlacementTransformReset,
   type PlacementTransformResetAxis,
 } from './app/imageTargetPayload';
+import { createEditorHistory } from './app/editorHistory';
+import {
+  cycleTargetSelection,
+  duplicateTargetSelection,
+  isSelectionLocked,
+  selectionStateKeys,
+  type TargetEditorTransientState,
+} from './app/targetEditorCommands';
 import {
   isEditableKeyboardTarget,
   nudgeTargetPlacement,
@@ -256,6 +264,8 @@ const newImageTargetButton = document.querySelector<HTMLButtonElement>('#new-ima
 const refreshImageTargetsButton = document.querySelector<HTMLButtonElement>('#refresh-image-targets');
 const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-status');
 const savedImageTargetList = document.querySelector<HTMLElement>('#saved-image-target-list');
+const targetKeyboardHelp = document.querySelector<HTMLElement>('#target-keyboard-help');
+const closeTargetKeyboardHelpButton = document.querySelector<HTMLButtonElement>('#close-target-keyboard-help');
 let session: MarkerARSession | undefined;
 let focusedScanTarget: CloudImageTarget | undefined;
 let activeScanId: string | undefined;
@@ -290,6 +300,9 @@ let targetObjects: TargetEditorObject[] = [];
 let targetGroups: TargetEditorGroup[] = [];
 let targetSelection: TargetEditorSelection = { objectIds: [] };
 let targetAnimationMixed = false;
+let hiddenTargetKeys = new Set<string>();
+let lockedTargetKeys = new Set<string>();
+let targetAnimationPlaying = true;
 let imageTargetPreview: ImageTargetPreview | undefined;
 let targetQrPromptRequestVersion = 0;
 let targetQrPromptTarget: CloudImageTarget | undefined;
@@ -297,6 +310,64 @@ let targetQrPromptArtifact: TargetQrArtifact | undefined;
 let targetQrPromptPreviewUrl: string | undefined;
 const targetQrDownloadJobs = new Map<string, Promise<void>>();
 let targetQrDialog: TargetQrDialog;
+
+type TargetEditorSnapshot = {
+  objects: TargetEditorObject[];
+  groups: TargetEditorGroup[];
+  selection: TargetEditorSelection;
+  transient: TargetEditorTransientState;
+};
+
+const targetEditorHistory = createEditorHistory<TargetEditorSnapshot>({
+  clone: (snapshot) => structuredClone(snapshot),
+  equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+});
+let restoringTargetEditorHistory = false;
+
+function captureTargetEditorSnapshot(): TargetEditorSnapshot {
+  return {
+    objects: structuredClone(targetObjects),
+    groups: structuredClone(targetGroups),
+    selection: structuredClone(targetSelection),
+    transient: {
+      hiddenKeys: [...hiddenTargetKeys],
+      lockedKeys: [...lockedTargetKeys],
+    },
+  };
+}
+
+function recordTargetEditorMutation(coalesceKey?: string): void {
+  if (!restoringTargetEditorHistory) {
+    targetEditorHistory.record(captureTargetEditorSnapshot(), coalesceKey);
+  }
+}
+
+function normalizeTargetTransientState(): void {
+  const validKeys = new Set([
+    ...targetObjects.map((object) => `object:${object.id}`),
+    ...targetGroups.map((group) => `group:${group.id}`),
+  ]);
+  hiddenTargetKeys = new Set([...hiddenTargetKeys].filter((key) => validKeys.has(key)));
+  lockedTargetKeys = new Set([...lockedTargetKeys].filter((key) => validKeys.has(key)));
+}
+
+function restoreTargetEditorSnapshot(snapshot: TargetEditorSnapshot): void {
+  restoringTargetEditorHistory = true;
+  targetObjects = structuredClone(snapshot.objects);
+  targetGroups = structuredClone(snapshot.groups);
+  targetSelection = normalizeTargetEditorSelection(
+    structuredClone(snapshot.selection),
+    targetObjects,
+    targetGroups,
+  );
+  hiddenTargetKeys = new Set(snapshot.transient.hiddenKeys);
+  lockedTargetKeys = new Set(snapshot.transient.lockedKeys);
+  normalizeTargetTransientState();
+  restoringTargetEditorHistory = false;
+  syncSelectionToInspector({ activateWhenSelected: targetSelection.objectIds.length > 0 || Boolean(targetSelection.groupId) });
+  renderTargetObjectList();
+  void updateTargetPreview();
+}
 targetQrDialog = createTargetQrDialog(shell, {
   onShare: async (scanUrl, targetLabel) => {
     if (!targetQrPromptArtifact) {
@@ -364,6 +435,7 @@ window.addEventListener('hashchange', () => {
   activateRequestedLocation(locationFromHash(window.location.hash));
 });
 window.addEventListener('keydown', handleTargetEditorKeyDown);
+closeTargetKeyboardHelpButton?.addEventListener('click', closeTargetKeyboardHelp);
 
 shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link) => {
   link.addEventListener('click', () => {
@@ -1344,6 +1416,7 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
   }
   imageTargetPreview ??= new ImageTargetPreview(targetPreviewStage, {
     onPlacementChange: ({ objectId, placement }) => {
+      recordTargetEditorMutation(`preview-placement:${objectId}`);
       const object = targetObjects.find((entry) => entry.id === objectId);
       if (object) {
         if (object.groupId) {
@@ -1362,6 +1435,7 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
       renderTargetObjectList();
     },
     onPlacementsChange: (changes) => {
+      recordTargetEditorMutation('preview-selection-placement');
       for (const { objectId, placement } of changes) {
         const object = targetObjects.find((entry) => entry.id === objectId);
         if (!object) {
@@ -1383,6 +1457,7 @@ function ensureImageTargetPreview(): ImageTargetPreview | undefined {
       if (!group) {
         return;
       }
+      recordTargetEditorMutation(`preview-group-placement:${groupId}`);
       group.placement = normalizePlacement(placement);
       targetObjects = targetObjects.map((object) => object.groupId === groupId
         ? { ...object, placement: resolveObjectPlacement(object, targetGroups) }
@@ -1495,6 +1570,7 @@ function addTargetObjectForModel(model: CloudflareModelOption): void {
   if (targetModelSelect) {
     targetModelSelect.value = model.id;
   }
+  recordTargetEditorMutation();
   const object = createTargetModelObject(model);
   targetObjects = [...targetObjects, object];
   selectTargetObject(object.id, { refreshPreview: false });
@@ -1504,6 +1580,7 @@ function addTargetObjectForModel(model: CloudflareModelOption): void {
 }
 
 function addTargetTextFromInput(): void {
+  recordTargetEditorMutation();
   const object = createLocalTextObject({
     id: createTargetObjectId(),
     text: readTargetTextInput(),
@@ -1553,7 +1630,15 @@ function removeTargetObjectsByIds(objectIds: string[]): boolean {
   if (removeIndex < 0 || removedObjects.length === 0) {
     return false;
   }
+  if (removedObjects.some((object) => (
+    lockedTargetKeys.has(`object:${object.id}`)
+    || Boolean(object.groupId && lockedTargetKeys.has(`group:${object.groupId}`))
+  ))) {
+    updateImageTargetStatus('Selection is locked. Press L to unlock it.', true);
+    return false;
+  }
 
+  recordTargetEditorMutation();
   targetObjects = targetObjects.filter((object) => !removedIds.has(object.id));
   const affectedGroupIds = new Set(
     removedObjects.flatMap((object) => object.groupId ? [object.groupId] : []),
@@ -1568,6 +1653,7 @@ function removeTargetObjectsByIds(objectIds: string[]): boolean {
   }
 
   targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
+  normalizeTargetTransientState();
   if (targetSelection.objectIds.length === 0 && !targetSelection.groupId) {
     const nextObject = targetObjects[Math.min(removeIndex, targetObjects.length - 1)];
     targetSelection = { objectIds: nextObject ? [nextObject.id] : [] };
@@ -1618,13 +1704,21 @@ function selectTargetObject(
 }
 
 function updateSelectedTargetObjectPlacement(placement: ImageTargetPlacement): void {
+  if (isSelectionLocked(targetSelection, targetObjects, lockedTargetKeys)) {
+    updateImageTargetStatus('Selection is locked. Press L to unlock it.', true);
+    return;
+  }
   const selectedGroup = getSelectedTargetGroup();
   const selectedObjects = getSelectedTargetObjects();
+  if (!selectedGroup && selectedObjects.length === 0) {
+    return;
+  }
   const activeObject = selectedObjects.at(-1);
   const nextPlacement = activeObject?.groupId && selectedObjects.length === 1
     ? normalizeLocalPlacement(placement)
     : normalizePlacement(placement);
 
+  recordTargetEditorMutation('placement');
   if (selectedGroup) {
     selectedGroup.placement = nextPlacement;
     targetObjects = targetObjects.map((object) => object.groupId === selectedGroup.id
@@ -1662,26 +1756,221 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
 
   const command = targetEditorKeyboardCommand(event);
   const hasSelection = targetSelection.objectIds.length > 0 || Boolean(targetSelection.groupId);
-  if (!command || !hasSelection) {
+  if (!command) {
     return;
   }
 
-  if (command.type === 'delete') {
-    if (!removeSelectedTargetObjects()) {
-      return;
+  if (event.key === 'Escape' && targetKeyboardHelp && !targetKeyboardHelp.hidden) {
+    closeTargetKeyboardHelp();
+    event.preventDefault();
+    return;
+  }
+
+  const selectionRequired = new Set([
+    'duplicate',
+    'move',
+    'transform-mode',
+    'scale',
+    'rotate-y',
+    'reset-transform',
+    'delete',
+    'toggle-hidden',
+    'toggle-locked',
+  ]);
+  if (selectionRequired.has(command.type) && !hasSelection) {
+    return;
+  }
+
+  const locked = isSelectionLocked(targetSelection, targetObjects, lockedTargetKeys);
+  const rejectsWhenLocked = new Set(['move', 'scale', 'rotate-y', 'reset-transform', 'delete']);
+  if (locked && rejectsWhenLocked.has(command.type)) {
+    updateImageTargetStatus('Selection is locked. Press L to unlock it.', true);
+    event.preventDefault();
+    return;
+  }
+
+  switch (command.type) {
+    case 'undo': {
+      const snapshot = targetEditorHistory.undo(captureTargetEditorSnapshot());
+      if (snapshot) {
+        restoreTargetEditorSnapshot(snapshot);
+        updateImageTargetStatus('Undid the last editor change.', false);
+      }
+      break;
     }
-  } else {
-    updateSelectedTargetObjectPlacement(nudgeTargetPlacement(targetPlacement, command));
-    const activeObject = getSelectedTargetObjects().at(-1);
-    syncTargetPlacementInputs(targetPlacement, {
-      local: Boolean(activeObject?.groupId && targetSelection.objectIds.length === 1),
-    });
-    void updateTargetPreview();
+    case 'redo': {
+      const snapshot = targetEditorHistory.redo(captureTargetEditorSnapshot());
+      if (snapshot) {
+        restoreTargetEditorSnapshot(snapshot);
+        updateImageTargetStatus('Redid the editor change.', false);
+      }
+      break;
+    }
+    case 'duplicate': {
+      recordTargetEditorMutation();
+      const duplicated = duplicateTargetSelection({
+        objects: targetObjects,
+        groups: targetGroups,
+        selection: targetSelection,
+        createObjectId: createTargetObjectId,
+        createGroupId: createTargetGroupId,
+      });
+      targetObjects = duplicated.objects;
+      targetGroups = duplicated.groups;
+      targetSelection = duplicated.selection;
+      syncSelectionToInspector({ activateWhenSelected: true });
+      renderTargetObjectList();
+      updateImageTargetStatus('Selection duplicated.', false);
+      void updateTargetPreview();
+      break;
+    }
+    case 'cycle-selection': {
+      if (targetObjects.length === 0) {
+        return;
+      }
+      targetSelection = cycleTargetSelection({
+        objects: targetObjects,
+        groups: targetGroups,
+        selection: targetSelection,
+        direction: command.direction,
+      });
+      syncSelectionToInspector({ activateWhenSelected: true });
+      renderTargetObjectList();
+      void updateTargetPreview();
+      break;
+    }
+    case 'move':
+      applyKeyboardTargetPlacement(nudgeTargetPlacement(targetPlacement, command));
+      break;
+    case 'scale':
+      applyKeyboardTargetPlacement({ ...targetPlacement, scale: targetPlacement.scale + command.amount });
+      break;
+    case 'rotate-y':
+      applyKeyboardTargetPlacement({ ...targetPlacement, rotationY: targetPlacement.rotationY + command.degrees });
+      break;
+    case 'reset-transform': {
+      const activeObject = getSelectedTargetObjects().at(-1);
+      const useLocal = Boolean(activeObject?.groupId && targetSelection.objectIds.length === 1);
+      let placement = targetPlacement;
+      for (const transform of ['move', 'rotate', 'scale'] as const) {
+        placement = useLocal
+          ? resetLocalPlacementTransform(placement, transform)
+          : resetPlacementTransform(placement, transform);
+      }
+      applyKeyboardTargetPlacement(placement);
+      break;
+    }
+    case 'delete':
+      if (!removeSelectedTargetObjects()) {
+        return;
+      }
+      break;
+    case 'transform-mode':
+      targetTransformMode = command.mode;
+      syncTargetTransformModeButtons(command.mode);
+      ensureImageTargetPreview()?.setTransformMode(command.mode);
+      break;
+    case 'toggle-hidden':
+      toggleSelectedTransientState(hiddenTargetKeys, 'hidden');
+      break;
+    case 'toggle-locked':
+      toggleSelectedTransientState(lockedTargetKeys, 'locked');
+      break;
+    case 'camera-preset':
+      applyTargetCameraView(cameraViewForPreset(command.preset));
+      break;
+    case 'toggle-animation':
+      targetAnimationPlaying = !targetAnimationPlaying;
+      ensureImageTargetPreview()?.setAnimationPlaying(targetAnimationPlaying);
+      updateImageTargetStatus(
+        targetAnimationPlaying ? 'Animation preview playing.' : 'Animation preview paused.',
+        false,
+      );
+      break;
+    case 'save':
+      if (!saveImageTargetButton || saveImageTargetButton.disabled) {
+        return;
+      }
+      saveImageTargetButton.click();
+      break;
+    case 'finish-interaction':
+      targetTransformMode = 'translate';
+      syncTargetTransformModeButtons(targetTransformMode);
+      ensureImageTargetPreview()?.setTransformMode(targetTransformMode);
+      break;
+    case 'toggle-help':
+      toggleTargetKeyboardHelp();
+      break;
   }
   event.preventDefault();
 }
 
+function toggleTargetKeyboardHelp(): void {
+  if (!targetKeyboardHelp) {
+    return;
+  }
+  targetKeyboardHelp.hidden = !targetKeyboardHelp.hidden;
+  if (!targetKeyboardHelp.hidden) {
+    closeTargetKeyboardHelpButton?.focus();
+  }
+}
+
+function closeTargetKeyboardHelp(): void {
+  if (targetKeyboardHelp) {
+    targetKeyboardHelp.hidden = true;
+  }
+}
+
+function applyKeyboardTargetPlacement(placement: ImageTargetPlacement): void {
+  updateSelectedTargetObjectPlacement(placement);
+  const activeObject = getSelectedTargetObjects().at(-1);
+  syncTargetPlacementInputs(targetPlacement, {
+    local: Boolean(activeObject?.groupId && targetSelection.objectIds.length === 1),
+  });
+  void updateTargetPreview();
+}
+
+function toggleSelectedTransientState(
+  state: Set<string>,
+  label: 'hidden' | 'locked',
+): void {
+  const keys = selectionStateKeys(targetSelection, targetObjects);
+  if (keys.length === 0) {
+    return;
+  }
+  recordTargetEditorMutation();
+  const enable = keys.some((key) => !state.has(key));
+  for (const key of keys) {
+    if (enable) {
+      state.add(key);
+    } else {
+      state.delete(key);
+    }
+  }
+  renderTargetObjectList();
+  updateImageTargetStatus(
+    `Selection ${enable ? label : label === 'hidden' ? 'shown' : 'unlocked'}.`,
+    false,
+  );
+  void updateTargetPreview();
+}
+
+function hiddenTargetObjectIds(): string[] {
+  const hiddenGroupIds = new Set(
+    [...hiddenTargetKeys]
+      .filter((key) => key.startsWith('group:'))
+      .map((key) => key.slice('group:'.length)),
+  );
+  return targetObjects
+    .filter((object) => (
+      hiddenTargetKeys.has(`object:${object.id}`)
+      || Boolean(object.groupId && hiddenGroupIds.has(object.groupId))
+    ))
+    .map((object) => object.id);
+}
+
 function updateSelectedTargetObjectAnimation(animation: ImageTargetAnimation): void {
+  recordTargetEditorMutation('animation');
   targetAnimation = normalizeAnimation(animation);
   targetAnimationMixed = false;
   const selectedGroup = getSelectedTargetGroup();
@@ -1757,6 +2046,8 @@ function renderTargetObjectList(): void {
     onSelectGroup: selectTargetGroup,
     onUngroup: ungroupTargetObjects,
     onDeleteObject: removeTargetObjectById,
+    hiddenKeys: hiddenTargetKeys,
+    lockedKeys: lockedTargetKeys,
   });
   targetObjectList.append(...rendered.children);
   if (groupSelectedObjectsButton) {
@@ -1770,6 +2061,7 @@ function groupSelectedTargetObjects(): void {
   if (selectedObjects.length < 2 || selectedObjects.some((object) => object.groupId)) {
     return;
   }
+  recordTargetEditorMutation();
   const nextNumber = targetGroups.length + 1;
   const created = createTargetEditorGroup({
     id: createTargetGroupId(),
@@ -1804,11 +2096,13 @@ function ungroupTargetObjects(groupId: string): void {
   if (!group) {
     return;
   }
+  recordTargetEditorMutation();
   const memberIds = targetObjects.filter((object) => object.groupId === groupId).map((object) => object.id);
   const ungrouped = ungroupTargetEditorGroup({ groupId, objects: targetObjects, groups: targetGroups });
   targetObjects = ungrouped.objects;
   targetGroups = ungrouped.groups;
   targetSelection = { objectIds: memberIds };
+  normalizeTargetTransientState();
   syncSelectionToInspector({ activateWhenSelected: memberIds.length > 0 });
   renderTargetObjectList();
   updateImageTargetStatus(`${group.label} ungrouped. Individual properties are preserved.`, false);
@@ -1978,6 +2272,7 @@ function updateSelectedTextObjectFromInput(
   }
 
   const nextText = readTargetTextInput();
+  recordTargetEditorMutation('text');
   targetObjects = updateTargetTextObject(targetObjects, object.id, nextText);
   renderTargetObjectList();
   syncTargetTextAction();
@@ -2174,6 +2469,9 @@ async function updateTargetPreview(loadingModel?: CloudflareModelOption): Promis
       selectedObjectId: targetSelection.objectIds.at(-1),
       camera: targetCameraView,
       transformMode: targetTransformMode,
+      hiddenObjectIds: hiddenTargetObjectIds(),
+      selectionLocked: isSelectionLocked(targetSelection, targetObjects, lockedTargetKeys),
+      animationPlaying: targetAnimationPlaying,
     });
   } finally {
     if (updateToken === targetPreviewUpdateToken && loadingTargetModelId) {
@@ -2546,6 +2844,10 @@ async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
   targetObjects = session.objects;
   targetGroups = session.groups;
   targetSelection = session.selection;
+  hiddenTargetKeys.clear();
+  lockedTargetKeys.clear();
+  targetAnimationPlaying = true;
+  targetEditorHistory.clear();
   syncTargetAccessInputs();
 
   const firstModel = targetObjects.find(isModelTargetObject);
@@ -2568,6 +2870,10 @@ function resetImageTargetEditor(): void {
   targetObjects = [];
   targetGroups = [];
   targetSelection = { objectIds: [] };
+  hiddenTargetKeys.clear();
+  lockedTargetKeys.clear();
+  targetAnimationPlaying = true;
+  targetEditorHistory.clear();
   targetPlacement = { ...DEFAULT_IMAGE_TARGET_PLACEMENT };
   targetAnimation = normalizeAnimation(DEFAULT_IMAGE_TARGET_ANIMATION);
   targetAnimationMixed = false;

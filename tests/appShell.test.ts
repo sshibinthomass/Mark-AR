@@ -105,7 +105,9 @@ describe('renderAppShell', () => {
       [...container.querySelectorAll<HTMLElement>('[data-page]')].map((page) => page.dataset.page),
     ).toEqual(['home', 'scan', 'targets', 'settings', 'account']);
     expect(container.querySelector('#settings-page-title')?.textContent).toBe('Keyboard settings');
-    expect(container.querySelectorAll('[data-page="settings"] .keyboard-shortcut-row')).toHaveLength(15);
+    expect(container.querySelectorAll('[data-page="settings"] .keyboard-shortcut-row')).toHaveLength(27);
+    expect(container.querySelector('#target-keyboard-help')?.getAttribute('role')).toBe('dialog');
+    expect(container.querySelectorAll('#target-keyboard-help .keyboard-shortcut-row')).toHaveLength(27);
     expect(layoutOrder(container, '.scanner-panel')).toEqual([
       'scanner-stage',
       'scanner-controls',

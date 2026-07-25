@@ -485,6 +485,25 @@ export function renderAppShell(): string {
             </div>
           </section>
         </section>
+        <div
+          id="target-keyboard-help"
+          class="target-keyboard-help"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="target-keyboard-help-title"
+          hidden
+        >
+          <div class="target-keyboard-help-panel">
+            <header class="target-keyboard-help-head">
+              <div>
+                <p class="eyebrow">Studio reference</p>
+                <h2 id="target-keyboard-help-title">Keyboard shortcuts</h2>
+              </div>
+              <button id="close-target-keyboard-help" type="button" aria-label="Close keyboard shortcuts">Close</button>
+            </header>
+            ${renderKeyboardSettings(undefined, 'target-keyboard-help-shortcuts')}
+          </div>
+        </div>
       </section>
 
       <section class="page settings-page" data-page="settings" hidden aria-label="Keyboard settings">

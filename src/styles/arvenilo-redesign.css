@@ -1664,6 +1664,67 @@ button:disabled,
   gap: var(--space-6);
 }
 
+.target-keyboard-help {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: rgb(3 8 18 / 78%);
+  backdrop-filter: blur(10px);
+}
+
+.target-keyboard-help[hidden] {
+  display: none;
+}
+
+.target-keyboard-help-panel {
+  width: min(1080px, 100%);
+  max-height: min(86vh, 900px);
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-card);
+  background: var(--color-interface-white);
+  box-shadow: 0 32px 90px rgb(0 0 0 / 45%);
+}
+
+.target-keyboard-help-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.target-keyboard-help-head h2 {
+  margin: 0.25rem 0 0;
+}
+
+.target-object-state {
+  display: inline-flex;
+  width: max-content;
+  margin-top: 0.2rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--color-context-slate);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.target-object-state-hidden {
+  color: #9a6700;
+}
+
+.target-object-state-locked {
+  color: #2457a7;
+}
+
 .keyboard-settings-intro {
   max-width: 68ch;
   color: var(--color-context-slate);

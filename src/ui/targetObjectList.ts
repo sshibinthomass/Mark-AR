@@ -15,6 +15,8 @@ export type TargetObjectListItemOptions = {
   index: number;
   selectedObjectId?: string;
   selectedObjectIds?: string[];
+  hidden?: boolean;
+  locked?: boolean;
   onSelect: (objectId: string, additive: boolean) => void;
   onDelete: (objectId: string) => void;
 };
@@ -27,6 +29,8 @@ export type TargetObjectListOptions = {
   onSelectGroup: (groupId: string) => void;
   onUngroup: (groupId: string) => void;
   onDeleteObject: (objectId: string) => void;
+  hiddenKeys?: ReadonlySet<string>;
+  lockedKeys?: ReadonlySet<string>;
 };
 
 export function renderTargetObjectListItem({
@@ -34,6 +38,8 @@ export function renderTargetObjectListItem({
   index,
   selectedObjectId,
   selectedObjectIds = selectedObjectId ? [selectedObjectId] : [],
+  hidden = false,
+  locked = false,
   onSelect,
   onDelete,
 }: TargetObjectListItemOptions): HTMLElement {
@@ -69,7 +75,7 @@ export function renderTargetObjectListItem({
     meta.textContent = text.fillMode === 'gradient'
       ? `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel} ${directionLabel}`
       : `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel}`;
-    selectButton.append(swatch, label, meta);
+    selectButton.append(swatch, label, meta, ...createStateBadges(hidden, locked));
 
     row.append(selectButton, createDeleteButton(object.id, `Delete text ${text.value}`, onDelete));
     return row;
@@ -78,7 +84,7 @@ export function renderTargetObjectListItem({
   row.classList.add('target-object-row-model');
   label.textContent = object.model.label;
   meta.textContent = `${index + 1} / ${Number(object.placement.scale.toFixed(2))}x`;
-  selectButton.append(label, meta);
+  selectButton.append(label, meta, ...createStateBadges(hidden, locked));
   row.append(selectButton, createDeleteButton(object.id, `Delete object ${object.model.label}`, onDelete));
   return row;
 }
@@ -91,6 +97,8 @@ export function renderTargetObjectList({
   onSelectGroup,
   onUngroup,
   onDeleteObject,
+  hiddenKeys = new Set(),
+  lockedKeys = new Set(),
 }: TargetObjectListOptions): HTMLElement {
   const list = document.createElement('div');
   list.className = 'target-object-list-content';
@@ -112,6 +120,8 @@ export function renderTargetObjectList({
       onSelectGroup,
       onUngroup,
       onDeleteObject,
+      hiddenKeys,
+      lockedKeys,
     }));
   }
 
@@ -123,6 +133,8 @@ export function renderTargetObjectList({
       object,
       index,
       selectedObjectIds: selection.objectIds,
+      hidden: hiddenKeys.has(`object:${object.id}`),
+      locked: lockedKeys.has(`object:${object.id}`),
       onSelect: onSelectObject,
       onDelete: onDeleteObject,
     }));
@@ -139,6 +151,8 @@ function createGroupRow({
   onSelectGroup,
   onUngroup,
   onDeleteObject,
+  hiddenKeys = new Set(),
+  lockedKeys = new Set(),
 }: Omit<TargetObjectListOptions, 'groups'> & { group: TargetEditorGroup; members: TargetEditorObject[] }): HTMLElement {
   const row = document.createElement('section');
   row.className = 'target-object-group';
@@ -160,7 +174,9 @@ function createGroupRow({
   label.textContent = group.label;
   const count = document.createElement('small');
   count.textContent = `${members.length} object${members.length === 1 ? '' : 's'}`;
-  selectButton.append(label, count);
+  const groupHidden = hiddenKeys.has(`group:${group.id}`);
+  const groupLocked = lockedKeys.has(`group:${group.id}`);
+  selectButton.append(label, count, ...createStateBadges(groupHidden, groupLocked));
   selectButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -187,6 +203,8 @@ function createGroupRow({
       object,
       index,
       selectedObjectIds: selection.objectIds,
+      hidden: groupHidden || hiddenKeys.has(`object:${object.id}`),
+      locked: groupLocked || lockedKeys.has(`object:${object.id}`),
       onSelect: onSelectObject,
       onDelete: onDeleteObject,
     }));
@@ -195,6 +213,25 @@ function createGroupRow({
   details.append(summary, children);
   row.append(details);
   return row;
+}
+
+function createStateBadges(hidden: boolean, locked: boolean): HTMLElement[] {
+  const badges: HTMLElement[] = [];
+  if (hidden) {
+    badges.push(createStateBadge('hidden', 'Hidden'));
+  }
+  if (locked) {
+    badges.push(createStateBadge('locked', 'Locked'));
+  }
+  return badges;
+}
+
+function createStateBadge(state: 'hidden' | 'locked', label: string): HTMLElement {
+  const badge = document.createElement('span');
+  badge.className = `target-object-state target-object-state-${state}`;
+  badge.dataset.objectState = state;
+  badge.textContent = label;
+  return badge;
 }
 
 function createDeleteButton(

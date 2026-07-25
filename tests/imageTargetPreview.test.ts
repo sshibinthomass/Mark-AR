@@ -1164,6 +1164,50 @@ describe('ImageTargetPreview', () => {
     expect(latest[1].placement.offsetX).toBeCloseTo(0.65);
     preview.dispose();
   });
+
+  it('applies temporary hidden, locked, and animation playback preview state', async () => {
+    const container = document.createElement('div');
+    const renderer = { domElement: document.createElement('canvas'), setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+    let frameCallback: FrameRequestCallback | undefined;
+    const model = createDisposableModel();
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: (callback) => { frameCallback = callback; return 1; },
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => model.group),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    await preview.update({
+      objects: [{
+        id: 'chair',
+        model: { id: 'chair', label: 'Chair', url: 'chair.glb' },
+        placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.12 },
+        animation: { preset: 'turntable', tracks: [] },
+      }],
+      selection: { objectIds: ['chair'] },
+      hiddenObjectIds: ['chair'],
+      selectionLocked: true,
+      animationPlaying: false,
+    });
+
+    const internals = preview as unknown as {
+      loadedModels: Map<string, Group>;
+      transformControls: { object?: Group; visible: boolean };
+      elapsedSeconds: number;
+    };
+    expect(internals.loadedModels.get('chair')?.visible).toBe(false);
+    expect(internals.transformControls.object).toBeUndefined();
+    expect(internals.transformControls.visible).toBe(false);
+
+    frameCallback?.(1000);
+    frameCallback?.(2000);
+    expect(internals.elapsedSeconds).toBe(0);
+    preview.setAnimationPlaying(true);
+    frameCallback?.(3000);
+    expect(internals.elapsedSeconds).toBe(1);
+    preview.dispose();
+  });
 });
 
 function createDisposableModel() {

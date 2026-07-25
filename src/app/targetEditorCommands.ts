@@ -131,16 +131,24 @@ export function duplicateTargetSelection({
 }
 
 function cloneTargetObject(object: TargetEditorObject, id: string): TargetEditorObject {
-  const common = {
+  if (isTextTargetObject(object)) {
+    return {
+      ...object,
+      id,
+      placement: { ...object.placement },
+      ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
+      animation: normalizeAnimation(object.animation),
+      text: { ...object.text },
+    };
+  }
+  return {
     ...object,
     id,
     placement: { ...object.placement },
     ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
     animation: normalizeAnimation(object.animation),
+    model: { ...object.model },
   };
-  return isTextTargetObject(object)
-    ? { ...common, kind: 'text', text: { ...object.text } }
-    : { ...common, model: { ...object.model } };
 }
 
 function offsetPlacement<T extends { offsetX: number; offsetY: number }>(placement: T): T {
