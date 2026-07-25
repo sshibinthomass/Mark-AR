@@ -1,4 +1,5 @@
-import { AmbientLight, Clock, DirectionalLight, Group, Scene } from 'three';
+import { AmbientLight, Camera, Clock, DirectionalLight, Group, Scene } from 'three';
+import { isYouTubeTargetObject } from '../app/targetEditorObjects';
 import { createMarkerObject, type MarkerObject } from './arObjects';
 import { normalizeMindARCameraLayers } from './cameraLayers';
 import { createCloudflareMarkerObject } from './cloudflareMarkerObject';
@@ -12,6 +13,7 @@ import {
   type CompiledMarkerTargets,
   type MindARCompilerConstructor,
 } from './targetCompiler';
+import { YouTubePlayerManager } from './youtubePlayerManager';
 
 export type MindARAnchor = {
   group: Group;
@@ -24,6 +26,7 @@ export type MindARThreeInstance = {
   addAnchor: (targetIndex: number) => MindARAnchor;
   camera: unknown;
   renderer: {
+    domElement: HTMLCanvasElement;
     render: (scene: unknown, camera: unknown) => void;
   };
   scene: Pick<Scene, 'add'>;
@@ -67,6 +70,7 @@ export function setupMarkerAnchors(
   mindarThree: Pick<MindARThreeInstance, 'addAnchor' | 'scene'>,
   targets: RuntimeMarkerTarget[] | MarkerSpec[] = createRuntimeMarkerTargets(),
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
+  youtubeManager?: Pick<YouTubePlayerManager, 'register' | 'setMarkerVisible'>,
 ): MarkerObject[] {
   return normalizeAnchorTargets(targets).map((target) => {
     const anchor = mindarThree.addAnchor(target.marker.targetIndex);
@@ -77,8 +81,17 @@ export function setupMarkerAnchors(
     anchor.group.add(markerObject.group);
     mindarThree.scene.add(anchor.group);
 
-    anchor.onTargetFound = () => onMarkerVisibility?.({ marker: target.marker, visible: true });
-    anchor.onTargetLost = () => onMarkerVisibility?.({ marker: target.marker, visible: false });
+    for (const surface of markerObject.youtubeSurfaces ?? []) {
+      youtubeManager?.register(target.marker.id, surface);
+    }
+    anchor.onTargetFound = () => {
+      youtubeManager?.setMarkerVisible(target.marker.id, true);
+      onMarkerVisibility?.({ marker: target.marker, visible: true });
+    };
+    anchor.onTargetLost = () => {
+      youtubeManager?.setMarkerVisible(target.marker.id, false);
+      onMarkerVisibility?.({ marker: target.marker, visible: false });
+    };
 
     return markerObject;
   });
@@ -105,6 +118,9 @@ export async function startMarkerAR(
   let frameId: number | undefined;
   let mindarStartAttempted = false;
   let stopped = false;
+  let youtubeManager: YouTubePlayerManager | undefined;
+  let pointerHandler: ((event: PointerEvent) => void) | undefined;
+  let resizeHandler: (() => void) | undefined;
 
   const stop = () => {
     if (stopped) {
@@ -124,6 +140,13 @@ export async function startMarkerAR(
     }
     for (const markerObject of markerObjects) {
       markerObject.dispose?.();
+    }
+    youtubeManager?.dispose();
+    if (pointerHandler && mindarThree) {
+      mindarThree.renderer.domElement.removeEventListener('pointerup', pointerHandler);
+    }
+    if (resizeHandler) {
+      window.removeEventListener('resize', resizeHandler);
     }
     compiledTargets?.dispose();
   };
@@ -159,11 +182,31 @@ export async function startMarkerAR(
     uiError: 'no',
   });
   mindarThree = instance;
+  const hasYouTube = targets.some((target) => (
+    target.cloudflareAsset?.objects?.some(isYouTubeTargetObject)
+  ));
+  youtubeManager = hasYouTube ? new YouTubePlayerManager(container) : undefined;
   markerObjects = setupScene(
     instance,
     targets,
     hooks.onMarkerVisibility,
+    youtubeManager,
   );
+  if (youtubeManager) {
+    pointerHandler = (event: PointerEvent) => {
+      const rect = instance.renderer.domElement.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        return;
+      }
+      void youtubeManager?.activateFromPointer({
+        x: ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      }, instance.camera as Camera);
+    };
+    instance.renderer.domElement.addEventListener('pointerup', pointerHandler);
+    resizeHandler = () => youtubeManager?.resize(container.clientWidth, container.clientHeight);
+    window.addEventListener('resize', resizeHandler);
+  }
   throwIfAborted();
 
   const clock = new Clock();
@@ -178,6 +221,7 @@ export async function startMarkerAR(
     }
 
     instance.renderer.render(instance.scene, instance.camera);
+    youtubeManager?.update(instance.camera as Camera);
     frameId = requestAnimationFrame(render);
   };
 
@@ -211,6 +255,7 @@ function setupScene(
   mindarThree: MindARThreeInstance,
   targets: RuntimeMarkerTarget[],
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void,
+  youtubeManager?: Pick<YouTubePlayerManager, 'register' | 'setMarkerVisible'>,
 ): MarkerObject[] {
   const ambient = new AmbientLight(0xffffff, 1.7);
   const directional = new DirectionalLight(0xffffff, 1.2);
@@ -218,7 +263,7 @@ function setupScene(
   mindarThree.scene.add(ambient);
   mindarThree.scene.add(directional);
 
-  return setupMarkerAnchors(mindarThree, targets, onMarkerVisibility);
+  return setupMarkerAnchors(mindarThree, targets, onMarkerVisibility, youtubeManager);
 }
 
 async function loadMindARModules(): Promise<MindARModules> {

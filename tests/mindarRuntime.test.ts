@@ -9,9 +9,21 @@ const runtimeMocks = vi.hoisted(() => ({
   instances: [] as unknown[],
   markerDispose: vi.fn(),
   markerUpdate: vi.fn(),
+  managerActivate: vi.fn(),
+  managerDispose: vi.fn(),
+  managerRegister: vi.fn(),
+  managerSetMarkerVisible: vi.fn(),
+  managerUpdate: vi.fn(),
+  anchors: [] as Array<{
+    group: Group;
+    onTargetFound?: () => void;
+    onTargetLost?: () => void;
+    targetIndex: number;
+  }>,
   mindarStart: vi.fn(),
   mindarStop: vi.fn(),
   render: vi.fn(),
+  youtubeSurfaces: [] as unknown[],
 }));
 
 vi.mock('../src/ar/cloudflareMarkerObject', async () => {
@@ -25,6 +37,7 @@ vi.mock('../src/ar/cloudflareMarkerObject', async () => {
         group,
         update: runtimeMocks.markerUpdate,
         dispose: runtimeMocks.markerDispose,
+        youtubeSurfaces: runtimeMocks.youtubeSurfaces,
       };
     },
   };
@@ -32,6 +45,17 @@ vi.mock('../src/ar/cloudflareMarkerObject', async () => {
 
 vi.mock('../src/ar/targetCompiler', () => ({
   compileMarkerTargets: runtimeMocks.compileMarkerTargets,
+}));
+
+vi.mock('../src/ar/youtubePlayerManager', () => ({
+  YouTubePlayerManager: class {
+    register = runtimeMocks.managerRegister;
+    setMarkerVisible = runtimeMocks.managerSetMarkerVisible;
+    activateFromPointer = runtimeMocks.managerActivate;
+    update = runtimeMocks.managerUpdate;
+    resize = vi.fn();
+    dispose = runtimeMocks.managerDispose;
+  },
 }));
 
 vi.mock('../src/vendor/mind-ar/mindar-image.prod.js', () => ({
@@ -42,7 +66,10 @@ vi.mock('../src/vendor/mind-ar/mindar-image-three.prod.js', async () => {
   const { Group: ThreeGroup, Scene } = await import('three');
   class FakeMindARThree {
     camera = {};
-    renderer = { render: runtimeMocks.render };
+    renderer = {
+      domElement: document.createElement('canvas'),
+      render: runtimeMocks.render,
+    };
     scene = new Scene();
     start = runtimeMocks.mindarStart;
     stop = runtimeMocks.mindarStop;
@@ -53,7 +80,9 @@ vi.mock('../src/vendor/mind-ar/mindar-image-three.prod.js', async () => {
     }
 
     addAnchor(targetIndex: number) {
-      return { group: new ThreeGroup(), targetIndex };
+      const anchor = { group: new ThreeGroup(), targetIndex };
+      runtimeMocks.anchors.push(anchor);
+      return anchor;
     }
   }
 
@@ -75,7 +104,7 @@ function createDeferred<T>(): Deferred<T> {
   return { promise, resolve };
 }
 
-function createCloudflareRuntimeTarget() {
+function createCloudflareRuntimeTarget(withYouTube = false) {
   return {
     marker: { ...AR_MARKERS[0], targetIndex: 0 },
     cloudflareAsset: {
@@ -85,6 +114,26 @@ function createCloudflareRuntimeTarget() {
         url: 'https://worker.example/models/chair.glb',
       },
       loadModelGroup: async () => new Group(),
+      ...(withYouTube ? {
+        objects: [{
+          kind: 'youtube' as const,
+          id: 'video-1',
+          youtube: {
+            videoId: 'M7lc1UVf-VE',
+            url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+            thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+          },
+          placement: {
+            scale: 1,
+            offsetX: 0,
+            offsetY: 0,
+            height: 0.12,
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0,
+          },
+        }],
+      } : {}),
     },
   };
 }
@@ -102,11 +151,18 @@ beforeEach(() => {
   runtimeMocks.compileMarkerTargets.mockReset();
   runtimeMocks.markerDispose.mockReset();
   runtimeMocks.markerUpdate.mockReset();
+  runtimeMocks.managerActivate.mockReset().mockResolvedValue(false);
+  runtimeMocks.managerDispose.mockReset();
+  runtimeMocks.managerRegister.mockReset();
+  runtimeMocks.managerSetMarkerVisible.mockReset();
+  runtimeMocks.managerUpdate.mockReset();
   runtimeMocks.mindarStart.mockReset().mockResolvedValue(undefined);
   runtimeMocks.mindarStop.mockReset();
   runtimeMocks.render.mockReset();
   runtimeMocks.constructorOptions.length = 0;
   runtimeMocks.instances.length = 0;
+  runtimeMocks.anchors.length = 0;
+  runtimeMocks.youtubeSurfaces.length = 0;
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 41));
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
 });
@@ -190,6 +246,26 @@ describe('setupMarkerAnchors', () => {
 });
 
 describe('startMarkerAR', () => {
+  it('registers YouTube surfaces, routes target visibility, and disposes the player layer', async () => {
+    const surface = { objectId: 'video-1' };
+    runtimeMocks.youtubeSurfaces.push(surface);
+    runtimeMocks.compileMarkerTargets.mockResolvedValue(createCompiledTargets());
+    const container = document.createElement('div');
+
+    const session = await startMarkerAR(container, {
+      targets: [createCloudflareRuntimeTarget(true)],
+    });
+
+    expect(runtimeMocks.managerRegister).toHaveBeenCalledWith(AR_MARKERS[0].id, surface);
+    runtimeMocks.anchors[0].onTargetFound?.();
+    expect(runtimeMocks.managerSetMarkerVisible).toHaveBeenLastCalledWith(AR_MARKERS[0].id, true);
+    runtimeMocks.anchors[0].onTargetLost?.();
+    expect(runtimeMocks.managerSetMarkerVisible).toHaveBeenLastCalledWith(AR_MARKERS[0].id, false);
+
+    session.stop();
+    expect(runtimeMocks.managerDispose).toHaveBeenCalledOnce();
+  });
+
   it('disables MindAR body-level loading, scanning, and error overlays', async () => {
     const container = document.createElement('div');
     runtimeMocks.compileMarkerTargets.mockResolvedValue(createCompiledTargets());

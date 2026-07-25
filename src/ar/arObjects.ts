@@ -9,11 +9,13 @@ import {
   TorusGeometry,
 } from 'three';
 import type { MarkerObjectSpec } from './markerCatalog';
+import type { InteractiveYouTubeSurface } from './targetSceneObject';
 
 export type MarkerObject = {
   group: Group;
   update: (deltaSeconds: number) => void;
   dispose?: () => void;
+  youtubeSurfaces?: InteractiveYouTubeSurface[];
 };
 
 export function createMarkerObject(spec: MarkerObjectSpec): MarkerObject {

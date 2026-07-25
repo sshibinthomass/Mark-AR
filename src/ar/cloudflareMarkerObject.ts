@@ -42,5 +42,6 @@ export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): Mark
     group,
     update: (deltaSeconds) => targetScene.update(deltaSeconds),
     dispose: () => targetScene.dispose(),
+    youtubeSurfaces: targetScene.youtubeSurfaces,
   };
 }
