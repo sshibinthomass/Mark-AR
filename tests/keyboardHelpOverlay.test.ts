@@ -21,7 +21,11 @@ describe('keyboard help overlay', () => {
     expect(root.hidden).toBe(false);
     expect(document.activeElement).toBe(close);
     expect(overlay.handleKeyDown(new KeyboardEvent('keydown', { key: 'Delete' }))).toBe(true);
+    expect(overlay.handleKeyDown(new KeyboardEvent('keydown', { key: '?', shiftKey: true }))).toBe(true);
+    expect(root.hidden).toBe(true);
+    expect(document.activeElement).toBe(invoker);
 
+    overlay.open();
     close.focus();
     expect(overlay.handleKeyDown(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true }))).toBe(true);
     expect(document.activeElement).toBe(settings);

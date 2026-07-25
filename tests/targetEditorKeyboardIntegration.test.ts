@@ -312,6 +312,10 @@ describe('target editor keyboard integration', () => {
     expect(helpEvent.defaultPrevented).toBe(true);
     expect(document.querySelector<HTMLElement>('#target-keyboard-help')?.hidden).toBe(false);
     expect(document.activeElement).toBe(document.querySelector('#close-target-keyboard-help'));
+    const toggleCloseEvent = dispatchEditorKey(document.body, '?', { shiftKey: true });
+    expect(toggleCloseEvent.defaultPrevented).toBe(true);
+    expect(document.querySelector<HTMLElement>('#target-keyboard-help')?.hidden).toBe(true);
+    dispatchEditorKey(helpInvoker, '?', { shiftKey: true });
     const blockedDelete = dispatchEditorKey(document.body, 'Delete');
     expect(blockedDelete.defaultPrevented).toBe(true);
     expect(latest().objects).toHaveLength(1);

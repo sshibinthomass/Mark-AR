@@ -63,7 +63,7 @@ export function createKeyboardHelpOverlay(
       if (root.hidden) {
         return false;
       }
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' || event.key === '?') {
         close();
         return true;
       }
