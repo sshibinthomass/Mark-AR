@@ -48,6 +48,11 @@ import {
   type PlacementTransformResetAxis,
 } from './app/imageTargetPayload';
 import {
+  isEditableKeyboardTarget,
+  nudgeTargetPlacement,
+  targetEditorKeyboardCommand,
+} from './app/targetEditorKeyboard';
+import {
   clearWorkerAuthToken,
   getCurrentWebArUser,
   loadWorkerAuthToken,
@@ -358,6 +363,7 @@ void initializeCloudflareControls();
 window.addEventListener('hashchange', () => {
   activateRequestedLocation(locationFromHash(window.location.hash));
 });
+window.addEventListener('keydown', handleTargetEditorKeyDown);
 
 shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link) => {
   link.addEventListener('click', () => {
@@ -1529,22 +1535,39 @@ function createTargetModelObject(model: CloudflareModelOption): CloudImageTarget
 }
 
 function removeTargetObjectById(objectId: string): void {
-  const removeIndex = targetObjects.findIndex((object) => object.id === objectId);
-  if (removeIndex < 0) {
-    return;
+  removeTargetObjectsByIds([objectId]);
+}
+
+function removeSelectedTargetObjects(): boolean {
+  const selectedGroup = getSelectedTargetGroup();
+  const selectedIds = selectedGroup
+    ? targetObjects.filter((object) => object.groupId === selectedGroup.id).map((object) => object.id)
+    : targetSelection.objectIds;
+  return removeTargetObjectsByIds(selectedIds);
+}
+
+function removeTargetObjectsByIds(objectIds: string[]): boolean {
+  const removedIds = new Set(objectIds);
+  const removeIndex = targetObjects.findIndex((object) => removedIds.has(object.id));
+  const removedObjects = targetObjects.filter((object) => removedIds.has(object.id));
+  if (removeIndex < 0 || removedObjects.length === 0) {
+    return false;
   }
 
-  const removedObject = targetObjects[removeIndex];
-  targetObjects = targetObjects.filter((object) => object.id !== objectId);
-  targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
-
-  const affectedGroupId = removedObject.groupId;
-  if (affectedGroupId && targetObjects.filter((object) => object.groupId === affectedGroupId).length < 2) {
-    const ungrouped = ungroupTargetEditorGroup({ groupId: affectedGroupId, objects: targetObjects, groups: targetGroups });
+  targetObjects = targetObjects.filter((object) => !removedIds.has(object.id));
+  const affectedGroupIds = new Set(
+    removedObjects.flatMap((object) => object.groupId ? [object.groupId] : []),
+  );
+  for (const groupId of affectedGroupIds) {
+    if (targetObjects.filter((object) => object.groupId === groupId).length >= 2) {
+      continue;
+    }
+    const ungrouped = ungroupTargetEditorGroup({ groupId, objects: targetObjects, groups: targetGroups });
     targetObjects = ungrouped.objects;
     targetGroups = ungrouped.groups;
-    targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
   }
+
+  targetSelection = normalizeTargetEditorSelection(targetSelection, targetObjects, targetGroups);
   if (targetSelection.objectIds.length === 0 && !targetSelection.groupId) {
     const nextObject = targetObjects[Math.min(removeIndex, targetObjects.length - 1)];
     targetSelection = { objectIds: nextObject ? [nextObject.id] : [] };
@@ -1553,11 +1576,19 @@ function removeTargetObjectById(objectId: string): void {
   renderTargetObjectList();
   updateImageTargetStatus(
     targetObjects.length > 0
-      ? `${isTextTargetObject(removedObject) ? 'Text' : 'Object'} removed. ${targetObjects.length} object${targetObjects.length === 1 ? '' : 's'} placed.`
+      ? `${removedTargetLabel(removedObjects)} removed. ${targetObjects.length} object${targetObjects.length === 1 ? '' : 's'} placed.`
       : 'No objects placed yet.',
     false,
   );
   void updateTargetPreview();
+  return true;
+}
+
+function removedTargetLabel(removedObjects: TargetEditorObject[]): string {
+  if (removedObjects.length > 1) {
+    return `${removedObjects.length} objects`;
+  }
+  return isTextTargetObject(removedObjects[0]) ? 'Text' : 'Object';
 }
 
 function selectTargetObject(
@@ -1617,6 +1648,37 @@ function updateSelectedTargetObjectPlacement(placement: ImageTargetPlacement): v
   }
   targetPlacement = nextPlacement;
   renderTargetObjectList();
+}
+
+function handleTargetEditorKeyDown(event: KeyboardEvent): void {
+  if (
+    event.defaultPrevented
+    || !shell.isConnected
+    || shell.dataset.activePage !== 'targets'
+    || isEditableKeyboardTarget(event.target)
+  ) {
+    return;
+  }
+
+  const command = targetEditorKeyboardCommand(event);
+  const hasSelection = targetSelection.objectIds.length > 0 || Boolean(targetSelection.groupId);
+  if (!command || !hasSelection) {
+    return;
+  }
+
+  if (command.type === 'delete') {
+    if (!removeSelectedTargetObjects()) {
+      return;
+    }
+  } else {
+    updateSelectedTargetObjectPlacement(nudgeTargetPlacement(targetPlacement, command));
+    const activeObject = getSelectedTargetObjects().at(-1);
+    syncTargetPlacementInputs(targetPlacement, {
+      local: Boolean(activeObject?.groupId && targetSelection.objectIds.length === 1),
+    });
+    void updateTargetPreview();
+  }
+  event.preventDefault();
 }
 
 function updateSelectedTargetObjectAnimation(animation: ImageTargetAnimation): void {
