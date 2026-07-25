@@ -1165,6 +1165,39 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
+  it('tints only preview models with locked object IDs', async () => {
+    const container = document.createElement('div');
+    const renderer = { domElement: document.createElement('canvas'), setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(), dispose: vi.fn() };
+    const unlockedMaterial = new MeshBasicMaterial({ color: 0xffffff });
+    const lockedMaterial = new MeshBasicMaterial({ color: 0xffffff });
+    const unlocked = new Group();
+    const locked = new Group();
+    unlocked.add(new Mesh(new PlaneGeometry(1, 1), unlockedMaterial));
+    locked.add(new Mesh(new PlaneGeometry(1, 1), lockedMaterial));
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn()
+        .mockResolvedValueOnce(unlocked)
+        .mockResolvedValueOnce(locked),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    await preview.update({
+      objects: [
+        { id: 'unlocked', model: { id: 'unlocked', label: 'Unlocked', url: 'unlocked.glb' }, placement: { scale: 1, offsetX: -0.2, offsetY: 0, height: 0.1 } },
+        { id: 'locked', model: { id: 'locked', label: 'Locked', url: 'locked.glb' }, placement: { scale: 1, offsetX: 0.2, offsetY: 0, height: 0.1 } },
+      ],
+      lockedObjectIds: ['locked'],
+    });
+
+    expect((unlocked.children[0] as Mesh).material).toBe(unlockedMaterial);
+    expect((locked.children[0] as Mesh).material).not.toBe(lockedMaterial);
+    expect(((locked.children[0] as Mesh).material as Material).opacity).toBe(0.62);
+    preview.dispose();
+  });
+
   it('applies temporary hidden, locked, and animation playback preview state', async () => {
     const container = document.createElement('div');
     const renderer = { domElement: document.createElement('canvas'), setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(), dispose: vi.fn() };

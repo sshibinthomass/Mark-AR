@@ -50,6 +50,7 @@ import {
   type PreviewCameraView,
 } from './previewCamera';
 import { createTextObject3D } from './textObject3d';
+import { applyLockedObjectTint } from './lockedObjectTint';
 import { createNormalizedTargetModelGroup } from './targetModelNormalization';
 import { applyTargetAnimation, applyTargetPlacement } from './targetObjectTransform';
 
@@ -105,6 +106,7 @@ export type PreviewState = {
   camera?: Partial<PreviewCameraView>;
   transformMode?: PreviewTransformMode;
   hiddenObjectIds?: string[];
+  lockedObjectIds?: readonly string[];
   selectionLocked?: boolean;
   animationPlaying?: boolean;
 };
@@ -152,6 +154,7 @@ export class ImageTargetPreview {
   private selection: TargetEditorSelection = { objectIds: [] };
   private selectedObjectId?: string;
   private hiddenObjectIds = new Set<string>();
+  private lockedObjectIds = new Set<string>();
   private selectionLocked = false;
   private animationPlaying = true;
   private selectionTransformStart?: {
@@ -250,6 +253,7 @@ export class ImageTargetPreview {
     this.selectionTransformStart = undefined;
     this.groups = normalizePreviewGroups(state.groups);
     this.hiddenObjectIds = new Set(state.hiddenObjectIds ?? []);
+    this.lockedObjectIds = new Set(state.lockedObjectIds ?? []);
     this.selectionLocked = Boolean(state.selectionLocked);
     this.animationPlaying = state.animationPlaying ?? this.animationPlaying;
     const validGroupIds = new Set(this.groups.map((group) => group.id));
@@ -310,6 +314,9 @@ export class ImageTargetPreview {
       if (isTextTargetObject(object)) {
         const textObject = this.createTextObject(object.text);
         textObject.name = `target-object-${object.id}`;
+        if (this.lockedObjectIds.has(object.id)) {
+          applyLockedObjectTint(textObject);
+        }
         this.loadedModels.set(object.id, textObject);
         this.applyPlacementToObject(object.id);
         this.parentForObject(object).add(textObject);
@@ -327,6 +334,9 @@ export class ImageTargetPreview {
         continue;
       }
       model.name = `target-object-${object.id}`;
+      if (this.lockedObjectIds.has(object.id)) {
+        applyLockedObjectTint(model);
+      }
       this.loadedModels.set(object.id, model);
       this.applyPlacementToObject(object.id);
       this.parentForObject(object).add(model);

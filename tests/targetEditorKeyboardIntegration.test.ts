@@ -13,6 +13,7 @@ type PreviewUpdate = {
   groups: TargetEditorGroup[];
   selection: TargetEditorSelection;
   hiddenObjectIds?: string[];
+  lockedObjectIds?: string[];
   selectionLocked?: boolean;
 };
 const previewUpdates: PreviewUpdate[] = [];
@@ -273,6 +274,7 @@ describe('target editor keyboard integration', () => {
 
     dispatchEditorKey(document.body, 'l');
     await waitFor(() => latest().selectionLocked === true);
+    expect(latest().lockedObjectIds).toEqual([latest().objects[0].id]);
     expect(document.querySelector('[data-object-state="locked"]')?.textContent).toBe('Locked');
     const modeCount = previewTransformModes.length;
     const lockedMode = dispatchEditorKey(document.body, 'e');
@@ -346,6 +348,9 @@ describe('target editor keyboard integration', () => {
 
     dispatchEditorKey(document.body, 'l');
     await waitFor(() => latest().selectionLocked === true);
+    expect(new Set(latest().lockedObjectIds)).toEqual(
+      new Set(latest().objects.map((object) => object.id)),
+    );
     const ungroup = document.querySelector<HTMLButtonElement>('[data-ungroup-target-group]')!;
     expect(ungroup.disabled).toBe(true);
     ungroup.click();

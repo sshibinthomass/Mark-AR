@@ -1970,6 +1970,20 @@ function hiddenTargetObjectIds(): string[] {
     .map((object) => object.id);
 }
 
+function lockedTargetObjectIds(): string[] {
+  const lockedGroupIds = new Set(
+    [...lockedTargetKeys]
+      .filter((key) => key.startsWith('group:'))
+      .map((key) => key.slice('group:'.length)),
+  );
+  return targetObjects
+    .filter((object) => (
+      lockedTargetKeys.has(`object:${object.id}`)
+      || Boolean(object.groupId && lockedGroupIds.has(object.groupId))
+    ))
+    .map((object) => object.id);
+}
+
 function updateSelectedTargetObjectAnimation(animation: ImageTargetAnimation): void {
   recordTargetEditorMutation('animation');
   targetAnimation = normalizeAnimation(animation);
@@ -2479,6 +2493,7 @@ async function updateTargetPreview(loadingModel?: CloudflareModelOption): Promis
       camera: targetCameraView,
       transformMode: targetTransformMode,
       hiddenObjectIds: hiddenTargetObjectIds(),
+      lockedObjectIds: lockedTargetObjectIds(),
       selectionLocked: isSelectionLocked(targetSelection, targetObjects, lockedTargetKeys),
       animationPlaying: targetAnimationPlaying,
     });
