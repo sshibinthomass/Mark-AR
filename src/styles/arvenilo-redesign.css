@@ -1659,6 +1659,96 @@ button:disabled,
   cursor: progress;
 }
 
+.keyboard-settings {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.keyboard-settings-intro {
+  max-width: 68ch;
+  color: var(--color-context-slate);
+}
+
+.keyboard-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.keyboard-shortcut-card {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-card);
+  background: var(--color-interface-white);
+  box-shadow: none;
+}
+
+.keyboard-shortcut-card h3,
+.keyboard-shortcut-card p {
+  margin: 0;
+}
+
+.keyboard-shortcut-card header {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.keyboard-shortcut-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keyboard-shortcut-row {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, auto) 1fr;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.keyboard-shortcut-row:last-child {
+  border-bottom: 0;
+}
+
+.keyboard-shortcut-keys,
+.keyboard-shortcut-copy {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.keyboard-shortcut-keys {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.keyboard-shortcut-copy {
+  flex-direction: column;
+}
+
+.keyboard-shortcut-copy small {
+  color: var(--color-context-slate);
+}
+
+.keyboard-shortcut-keys kbd {
+  min-width: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--color-border-dark);
+  border-bottom-width: 3px;
+  border-radius: var(--radius-control);
+  background: var(--color-reality-mist);
+  color: var(--color-spatial-ink);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
 @media (max-width: 1023px) {
   .app-shell {
     padding-right: var(--space-6);
@@ -1767,7 +1857,7 @@ button:disabled,
     left: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 2px;
     width: 100%;
     padding: 6px 8px max(6px, env(safe-area-inset-bottom));
@@ -1784,6 +1874,18 @@ button:disabled,
     min-height: 56px;
     padding: 6px 4px;
     font-size: 0.6875rem;
+  }
+
+  .keyboard-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .keyboard-shortcut-row {
+    grid-template-columns: 1fr;
+  }
+
+  .keyboard-shortcut-card {
+    padding: var(--space-4);
   }
 
   [data-active-page="scan"][data-scan-session="starting"] .route-tabs,

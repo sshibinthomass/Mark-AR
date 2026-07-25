@@ -602,7 +602,7 @@ workerLogoutButton.addEventListener('click', async () => {
   authNavigation.clear();
   setAuthFormMode('login');
   setAuthUiState({ status: 'signed-out', message: `Signed out. ${loginIntroMessage}` });
-  if (shell.dataset.activePage === 'targets') {
+  if (shell.dataset.activePage === 'targets' || shell.dataset.activePage === 'settings') {
     window.location.hash = hrefForRoute('account');
   }
   await refreshCloudflareModels();
