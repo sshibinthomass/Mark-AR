@@ -168,6 +168,7 @@ import {
 } from './ui/scannerStage';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
+import { createKeyboardHelpOverlay } from './ui/keyboardHelpOverlay';
 import {
   createTargetQrDialog,
   type TargetQrDialog,
@@ -266,6 +267,9 @@ const imageTargetStatus = document.querySelector<HTMLElement>('#image-target-sta
 const savedImageTargetList = document.querySelector<HTMLElement>('#saved-image-target-list');
 const targetKeyboardHelp = document.querySelector<HTMLElement>('#target-keyboard-help');
 const closeTargetKeyboardHelpButton = document.querySelector<HTMLButtonElement>('#close-target-keyboard-help');
+const targetKeyboardHelpOverlay = targetKeyboardHelp && closeTargetKeyboardHelpButton
+  ? createKeyboardHelpOverlay(targetKeyboardHelp, closeTargetKeyboardHelpButton)
+  : undefined;
 let session: MarkerARSession | undefined;
 let focusedScanTarget: CloudImageTarget | undefined;
 let activeScanId: string | undefined;
@@ -435,7 +439,7 @@ window.addEventListener('hashchange', () => {
   activateRequestedLocation(locationFromHash(window.location.hash));
 });
 window.addEventListener('keydown', handleTargetEditorKeyDown);
-closeTargetKeyboardHelpButton?.addEventListener('click', closeTargetKeyboardHelp);
+closeTargetKeyboardHelpButton?.addEventListener('click', () => targetKeyboardHelpOverlay?.close());
 
 shell.querySelectorAll<HTMLAnchorElement>('[data-auth-protected]').forEach((link) => {
   link.addEventListener('click', () => {
@@ -1749,20 +1753,21 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
     event.defaultPrevented
     || !shell.isConnected
     || shell.dataset.activePage !== 'targets'
-    || isEditableKeyboardTarget(event.target)
   ) {
+    return;
+  }
+
+  if (targetKeyboardHelpOverlay?.handleKeyDown(event)) {
+    event.preventDefault();
+    return;
+  }
+  if (isEditableKeyboardTarget(event.target)) {
     return;
   }
 
   const command = targetEditorKeyboardCommand(event);
   const hasSelection = targetSelection.objectIds.length > 0 || Boolean(targetSelection.groupId);
   if (!command) {
-    return;
-  }
-
-  if (event.key === 'Escape' && targetKeyboardHelp && !targetKeyboardHelp.hidden) {
-    closeTargetKeyboardHelp();
-    event.preventDefault();
     return;
   }
 
@@ -1782,7 +1787,14 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
   }
 
   const locked = isSelectionLocked(targetSelection, targetObjects, lockedTargetKeys);
-  const rejectsWhenLocked = new Set(['move', 'scale', 'rotate-y', 'reset-transform', 'delete']);
+  const rejectsWhenLocked = new Set([
+    'move',
+    'transform-mode',
+    'scale',
+    'rotate-y',
+    'reset-transform',
+    'delete',
+  ]);
   if (locked && rejectsWhenLocked.has(command.type)) {
     updateImageTargetStatus('Selection is locked. Press L to unlock it.', true);
     event.preventDefault();
@@ -1792,18 +1804,20 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
   switch (command.type) {
     case 'undo': {
       const snapshot = targetEditorHistory.undo(captureTargetEditorSnapshot());
-      if (snapshot) {
-        restoreTargetEditorSnapshot(snapshot);
-        updateImageTargetStatus('Undid the last editor change.', false);
+      if (!snapshot) {
+        return;
       }
+      restoreTargetEditorSnapshot(snapshot);
+      updateImageTargetStatus('Undid the last editor change.', false);
       break;
     }
     case 'redo': {
       const snapshot = targetEditorHistory.redo(captureTargetEditorSnapshot());
-      if (snapshot) {
-        restoreTargetEditorSnapshot(snapshot);
-        updateImageTargetStatus('Redid the editor change.', false);
+      if (!snapshot) {
+        return;
       }
+      restoreTargetEditorSnapshot(snapshot);
+      updateImageTargetStatus('Redid the editor change.', false);
       break;
     }
     case 'duplicate': {
@@ -1899,26 +1913,13 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
       ensureImageTargetPreview()?.setTransformMode(targetTransformMode);
       break;
     case 'toggle-help':
-      toggleTargetKeyboardHelp();
+      if (!targetKeyboardHelpOverlay) {
+        return;
+      }
+      targetKeyboardHelpOverlay.toggle();
       break;
   }
   event.preventDefault();
-}
-
-function toggleTargetKeyboardHelp(): void {
-  if (!targetKeyboardHelp) {
-    return;
-  }
-  targetKeyboardHelp.hidden = !targetKeyboardHelp.hidden;
-  if (!targetKeyboardHelp.hidden) {
-    closeTargetKeyboardHelpButton?.focus();
-  }
-}
-
-function closeTargetKeyboardHelp(): void {
-  if (targetKeyboardHelp) {
-    targetKeyboardHelp.hidden = true;
-  }
 }
 
 function applyKeyboardTargetPlacement(placement: ImageTargetPlacement): void {
@@ -2061,6 +2062,10 @@ function groupSelectedTargetObjects(): void {
   if (selectedObjects.length < 2 || selectedObjects.some((object) => object.groupId)) {
     return;
   }
+  if (isSelectionLocked(targetSelection, targetObjects, lockedTargetKeys)) {
+    updateImageTargetStatus('Selection is locked. Press L to unlock it.', true);
+    return;
+  }
   recordTargetEditorMutation();
   const nextNumber = targetGroups.length + 1;
   const created = createTargetEditorGroup({
@@ -2094,6 +2099,10 @@ function selectTargetGroup(groupId: string): void {
 function ungroupTargetObjects(groupId: string): void {
   const group = targetGroups.find((candidate) => candidate.id === groupId);
   if (!group) {
+    return;
+  }
+  if (lockedTargetKeys.has(`group:${groupId}`)) {
+    updateImageTargetStatus(`${group.label} is locked. Press L to unlock it.`, true);
     return;
   }
   recordTargetEditorMutation();

@@ -46,6 +46,8 @@ export function renderTargetObjectListItem({
   const row = document.createElement('div');
   row.className = 'target-object-row';
   row.dataset.objectId = object.id;
+  row.dataset.hidden = String(hidden);
+  row.dataset.locked = String(locked);
   row.setAttribute('role', 'listitem');
   row.setAttribute('aria-selected', String(selectedObjectIds.includes(object.id)));
 
@@ -77,7 +79,7 @@ export function renderTargetObjectListItem({
       : `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel}`;
     selectButton.append(swatch, label, meta, ...createStateBadges(hidden, locked));
 
-    row.append(selectButton, createDeleteButton(object.id, `Delete text ${text.value}`, onDelete));
+    row.append(selectButton, createDeleteButton(object.id, `Delete text ${text.value}`, onDelete, locked));
     return row;
   }
 
@@ -85,7 +87,7 @@ export function renderTargetObjectListItem({
   label.textContent = object.model.label;
   meta.textContent = `${index + 1} / ${Number(object.placement.scale.toFixed(2))}x`;
   selectButton.append(label, meta, ...createStateBadges(hidden, locked));
-  row.append(selectButton, createDeleteButton(object.id, `Delete object ${object.model.label}`, onDelete));
+  row.append(selectButton, createDeleteButton(object.id, `Delete object ${object.model.label}`, onDelete, locked));
   return row;
 }
 
@@ -176,6 +178,8 @@ function createGroupRow({
   count.textContent = `${members.length} object${members.length === 1 ? '' : 's'}`;
   const groupHidden = hiddenKeys.has(`group:${group.id}`);
   const groupLocked = lockedKeys.has(`group:${group.id}`);
+  row.dataset.hidden = String(groupHidden);
+  row.dataset.locked = String(groupLocked);
   selectButton.append(label, count, ...createStateBadges(groupHidden, groupLocked));
   selectButton.addEventListener('click', (event) => {
     event.preventDefault();
@@ -188,6 +192,7 @@ function createGroupRow({
   ungroupButton.className = 'target-object-ungroup';
   ungroupButton.dataset.ungroupTargetGroup = group.id;
   ungroupButton.textContent = 'Ungroup';
+  ungroupButton.disabled = groupLocked;
   ungroupButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -238,11 +243,13 @@ function createDeleteButton(
   objectId: string,
   label: string,
   onDelete: (objectId: string) => void,
+  disabled = false,
 ): HTMLButtonElement {
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
   deleteButton.className = 'target-object-delete';
   deleteButton.dataset.deleteTargetObject = objectId;
+  deleteButton.disabled = disabled;
   decorateDeleteIconButton(deleteButton, label);
   deleteButton.addEventListener('click', () => onDelete(objectId));
   return deleteButton;

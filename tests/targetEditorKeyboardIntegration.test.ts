@@ -110,6 +110,17 @@ describe('target editor keyboard integration', () => {
     expect(latest().objects).toHaveLength(0);
   }, 10000);
 
+  it('does not consume Undo, Redo, or disabled Save when no action can run', async () => {
+    await import('../src/main');
+    await waitForEditor();
+    const saveButton = document.querySelector<HTMLButtonElement>('#save-image-target')!;
+    saveButton.disabled = true;
+
+    expect(dispatchEditorKey(document.body, 'z', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(dispatchEditorKey(document.body, 'z', { ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(false);
+    expect(dispatchEditorKey(document.body, 's', { ctrlKey: true }).defaultPrevented).toBe(false);
+  }, 10000);
+
   it('ignores modified and already-consumed keyboard events', async () => {
     await import('../src/main');
     await waitForEditor();
@@ -263,8 +274,12 @@ describe('target editor keyboard integration', () => {
     dispatchEditorKey(document.body, 'l');
     await waitFor(() => latest().selectionLocked === true);
     expect(document.querySelector('[data-object-state="locked"]')?.textContent).toBe('Locked');
+    const modeCount = previewTransformModes.length;
+    const lockedMode = dispatchEditorKey(document.body, 'e');
     const lockedMove = dispatchEditorKey(document.body, 'ArrowRight');
     const lockedDelete = dispatchEditorKey(document.body, 'Delete');
+    expect(lockedMode.defaultPrevented).toBe(true);
+    expect(previewTransformModes).toHaveLength(modeCount);
     expect(lockedMove.defaultPrevented).toBe(true);
     expect(lockedDelete.defaultPrevented).toBe(true);
     expect(latest().objects).toHaveLength(1);
@@ -289,11 +304,21 @@ describe('target editor keyboard integration', () => {
     expect(animationEvent.defaultPrevented).toBe(true);
     expect(previewAnimationStates.at(-1)).toBe(false);
 
-    const helpEvent = dispatchEditorKey(document.body, '?', { shiftKey: true });
+    document.querySelectorAll<HTMLButtonElement>('.target-model-card')[0].click();
+    await waitFor(() => latest().objects.length === 1);
+    const helpInvoker = document.querySelector<HTMLButtonElement>('[data-transform-mode="translate"]')!;
+    helpInvoker.focus();
+    const helpEvent = dispatchEditorKey(helpInvoker, '?', { shiftKey: true });
     expect(helpEvent.defaultPrevented).toBe(true);
     expect(document.querySelector<HTMLElement>('#target-keyboard-help')?.hidden).toBe(false);
-    dispatchEditorKey(document.body, 'Escape');
+    expect(document.activeElement).toBe(document.querySelector('#close-target-keyboard-help'));
+    const blockedDelete = dispatchEditorKey(document.body, 'Delete');
+    expect(blockedDelete.defaultPrevented).toBe(true);
+    expect(latest().objects).toHaveLength(1);
+    const closeEvent = dispatchEditorKey(document.body, 'Escape');
+    expect(closeEvent.defaultPrevented).toBe(true);
     expect(document.querySelector<HTMLElement>('#target-keyboard-help')?.hidden).toBe(true);
+    expect(document.activeElement).toBe(helpInvoker);
 
     let saveClicks = 0;
     document.querySelector<HTMLButtonElement>('#save-image-target')!
@@ -301,6 +326,26 @@ describe('target editor keyboard integration', () => {
     const saveEvent = dispatchEditorKey(document.body, 's', { ctrlKey: true });
     expect(saveEvent.defaultPrevented).toBe(true);
     expect(saveClicks).toBe(1);
+  }, 10000);
+
+  it('disables destructive group controls while the group is locked', async () => {
+    await import('../src/main');
+    await waitForEditor();
+    const cards = document.querySelectorAll<HTMLButtonElement>('.target-model-card');
+    cards[0].click();
+    cards[1].click();
+    await waitFor(() => latest().objects.length === 2);
+    clickObject('chair');
+    clickObject('lamp', { ctrlKey: true });
+    document.querySelector<HTMLButtonElement>('#group-selected-objects')!.click();
+    await waitFor(() => latest().groups.length === 1);
+
+    dispatchEditorKey(document.body, 'l');
+    await waitFor(() => latest().selectionLocked === true);
+    const ungroup = document.querySelector<HTMLButtonElement>('[data-ungroup-target-group]')!;
+    expect(ungroup.disabled).toBe(true);
+    ungroup.click();
+    expect(latest().groups).toHaveLength(1);
   }, 10000);
 });
 

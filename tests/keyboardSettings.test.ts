@@ -30,13 +30,14 @@ describe('keyboard shortcut Settings', () => {
     expect(container.querySelectorAll('.keyboard-shortcut-card')).toHaveLength(5);
     expect(container.querySelectorAll('.keyboard-shortcut-row')).toHaveLength(27);
     expect([...container.querySelectorAll('kbd')].map((key) => key.textContent)).toEqual(
-      expect.arrayContaining(['Ctrl/Command + Z', 'Shift + Arrow', 'Delete', 'H', 'L', 'Space', '?']),
+      expect.arrayContaining(['Ctrl/Command + Z', 'Shift + Arrow', 'Delete', '+', '=', 'H', 'L', 'Space', '?']),
     );
     expect(container.querySelector('.keyboard-settings-intro')?.textContent).toContain(
       'work throughout Studio',
     );
     expect(container.textContent).toContain('Not while typing or editing a form');
     expect(container.textContent).toContain('Available throughout Studio');
+    expect(container.textContent).toContain('Unlocked selection required');
     expect(container.querySelectorAll('.keyboard-shortcut-list')).toHaveLength(5);
   });
 });

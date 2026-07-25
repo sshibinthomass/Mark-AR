@@ -304,10 +304,12 @@ export class ImageTargetPreview {
     }
 
     for (const object of this.previewObjects) {
+      if (this.hiddenObjectIds.has(object.id)) {
+        continue;
+      }
       if (isTextTargetObject(object)) {
         const textObject = this.createTextObject(object.text);
         textObject.name = `target-object-${object.id}`;
-        textObject.visible = !this.hiddenObjectIds.has(object.id);
         this.loadedModels.set(object.id, textObject);
         this.applyPlacementToObject(object.id);
         this.parentForObject(object).add(textObject);
@@ -325,7 +327,6 @@ export class ImageTargetPreview {
         continue;
       }
       model.name = `target-object-${object.id}`;
-      model.visible = !this.hiddenObjectIds.has(object.id);
       this.loadedModels.set(object.id, model);
       this.applyPlacementToObject(object.id);
       this.parentForObject(object).add(model);

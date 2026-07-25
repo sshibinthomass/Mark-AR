@@ -1170,11 +1170,12 @@ describe('ImageTargetPreview', () => {
     const renderer = { domElement: document.createElement('canvas'), setPixelRatio: vi.fn(), setSize: vi.fn(), render: vi.fn(), dispose: vi.fn() };
     let frameCallback: FrameRequestCallback | undefined;
     const model = createDisposableModel();
+    const loadModel = vi.fn(async () => model.group);
     const preview = new ImageTargetPreview(container, {
       createRenderer: () => renderer,
       requestFrame: (callback) => { frameCallback = callback; return 1; },
       cancelFrame: vi.fn(),
-      loadModel: vi.fn(async () => model.group),
+      loadModel,
       loadTexture: vi.fn(async () => undefined),
     });
 
@@ -1196,7 +1197,9 @@ describe('ImageTargetPreview', () => {
       transformControls: { object?: Group; visible: boolean };
       elapsedSeconds: number;
     };
-    expect(internals.loadedModels.get('chair')?.visible).toBe(false);
+    expect(internals.loadedModels.has('chair')).toBe(false);
+    expect(internals.loadedModels.size).toBe(0);
+    expect(loadModel).not.toHaveBeenCalled();
     expect(internals.transformControls.object).toBeUndefined();
     expect(internals.transformControls.visible).toBe(false);
 
