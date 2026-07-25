@@ -1,4 +1,4 @@
-import { Group } from 'three';
+import { Group, type Texture } from 'three';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
@@ -27,6 +27,7 @@ export type CloudflarePlacedAsset = {
   groups?: TargetEditorGroup[];
   loadModelGroup?: ModelGroupLoader;
   createTextObject?: (text: TargetTextContent) => Group;
+  loadTexture?: (url: string) => Promise<Texture | undefined>;
 };
 
 export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): MarkerObject {

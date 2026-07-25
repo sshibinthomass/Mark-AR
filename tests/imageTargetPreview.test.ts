@@ -226,6 +226,63 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
+  it('loads image objects into the same selectable transform roots as models', async () => {
+    const container = document.createElement('div');
+    Object.defineProperties(container, {
+      clientWidth: { value: 500 },
+      clientHeight: { value: 500 },
+    });
+    const rendererElement = document.createElement('canvas');
+    mockCanvasRect(rendererElement, { width: 500, height: 500 });
+    const renderer = {
+      domElement: rendererElement,
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const selectionChanges: unknown[] = [];
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => new Texture()),
+      onSelectionChange: (selection) => selectionChanges.push(selection),
+    });
+
+    await preview.update({
+      objects: [{
+        kind: 'image',
+        id: 'poster',
+        image: {
+          url: 'poster.webp',
+          label: 'Poster',
+          width: 1200,
+          height: 800,
+          aspectRatio: 1.5,
+        },
+        placement: {
+          scale: 1,
+          offsetX: 0,
+          offsetY: 0,
+          height: 0.5,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+        },
+      }],
+    });
+
+    const loaded = (preview as unknown as { loadedModels: Map<string, Group> }).loadedModels.get('poster');
+    expect(loaded?.getObjectByName('target-media-plane-poster')).toBeInstanceOf(Mesh);
+    dispatchPointer(rendererElement, 'pointerdown', { pointerId: 1, clientX: 250, clientY: 250 });
+    dispatchPointer(rendererElement, 'pointerup', { pointerId: 1, clientX: 250, clientY: 250 });
+    expect(selectionChanges.at(-1)).toEqual({ objectIds: ['poster'] });
+
+    preview.dispose();
+  });
+
   it('clears the selected object when clicking empty preview space', async () => {
     const container = document.createElement('div');
     Object.defineProperties(container, {

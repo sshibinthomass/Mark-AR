@@ -26,8 +26,10 @@ import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
 import {
+  isImageTargetObject,
   isModelTargetObject,
   isTextTargetObject,
+  isYouTubeTargetObject,
   type TargetEditorObject,
   type TargetTextContent,
 } from '../app/targetEditorObjects';
@@ -51,6 +53,7 @@ import {
   type PreviewCameraView,
 } from './previewCamera';
 import { createTextObject3D } from './textObject3d';
+import { prepareMediaPlane } from './mediaPlane3d';
 import { createNormalizedTargetModelGroup } from './targetModelNormalization';
 import { applyTargetAnimation, applyTargetPlacement } from './targetObjectTransform';
 
@@ -302,6 +305,29 @@ export class ImageTargetPreview {
         this.loadedModels.set(object.id, textObject);
         this.applyPlacementToObject(object.id);
         this.parentForObject(object).add(textObject);
+        continue;
+      }
+
+      if (isImageTargetObject(object) || isYouTubeTargetObject(object)) {
+        const content = isImageTargetObject(object)
+          ? { url: object.image.url, aspectRatio: object.image.aspectRatio, kind: 'image' as const }
+          : { url: object.youtube.thumbnailUrl, aspectRatio: 16 / 9, kind: 'youtube' as const };
+        const prepared = prepareMediaPlane({
+          objectId: object.id,
+          ...content,
+        }, {
+          loadTexture: this.loadTexture,
+          loadMode: 'fallback',
+        });
+        await prepared.ready;
+        if (this.disposed || updateToken !== this.updateToken) {
+          prepared.dispose();
+          return;
+        }
+        prepared.group.name = `target-object-${object.id}`;
+        this.loadedModels.set(object.id, prepared.group);
+        this.applyPlacementToObject(object.id);
+        this.parentForObject(object).add(prepared.group);
         continue;
       }
 

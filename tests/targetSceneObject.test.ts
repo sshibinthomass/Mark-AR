@@ -9,6 +9,63 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTargetSceneObject } from '../src/ar/targetSceneObject';
 
 describe('createTargetSceneObject', () => {
+  it('renders image and YouTube objects as transformed media planes', async () => {
+    const texture = new Texture();
+    const scene = createTargetSceneObject({
+      objects: [{
+        kind: 'image',
+        id: 'poster',
+        image: {
+          url: 'poster.webp',
+          label: 'Poster',
+          width: 1200,
+          height: 800,
+          aspectRatio: 1.5,
+        },
+        placement: {
+          scale: 1.2,
+          offsetX: 0.25,
+          offsetY: -0.1,
+          height: 0.3,
+          rotationX: 5,
+          rotationY: 10,
+          rotationZ: 15,
+        },
+      }, {
+        kind: 'youtube',
+        id: 'trailer',
+        youtube: {
+          videoId: 'M7lc1UVf-VE',
+          url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+          thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+        },
+        placement: {
+          scale: 0.8,
+          offsetX: -0.25,
+          offsetY: 0.1,
+          height: 0.2,
+          rotationX: 0,
+          rotationY: -20,
+          rotationZ: 0,
+        },
+      }],
+      loadTexture: async () => texture,
+    }, { loadMode: 'strict' });
+
+    await scene.ready;
+
+    const posterRoot = scene.group.getObjectByName('cloudflare-model-root-poster') as Group;
+    const posterPlane = scene.group.getObjectByName('target-media-plane-poster') as Mesh;
+    const trailerPlane = scene.group.getObjectByName('target-media-plane-trailer') as Mesh;
+    expect(posterRoot.position.toArray()).toEqual([0.25, 0.3, -0.1]);
+    expect(posterRoot.scale.toArray()).toEqual([1.2, 1.2, 1.2]);
+    expect(posterPlane).toBeInstanceOf(Mesh);
+    expect(trailerPlane).toBeInstanceOf(Mesh);
+    expect(scene.youtubeSurfaces).toEqual([
+      expect.objectContaining({ objectId: 'trailer', mesh: trailerPlane }),
+    ]);
+  });
+
   it('builds the complete saved scene directly in Y-up space and applies authored animations', async () => {
     const textGroup = new Group();
     const scene = createTargetSceneObject({

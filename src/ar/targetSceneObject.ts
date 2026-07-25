@@ -13,7 +13,14 @@ import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { normalizeAnimation } from '../app/imageTargetAnimation';
 import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizeLocalPlacement, type TargetEditorGroup } from '../app/targetEditorGroups';
-import { isModelTargetObject, isTextTargetObject } from '../app/targetEditorObjects';
+import {
+  isImageTargetObject,
+  isModelTargetObject,
+  isTextTargetObject,
+  isYouTubeTargetObject,
+  type YouTubeTargetObject,
+} from '../app/targetEditorObjects';
+import { prepareMediaPlane } from '../scene/mediaPlane3d';
 import {
   prepareTextObject3D,
   type PreparedTextObject3D,
@@ -30,8 +37,16 @@ export type TargetSceneLoadMode = 'fallback' | 'strict';
 export type TargetSceneObject = {
   group: Group;
   ready: Promise<void>;
+  youtubeSurfaces: InteractiveYouTubeSurface[];
   update(deltaSeconds: number): void;
   dispose(): void;
+};
+
+export type InteractiveYouTubeSurface = {
+  objectId: string;
+  root: Group;
+  mesh: Mesh;
+  youtube: YouTubeTargetObject['youtube'];
 };
 
 type AnimatedRoot = {
@@ -60,6 +75,7 @@ export function createTargetSceneObject(
   const animatedRoots: AnimatedRoot[] = [];
   const resourceLoads: Promise<void>[] = [];
   const preparedTexts: PreparedTextObject3D[] = [];
+  const youtubeSurfaces: InteractiveYouTubeSurface[] = [];
   const disposedResources: DisposedResources = {
     geometries: new Set(),
     materials: new Set(),
@@ -103,6 +119,26 @@ export function createTargetSceneObject(
         resourceLoads.push(preparedText.ready);
         objectRoot.add(preparedText.group);
       }
+    } else if (isImageTargetObject(object) || isYouTubeTargetObject(object)) {
+      const prepared = prepareMediaPlane({
+        objectId: object.id,
+        kind: isImageTargetObject(object) ? 'image' : 'youtube',
+        url: isImageTargetObject(object) ? object.image.url : object.youtube.thumbnailUrl,
+        aspectRatio: isImageTargetObject(object) ? object.image.aspectRatio : 16 / 9,
+      }, {
+        loadTexture: asset.loadTexture,
+        loadMode,
+      });
+      objectRoot.add(prepared.group);
+      resourceLoads.push(prepared.ready);
+      if (isYouTubeTargetObject(object)) {
+        youtubeSurfaces.push({
+          objectId: object.id,
+          root: objectRoot,
+          mesh: prepared.mesh,
+          youtube: object.youtube,
+        });
+      }
     } else if (isModelTargetObject(object)) {
       const load = loadModelGroup(object.model.url)
         .then((loadedModel) => {
@@ -137,6 +173,7 @@ export function createTargetSceneObject(
   return {
     group: sceneRoot,
     ready: Promise.all(resourceLoads).then(() => undefined),
+    youtubeSurfaces,
     update(deltaSeconds) {
       for (const animatedRoot of animatedRoots) {
         animatedRoot.elapsedSeconds += deltaSeconds;
@@ -188,9 +225,11 @@ function createPlacedObjects(asset: CloudflarePlacedAsset): CloudflarePlacedObje
     return [];
   }
   return [{
-    id: 'legacy-object',
+    id: '',
     model: asset.model,
-    placement: normalizePlacement(asset.placement),
+    placement: asset.placement
+      ? normalizePlacement(asset.placement)
+      : normalizePlacement({ height: 0.04 }),
   }];
 }
 
