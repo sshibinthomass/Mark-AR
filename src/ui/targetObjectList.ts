@@ -5,6 +5,7 @@ import {
   isTextTargetObject,
   languageOption,
   normalizeTargetText,
+  targetObjectLabel,
   type TargetEditorObject,
 } from '../app/targetEditorObjects';
 import type { TargetEditorGroup, TargetEditorSelection } from '../app/targetEditorGroups';
@@ -75,11 +76,11 @@ export function renderTargetObjectListItem({
     return row;
   }
 
-  row.classList.add('target-object-row-model');
-  label.textContent = object.model.label;
+  row.classList.add(`target-object-row-${object.kind ?? 'model'}`);
+  label.textContent = targetObjectLabel(object);
   meta.textContent = `${index + 1} / ${Number(object.placement.scale.toFixed(2))}x`;
   selectButton.append(label, meta);
-  row.append(selectButton, createDeleteButton(object.id, `Delete object ${object.model.label}`, onDelete));
+  row.append(selectButton, createDeleteButton(object.id, `Delete object ${targetObjectLabel(object)}`, onDelete));
   return row;
 }
 

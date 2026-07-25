@@ -3,7 +3,7 @@ import type { CloudflareModelOption } from '../app/cloudflareModels';
 import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import type { TargetEditorGroup } from '../app/targetEditorGroups';
-import type { LocalTextTargetObject } from '../app/targetEditorObjects';
+import type { TargetEditorObject, TargetTextContent } from '../app/targetEditorObjects';
 import type { MarkerObject } from './arObjects';
 import { createTargetSceneObject } from './targetSceneObject';
 
@@ -18,7 +18,7 @@ export type CloudflareModelPlacedObject = {
   localPlacement?: ImageTargetPlacement;
 };
 
-export type CloudflarePlacedObject = CloudflareModelPlacedObject | LocalTextTargetObject;
+export type CloudflarePlacedObject = TargetEditorObject;
 
 export type CloudflarePlacedAsset = {
   model?: CloudflareModelOption;
@@ -26,7 +26,7 @@ export type CloudflarePlacedAsset = {
   objects?: CloudflarePlacedObject[];
   groups?: TargetEditorGroup[];
   loadModelGroup?: ModelGroupLoader;
-  createTextObject?: (text: LocalTextTargetObject['text']) => Group;
+  createTextObject?: (text: TargetTextContent) => Group;
 };
 
 export function createCloudflareMarkerObject(asset: CloudflarePlacedAsset): MarkerObject {

@@ -26,6 +26,7 @@ import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
 import {
+  isModelTargetObject,
   isTextTargetObject,
   type TargetEditorObject,
   type TargetTextContent,
@@ -304,6 +305,9 @@ export class ImageTargetPreview {
         continue;
       }
 
+      if (!isModelTargetObject(object)) {
+        continue;
+      }
       const model = await this.loadModel(object.model.url);
       if (this.disposed || updateToken !== this.updateToken || !model) {
         if (model) {

@@ -1,5 +1,5 @@
 import type { CloudImageTarget } from '../app/cloudImageTargets';
-import { isTextTargetObject } from '../app/targetEditorObjects';
+import { targetObjectLabel } from '../app/targetEditorObjects';
 import { decorateDeleteIconButton } from './deleteIconButton';
 import { absoluteTargetScanUrl, hrefForTargetScan } from './pageRoutes';
 
@@ -105,5 +105,5 @@ function savedTargetSummary(target: CloudImageTarget): string {
     return `${target.objects.length} objects`;
   }
   const object = target.objects[0];
-  return isTextTargetObject(object) ? object.text.value : object.model.label;
+  return targetObjectLabel(object);
 }

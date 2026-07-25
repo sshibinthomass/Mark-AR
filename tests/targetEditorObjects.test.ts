@@ -6,12 +6,18 @@ import {
   TEXT_GRADIENT_DIRECTION_OPTIONS,
   TEXT_LANGUAGE_OPTIONS,
   TEXT_STYLE_PRESETS,
+  createLocalImageObject,
   createLocalTextObject,
+  createYouTubeObject,
+  isImageTargetObject,
   isModelTargetObject,
+  isYouTubeTargetObject,
   normalizeTargetText,
   saveableModelObjects,
+  targetObjectLabel,
   updateTargetTextObject,
 } from '../src/app/targetEditorObjects';
+import { normalizeYouTubeUrl } from '../src/app/targetMedia';
 
 const TAMIL_HELLO = '\u0bb5\u0ba3\u0b95\u0bcd\u0b95\u0bae\u0bcd AR';
 
@@ -199,6 +205,41 @@ describe('target editor object helpers', () => {
         gloss: 0.9,
       },
       placement: textObject.placement,
+    });
+  });
+
+  it('creates image and YouTube objects without classifying them as models', () => {
+    const imageObject = createLocalImageObject({
+      id: 'image-1',
+      image: {
+        url: 'blob:poster',
+        label: 'Poster',
+        width: 1200,
+        height: 800,
+        aspectRatio: 1.5,
+      },
+      placement: { scale: 1.2, offsetX: 0.3, height: 0.2 },
+    });
+    const youtube = normalizeYouTubeUrl('https://youtu.be/M7lc1UVf-VE');
+    expect(youtube).not.toBeNull();
+    const youtubeObject = createYouTubeObject({
+      id: 'youtube-1',
+      youtube: youtube!,
+      placement: { scale: 0.8, rotationY: 20 },
+    });
+
+    expect(isImageTargetObject(imageObject)).toBe(true);
+    expect(isYouTubeTargetObject(youtubeObject)).toBe(true);
+    expect(isModelTargetObject(imageObject)).toBe(false);
+    expect(isModelTargetObject(youtubeObject)).toBe(false);
+    expect(saveableModelObjects([imageObject, youtubeObject])).toEqual([]);
+    expect(targetObjectLabel(imageObject)).toBe('Poster');
+    expect(targetObjectLabel(youtubeObject)).toBe('YouTube M7lc1UVf-VE');
+    expect(imageObject.placement).toMatchObject({
+      scale: 1.2,
+      offsetX: 0.3,
+      offsetY: 0,
+      height: 0.2,
     });
   });
 });

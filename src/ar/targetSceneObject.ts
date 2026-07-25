@@ -13,7 +13,7 @@ import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import { normalizeAnimation } from '../app/imageTargetAnimation';
 import { normalizePlacement, type ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizeLocalPlacement, type TargetEditorGroup } from '../app/targetEditorGroups';
-import { isTextTargetObject } from '../app/targetEditorObjects';
+import { isModelTargetObject, isTextTargetObject } from '../app/targetEditorObjects';
 import {
   prepareTextObject3D,
   type PreparedTextObject3D,
@@ -103,7 +103,7 @@ export function createTargetSceneObject(
         resourceLoads.push(preparedText.ready);
         objectRoot.add(preparedText.group);
       }
-    } else {
+    } else if (isModelTargetObject(object)) {
       const load = loadModelGroup(object.model.url)
         .then((loadedModel) => {
           if (disposed) {
@@ -122,6 +122,8 @@ export function createTargetSceneObject(
           }
         });
       resourceLoads.push(load);
+    } else {
+      objectRoot.add(createModelLoadFallback());
     }
 
     animatedRoots.push({
@@ -186,8 +188,9 @@ function createPlacedObjects(asset: CloudflarePlacedAsset): CloudflarePlacedObje
     return [];
   }
   return [{
+    id: 'legacy-object',
     model: asset.model,
-    ...(asset.placement ? { placement: asset.placement } : {}),
+    placement: normalizePlacement(asset.placement),
   }];
 }
 

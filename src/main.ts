@@ -86,6 +86,7 @@ import {
   isTextTargetObject,
   languageOption,
   normalizeTargetText,
+  targetObjectLabel,
   textStylePreset,
   updateTargetTextObject,
   type LocalImageTargetDraft,
@@ -1609,7 +1610,7 @@ function selectTargetObject(
   updateImageTargetStatus(
     targetSelection.objectIds.length > 1
       ? `${targetSelection.objectIds.length} objects selected.`
-      : isTextTargetObject(object) ? `${object.text.value} text selected.` : `${object.model.label} selected.`,
+      : `${targetObjectLabel(object)} selected.`,
     false,
   );
   if (options?.refreshPreview !== false) {
@@ -1834,7 +1835,7 @@ function syncSelectionToInspector(options?: { activateWhenSelected?: boolean }):
   targetAnimation = targetAnimationMixed ? DEFAULT_IMAGE_TARGET_ANIMATION : animations[0] ?? DEFAULT_IMAGE_TARGET_ANIMATION;
 
   if (targetModelSelect) {
-    targetModelSelect.value = activeObject && !isTextTargetObject(activeObject) ? activeObject.model.id : '';
+    targetModelSelect.value = activeObject && isModelTargetObject(activeObject) ? activeObject.model.id : '';
   }
   if (activeObject && selectedObjects.length === 1 && isTextTargetObject(activeObject)) {
     syncTargetTextInputs(activeObject.text);

@@ -10,6 +10,10 @@ import {
   normalizePlacement,
   type ImageTargetPlacement,
 } from './imageTargetPayload';
+import type {
+  TargetImageContent,
+  TargetYouTubeContent,
+} from './targetMedia';
 
 export const TEXT_LANGUAGE_OPTIONS = [
   { id: 'english', label: 'English', sample: 'Hello AR' },
@@ -182,27 +186,39 @@ export type TargetTextContent = {
   stylePreset?: TargetTextStylePreset;
 };
 
-export type LocalTextTargetObject = {
+export type TargetObjectBase = {
+  id: string;
+  placement: ImageTargetPlacement;
+  animation?: ImageTargetAnimation;
+  groupId?: string;
+  localPlacement?: ImageTargetPlacement;
+};
+
+export type LocalTextTargetObject = TargetObjectBase & {
   kind: 'text';
-  id: string;
   text: TargetTextContent;
-  placement: ImageTargetPlacement;
-  animation?: ImageTargetAnimation;
-  groupId?: string;
-  localPlacement?: ImageTargetPlacement;
 };
 
-export type ModelTargetObject = {
+export type ModelTargetObject = TargetObjectBase & {
   kind?: 'model';
-  id: string;
   model: CloudflareModelOption;
-  placement: ImageTargetPlacement;
-  animation?: ImageTargetAnimation;
-  groupId?: string;
-  localPlacement?: ImageTargetPlacement;
 };
 
-export type TargetEditorObject = ModelTargetObject | LocalTextTargetObject;
+export type ImageTargetObject = TargetObjectBase & {
+  kind: 'image';
+  image: TargetImageContent;
+};
+
+export type YouTubeTargetObject = TargetObjectBase & {
+  kind: 'youtube';
+  youtube: TargetYouTubeContent;
+};
+
+export type TargetEditorObject =
+  | ModelTargetObject
+  | LocalTextTargetObject
+  | ImageTargetObject
+  | YouTubeTargetObject;
 
 export type LocalImageTargetDraft = {
   id: string;
@@ -286,6 +302,46 @@ export function createLocalTextObject({
   };
 }
 
+export function createLocalImageObject({
+  id,
+  image,
+  placement,
+  animation,
+}: {
+  id: string;
+  image: TargetImageContent;
+  placement?: Partial<ImageTargetPlacement>;
+  animation?: Partial<ImageTargetAnimation>;
+}): ImageTargetObject {
+  return {
+    kind: 'image',
+    id,
+    image: normalizeTargetImageContent(image),
+    placement: normalizePlacement(placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT),
+    animation: normalizeAnimation(animation ?? DEFAULT_IMAGE_TARGET_ANIMATION),
+  };
+}
+
+export function createYouTubeObject({
+  id,
+  youtube,
+  placement,
+  animation,
+}: {
+  id: string;
+  youtube: TargetYouTubeContent;
+  placement?: Partial<ImageTargetPlacement>;
+  animation?: Partial<ImageTargetAnimation>;
+}): YouTubeTargetObject {
+  return {
+    kind: 'youtube',
+    id,
+    youtube: { ...youtube },
+    placement: normalizePlacement(placement ?? DEFAULT_IMAGE_TARGET_PLACEMENT),
+    animation: normalizeAnimation(animation ?? DEFAULT_IMAGE_TARGET_ANIMATION),
+  };
+}
+
 export function isTextTargetObject(object: unknown): object is LocalTextTargetObject {
   return Boolean(
     object &&
@@ -295,12 +351,33 @@ export function isTextTargetObject(object: unknown): object is LocalTextTargetOb
   );
 }
 
+export function isImageTargetObject(object: unknown): object is ImageTargetObject {
+  return hasTargetObjectKind(object, 'image');
+}
+
+export function isYouTubeTargetObject(object: unknown): object is YouTubeTargetObject {
+  return hasTargetObjectKind(object, 'youtube');
+}
+
 export function isModelTargetObject(object: TargetEditorObject): object is ModelTargetObject {
-  return !isTextTargetObject(object);
+  return (object.kind === undefined || object.kind === 'model') && 'model' in object;
 }
 
 export function saveableModelObjects(objects: TargetEditorObject[]): ModelTargetObject[] {
   return objects.filter(isModelTargetObject);
+}
+
+export function targetObjectLabel(object: TargetEditorObject): string {
+  if (isTextTargetObject(object)) {
+    return object.text.value;
+  }
+  if (isImageTargetObject(object)) {
+    return object.image.label;
+  }
+  if (isYouTubeTargetObject(object)) {
+    return `YouTube ${object.youtube.videoId}`;
+  }
+  return object.model.label;
 }
 
 export function updateTargetTextObject(
@@ -375,4 +452,33 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     return fallback;
   }
   return Math.min(max, Math.max(min, numericValue));
+}
+
+function hasTargetObjectKind(
+  object: unknown,
+  kind: ImageTargetObject['kind'] | YouTubeTargetObject['kind'],
+): boolean {
+  return Boolean(
+    object
+      && typeof object === 'object'
+      && 'kind' in object
+      && (object as { kind?: unknown }).kind === kind,
+  );
+}
+
+function normalizeTargetImageContent(image: TargetImageContent): TargetImageContent {
+  const width = finitePositive(image.width, 1);
+  const height = finitePositive(image.height, 1);
+  return {
+    url: image.url,
+    ...(image.objectKey ? { objectKey: image.objectKey } : {}),
+    label: image.label.trim() || 'Image',
+    width,
+    height,
+    aspectRatio: finitePositive(image.aspectRatio, width / height),
+  };
+}
+
+function finitePositive(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback;
 }

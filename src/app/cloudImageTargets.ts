@@ -549,9 +549,13 @@ function imageTargetObjectsRequestBody(
       local_placement: localPlacementRequestBody(object.localPlacement),
     } : {};
     const animationFields = object.animation ? { animation: animationRequestBody(object.animation) } : {};
-    return isTextTargetObject(object)
-      ? { kind: 'text' as const, id, text: textRequestBody(object.text), placement, ...groupFields, ...animationFields }
-      : { kind: 'model' as const, id, model: modelRequestBody(object.model), placement, ...groupFields, ...animationFields };
+    if (isTextTargetObject(object)) {
+      return { kind: 'text' as const, id, text: textRequestBody(object.text), placement, ...groupFields, ...animationFields };
+    }
+    if (isModelTargetObject(object)) {
+      return { kind: 'model' as const, id, model: modelRequestBody(object.model), placement, ...groupFields, ...animationFields };
+    }
+    throw new Error(`Unsupported target object kind: ${object.kind}.`);
   });
 }
 

@@ -3,7 +3,10 @@ import { normalizeAnimation } from './imageTargetAnimation';
 import { normalizePlacement } from './imageTargetPayload';
 import { normalizeLocalPlacement, type TargetEditorGroup } from './targetEditorGroups';
 import {
+  isImageTargetObject,
+  isModelTargetObject,
   isTextTargetObject,
+  isYouTubeTargetObject,
   normalizeTargetText,
   type TargetEditorObject,
 } from './targetEditorObjects';
@@ -123,6 +126,15 @@ function canonicalObject(object: TargetEditorObject): unknown {
       kind: 'text',
       text: normalizeTargetText(object.text),
     };
+  }
+  if (isImageTargetObject(object)) {
+    return { ...shared, kind: 'image', image: object.image };
+  }
+  if (isYouTubeTargetObject(object)) {
+    return { ...shared, kind: 'youtube', youtube: object.youtube };
+  }
+  if (!isModelTargetObject(object)) {
+    return { ...shared, kind: 'unknown' };
   }
   return {
     ...shared,
