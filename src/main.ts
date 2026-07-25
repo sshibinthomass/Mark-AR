@@ -75,7 +75,9 @@ import {
 import { recoverExistingAccount } from './app/authRecovery';
 import {
   DEFAULT_TARGET_TEXT,
+  createLocalImageObject,
   createLocalTextObject,
+  createYouTubeObject,
   isTargetTextFillMode,
   isTargetTextFont,
   isTargetTextGradientDirection,
@@ -98,6 +100,14 @@ import {
   type TargetTextLanguage,
   type TargetTextStylePreset,
 } from './app/targetEditorObjects';
+import {
+  normalizeYouTubeUrl,
+  type PendingTargetImageSource,
+} from './app/targetMedia';
+import {
+  createTargetImageDraftFromFile,
+  createTargetImageDraftFromUrl,
+} from './app/targetMediaDraft';
 import {
   createTargetEditorGroup,
   normalizeLocalPlacement,
@@ -217,6 +227,13 @@ const targetPreviewStage = document.querySelector<HTMLElement>('#target-preview-
 const targetModelRail = document.querySelector<HTMLElement>('#target-model-rail');
 const targetObjectList = document.querySelector<HTMLElement>('#target-object-list');
 const groupSelectedObjectsButton = document.querySelector<HTMLButtonElement>('#group-selected-objects');
+const targetObjectKindButtons = document.querySelectorAll<HTMLButtonElement>('[data-add-object-kind]');
+const targetObjectCreators = document.querySelectorAll<HTMLElement>('[data-object-creator]');
+const targetObjectImageFile = document.querySelector<HTMLInputElement>('#target-object-image-file');
+const targetObjectImageUrl = document.querySelector<HTMLInputElement>('#target-object-image-url');
+const addTargetImageButton = document.querySelector<HTMLButtonElement>('#add-target-image');
+const targetObjectYouTubeUrl = document.querySelector<HTMLInputElement>('#target-object-youtube-url');
+const addTargetYouTubeButton = document.querySelector<HTMLButtonElement>('#add-target-youtube');
 const targetTextValueInput = document.querySelector<HTMLTextAreaElement>('#target-text-value');
 const targetTextPresetSelect = document.querySelector<HTMLSelectElement>('#target-text-preset');
 const targetTextLanguageSelect = document.querySelector<HTMLSelectElement>('#target-text-language');
@@ -288,6 +305,7 @@ let targetAnimation: ImageTargetAnimation = DEFAULT_IMAGE_TARGET_ANIMATION;
 let targetCameraView: PreviewCameraView = DEFAULT_PREVIEW_CAMERA_VIEW;
 let targetTransformMode: PreviewTransformMode = 'translate';
 let targetObjects: TargetEditorObject[] = [];
+const pendingTargetMediaSources = new Map<string, PendingTargetImageSource>();
 let targetGroups: TargetEditorGroup[] = [];
 let targetSelection: TargetEditorSelection = { objectIds: [] };
 let targetAnimationMixed = false;
@@ -765,6 +783,26 @@ resetTargetAnimationButton?.addEventListener('click', () => {
 
 groupSelectedObjectsButton?.addEventListener('click', () => {
   groupSelectedTargetObjects();
+});
+
+targetObjectKindButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const kind = button.dataset.addObjectKind;
+    targetObjectKindButtons.forEach((candidate) => {
+      candidate.setAttribute('aria-pressed', String(candidate === button));
+    });
+    targetObjectCreators.forEach((creator) => {
+      creator.hidden = creator.dataset.objectCreator !== kind;
+    });
+  });
+});
+
+addTargetImageButton?.addEventListener('click', () => {
+  void addTargetImageFromInput();
+});
+
+addTargetYouTubeButton?.addEventListener('click', () => {
+  addTargetYouTubeFromInput();
 });
 
 targetTextPresetSelect?.addEventListener('change', () => {
@@ -1518,6 +1556,53 @@ function addTargetTextFromInput(): void {
   void updateTargetPreview();
 }
 
+async function addTargetImageFromInput(): Promise<void> {
+  try {
+    const file = targetObjectImageFile?.files?.[0];
+    const url = targetObjectImageUrl?.value.trim() ?? '';
+    if (!file && !url) {
+      updateImageTargetStatus('Choose an image file or enter a public HTTPS image URL.', true);
+      return;
+    }
+    const draft = file
+      ? await createTargetImageDraftFromFile(file)
+      : await createTargetImageDraftFromUrl(url);
+    const object = createLocalImageObject({
+      id: createTargetObjectId(),
+      image: draft.image,
+      placement: nextTargetObjectPlacement(),
+      animation: DEFAULT_IMAGE_TARGET_ANIMATION,
+    });
+    pendingTargetMediaSources.set(object.id, draft.source);
+    targetObjects = [...targetObjects, object];
+    selectTargetObject(object.id, { refreshPreview: false });
+    renderTargetObjectList();
+    updateImageTargetStatus(`Image "${object.image.label}" added locally.`, false);
+    await updateTargetPreview();
+  } catch (error) {
+    updateImageTargetStatus(errorMessage(error, 'Unable to add image.'), true);
+  }
+}
+
+function addTargetYouTubeFromInput(): void {
+  const youtube = normalizeYouTubeUrl(targetObjectYouTubeUrl?.value ?? '');
+  if (!youtube) {
+    updateImageTargetStatus('Enter a valid YouTube video link.', true);
+    return;
+  }
+  const object = createYouTubeObject({
+    id: createTargetObjectId(),
+    youtube,
+    placement: nextTargetObjectPlacement(),
+    animation: DEFAULT_IMAGE_TARGET_ANIMATION,
+  });
+  targetObjects = [...targetObjects, object];
+  selectTargetObject(object.id, { refreshPreview: false });
+  renderTargetObjectList();
+  updateImageTargetStatus('YouTube video added. Its thumbnail will play after a tap in AR.', false);
+  void updateTargetPreview();
+}
+
 function commitTargetTextFromInput(): void {
   if (updateSelectedTextObjectFromInput({ announce: true })) {
     return;
@@ -1556,6 +1641,7 @@ function removeTargetObjectsByIds(objectIds: string[]): boolean {
   }
 
   targetObjects = targetObjects.filter((object) => !removedIds.has(object.id));
+  removedIds.forEach((objectId) => pendingTargetMediaSources.delete(objectId));
   const affectedGroupIds = new Set(
     removedObjects.flatMap((object) => object.groupId ? [object.groupId] : []),
   );
@@ -2238,7 +2324,7 @@ async function saveCurrentImageTarget(): Promise<void> {
   }
 
   if (objectsToSave.length === 0) {
-    updateImageTargetStatus('Add at least one model or text object before saving.', true);
+    updateImageTargetStatus('Add at least one 3D object, text, image, or video before saving.', true);
     return;
   }
 
@@ -2280,6 +2366,7 @@ async function saveCurrentImageTarget(): Promise<void> {
         objects,
         groups,
         access: accessToSave,
+        mediaSources: Object.fromEntries(pendingTargetMediaSources),
         ...(targetImagePayload ?? {}),
       });
     } else {
@@ -2296,6 +2383,7 @@ async function saveCurrentImageTarget(): Promise<void> {
         objects,
         groups,
         access: accessToSave,
+        mediaSources: Object.fromEntries(pendingTargetMediaSources),
       });
     }
     const expectedAccess = { ...accessToSave, ...(editingTargetScanId ? { scanId: editingTargetScanId } : {}) };
@@ -2538,6 +2626,7 @@ async function loadSavedImageTarget(target: CloudImageTarget): Promise<void> {
     allowedEmails: target.allowedEmails,
   }, target.visibility);
   targetImagePayload = undefined;
+  pendingTargetMediaSources.clear();
   if (targetImageFile) {
     targetImageFile.value = '';
   }
@@ -2566,6 +2655,7 @@ function resetImageTargetEditor(): void {
   editingTargetScanId = undefined;
   targetAccess = { ...DEFAULT_IMAGE_TARGET_ACCESS };
   targetImagePayload = undefined;
+  pendingTargetMediaSources.clear();
   targetObjects = [];
   targetGroups = [];
   targetSelection = { objectIds: [] };

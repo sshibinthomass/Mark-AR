@@ -196,18 +196,18 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#target-model-select')).toBeTruthy();
     expect(container.querySelector('#target-model-select')?.closest('label')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('#target-model-rail')).toBeTruthy();
-    expect(container.querySelector('#target-model-rail')?.closest('.target-preview-shell')).toBeTruthy();
+    expect(container.querySelector('#target-model-rail')?.closest('[data-target-inspector-panel="objects"]')).toBeTruthy();
     expect(
       [...container.querySelectorAll<HTMLElement>('[data-target-inspector-tab]')].map((tab) => (
         tab.dataset.targetInspectorTab
       )),
-    ).toEqual(['target', 'objects', 'text', 'object-controls']);
+    ).toEqual(['target', 'objects', 'object-controls']);
     expect(container.querySelector('[data-target-inspector-tab="target"]')?.getAttribute('aria-selected')).toBe('true');
     expect(container.querySelector('[data-target-inspector-tab="object-controls"]')?.getAttribute('aria-disabled')).toBe('true');
     expect(container.querySelector('[data-target-inspector-tab="object-controls"]')?.hasAttribute('disabled')).toBe(true);
     expect(container.querySelector('[data-target-inspector-panel="target"]')?.hasAttribute('hidden')).toBe(false);
     expect(container.querySelector('[data-target-inspector-panel="objects"]')?.hasAttribute('hidden')).toBe(true);
-    expect(container.querySelector('[data-target-inspector-panel="text"]')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-target-inspector-panel="text"]')).toBeNull();
     expect(container.querySelector('[data-target-inspector-panel="object-controls"]')?.hasAttribute('hidden')).toBe(true);
     expect(container.querySelector('[data-target-inspector-panel="animation"]')).toBeNull();
     expect(container.querySelector('#add-target-object')).toBeNull();
@@ -220,7 +220,17 @@ describe('renderAppShell', () => {
     expect(groupSelected?.textContent?.trim()).toBe('Group selected');
     expect(groupSelected?.closest('[data-target-inspector-panel="objects"]')).toBeTruthy();
     expect(container.querySelector('#target-text-value')).toBeTruthy();
-    expect(container.querySelector('#target-text-value')?.closest('[data-target-inspector-panel="text"]')).toBeTruthy();
+    expect(container.querySelector('#target-text-value')?.closest('[data-target-inspector-panel="objects"]')).toBeTruthy();
+    expect(container.querySelectorAll('[data-add-object-kind]')).toHaveLength(4);
+    expect(container.querySelector('[data-add-object-kind="model"]')).toBeTruthy();
+    expect(container.querySelector('[data-add-object-kind="text"]')).toBeTruthy();
+    expect(container.querySelector('[data-add-object-kind="image"]')).toBeTruthy();
+    expect(container.querySelector('[data-add-object-kind="youtube"]')).toBeTruthy();
+    expect(container.querySelector('#target-object-image-file')).toBeTruthy();
+    expect(container.querySelector('#target-object-image-url')).toBeTruthy();
+    expect(container.querySelector('#add-target-image')).toBeTruthy();
+    expect(container.querySelector('#target-object-youtube-url')).toBeTruthy();
+    expect(container.querySelector('#add-target-youtube')).toBeTruthy();
     expect(container.querySelector('.target-text-advanced')?.closest('[data-target-inspector-panel="text"]')).toBeNull();
     expect(container.querySelector('.target-text-advanced')?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();
     expect(container.querySelector('.target-text-advanced')?.hasAttribute('hidden')).toBe(true);

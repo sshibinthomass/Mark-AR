@@ -220,9 +220,6 @@ export function renderAppShell(): string {
               </div>
             </div>
             <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
-            <div id="target-model-rail" class="target-model-rail" role="listbox" aria-label="Model library">
-              <p class="target-model-rail-empty">Loading 3D models...</p>
-            </div>
           </div>
 
           <section class="tool-card target-inspector-card target-setup-card" data-layout-role="target-inspector">
@@ -233,7 +230,6 @@ export function renderAppShell(): string {
             <div class="target-inspector-tabs" role="tablist" aria-label="Target editor sections">
               <button type="button" id="target-tab-target" role="tab" data-target-inspector-tab="target" aria-selected="true" aria-controls="target-inspector-target">Target</button>
               <button type="button" id="target-tab-objects" role="tab" data-target-inspector-tab="objects" aria-selected="false" aria-controls="target-inspector-objects">Objects</button>
-              <button type="button" id="target-tab-text" role="tab" data-target-inspector-tab="text" aria-selected="false" aria-controls="target-inspector-text">Text</button>
               <button type="button" id="target-tab-object-controls" role="tab" data-target-inspector-tab="object-controls" aria-selected="false" aria-disabled="true" aria-controls="target-inspector-object-controls" disabled>Object</button>
             </div>
             <div class="target-inspector-panels">
@@ -290,47 +286,83 @@ export function renderAppShell(): string {
               </section>
 
               <section id="target-inspector-objects" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="objects" aria-labelledby="target-tab-objects" hidden>
+                <div class="target-object-kind-picker" role="tablist" aria-label="Add object">
+                  <button type="button" data-add-object-kind="model" aria-pressed="true">3D object</button>
+                  <button type="button" data-add-object-kind="text" aria-pressed="false">Text</button>
+                  <button type="button" data-add-object-kind="image" aria-pressed="false">Image</button>
+                  <button type="button" data-add-object-kind="youtube" aria-pressed="false">Video</button>
+                </div>
+                <div class="target-object-creators">
+                  <section data-object-creator="model">
+                    <div id="target-model-rail" class="target-model-rail" role="listbox" aria-label="Model library">
+                      <p class="target-model-rail-empty">Loading 3D models...</p>
+                    </div>
+                  </section>
+                  <section data-object-creator="text" hidden>
+                    <div class="target-text-panel">
+                      <label>
+                        <span>Text content</span>
+                        <textarea id="target-text-value" rows="2" aria-label="Text content">${TEXT_LANGUAGE_OPTIONS[0].sample}</textarea>
+                      </label>
+                      <div class="target-text-quick-grid">
+                        <label>
+                          <span>Style preset</span>
+                          <select id="target-text-preset">
+                            ${TEXT_STYLE_PRESETS.map((option) => (
+                              `<option value="${option.id}">${option.label}</option>`
+                            )).join('')}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Language</span>
+                          <select id="target-text-language">
+                            ${TEXT_LANGUAGE_OPTIONS.map((option) => (
+                              `<option value="${option.id}">${option.label}</option>`
+                            )).join('')}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Font</span>
+                          <select id="target-text-font">
+                            ${TEXT_FONT_OPTIONS.map((option) => (
+                              `<option value="${option.id}">${option.label}</option>`
+                            )).join('')}
+                          </select>
+                        </label>
+                      </div>
+                      <button id="add-target-text" type="button">Add text</button>
+                    </div>
+                  </section>
+                  <section data-object-creator="image" hidden>
+                    <div class="target-media-panel">
+                      <label class="file-control">
+                        <span>Upload image</span>
+                        <input id="target-object-image-file" type="file" accept="image/png,image/jpeg,image/webp" />
+                      </label>
+                      <span class="target-media-divider">or</span>
+                      <label>
+                        <span>Public HTTPS image URL</span>
+                        <input id="target-object-image-url" type="url" placeholder="https://cdn.example.com/poster.png" />
+                      </label>
+                      <button id="add-target-image" type="button">Add image</button>
+                    </div>
+                  </section>
+                  <section data-object-creator="youtube" hidden>
+                    <div class="target-media-panel">
+                      <label>
+                        <span>YouTube link</span>
+                        <input id="target-object-youtube-url" type="url" placeholder="https://www.youtube.com/watch?v=..." />
+                      </label>
+                      <small>The thumbnail appears in AR. Viewers tap it to play inline.</small>
+                      <button id="add-target-youtube" type="button">Add video</button>
+                    </div>
+                  </section>
+                </div>
                 <div class="target-object-toolbar">
                   <p>Ctrl/Command-click to select more than one object.</p>
                   <button id="group-selected-objects" type="button" disabled>Group selected</button>
                 </div>
                 <div id="target-object-list" class="target-object-list" role="list" aria-label="Placed 3D objects"></div>
-              </section>
-
-              <section id="target-inspector-text" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="text" aria-labelledby="target-tab-text" hidden>
-                <div class="target-text-panel">
-                  <label>
-                    <span>Text content</span>
-                    <textarea id="target-text-value" rows="2" aria-label="Text content">${TEXT_LANGUAGE_OPTIONS[0].sample}</textarea>
-                  </label>
-                  <div class="target-text-quick-grid">
-                    <label>
-                      <span>Style preset</span>
-                      <select id="target-text-preset">
-                        ${TEXT_STYLE_PRESETS.map((option) => (
-                          `<option value="${option.id}">${option.label}</option>`
-                        )).join('')}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Language</span>
-                      <select id="target-text-language">
-                        ${TEXT_LANGUAGE_OPTIONS.map((option) => (
-                          `<option value="${option.id}">${option.label}</option>`
-                        )).join('')}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Font</span>
-                      <select id="target-text-font">
-                        ${TEXT_FONT_OPTIONS.map((option) => (
-                          `<option value="${option.id}">${option.label}</option>`
-                        )).join('')}
-                      </select>
-                    </label>
-                  </div>
-                  <button id="add-target-text" type="button">Add text</button>
-                </div>
               </section>
 
               <section id="target-inspector-object-controls" class="target-inspector-panel" role="tabpanel" data-target-inspector-panel="object-controls" aria-labelledby="target-tab-object-controls" hidden>
