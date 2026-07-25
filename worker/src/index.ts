@@ -20,6 +20,7 @@ export interface WorkerEnv {
   ADMIN_EMAIL?: string;
   ALLOWED_ORIGINS?: string;
   LEGACY_WORKER_ORIGIN?: string;
+  LEGACY_WORKER?: { fetch: typeof fetch };
   PUBLIC_ORIGIN?: string;
   ASSET_BUCKET: R2BucketLike;
 }
@@ -115,7 +116,7 @@ async function route(request: Request, env: WorkerEnv, deps: WorkerDeps): Promis
     url.pathname.startsWith('/auth/')
     || (request.method === 'GET' && url.pathname === '/generate-3d/models')
   )) {
-    return proxyLegacyRequest(request, env.LEGACY_WORKER_ORIGIN, url, deps.fetch);
+    return proxyLegacyRequest(request, env.LEGACY_WORKER_ORIGIN, url, legacyFetch(env, deps));
   }
   if (url.pathname.startsWith('/auth/')) return handleAuth(request, env, deps, url.pathname);
   if (request.method === 'GET' && url.pathname === '/generate-3d/models') {
@@ -222,12 +223,18 @@ async function proxyLegacyRequest(
   const body = request.method === 'GET' || request.method === 'HEAD'
     ? undefined
     : await request.clone().arrayBuffer();
+  const headers = new Headers(request.headers);
+  headers.delete('host');
   return fetchImpl(targetUrl, {
     method: request.method,
-    headers: request.headers,
+    headers,
     ...(body ? { body } : {}),
     redirect: 'manual',
   });
+}
+
+function legacyFetch(env: WorkerEnv, deps: WorkerDeps): typeof fetch {
+  return env.LEGACY_WORKER?.fetch.bind(env.LEGACY_WORKER) ?? deps.fetch;
 }
 
 async function listTargets(request: Request, env: WorkerEnv, deps: WorkerDeps): Promise<Response> {
@@ -675,7 +682,7 @@ async function authenticatedUser(
   const token = request.headers.get('Authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
   if (env.LEGACY_WORKER_ORIGIN) {
-    const response = await deps.fetch(
+    const response = await legacyFetch(env, deps)(
       `${env.LEGACY_WORKER_ORIGIN.replace(/\/+$/, '')}/auth/session`,
       { headers: { Authorization: `Bearer ${token}` } },
     );

@@ -101,8 +101,9 @@ describe('Mark-AR target Worker', () => {
     const env = createEnv(bucket);
     (env as WorkerEnv & { LEGACY_WORKER_ORIGIN: string }).LEGACY_WORKER_ORIGIN =
       'https://legacy.example';
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      expect(new Headers(init?.headers).has('host')).toBe(false);
       if (url === 'https://legacy.example/auth/signup') {
         return new Response(JSON.stringify({
           user: { email: 'pending@example.com', role: 'user', status: 'pending' },
@@ -115,19 +116,23 @@ describe('Mark-AR target Worker', () => {
       }
       return new Response('not found', { status: 404 });
     });
+    (env as WorkerEnv & { LEGACY_WORKER: { fetch: typeof fetch } }).LEGACY_WORKER = {
+      fetch: fetchImpl as unknown as typeof fetch,
+    };
+    const forbiddenGlobalFetch = vi.fn(async () => new Response('global fetch used', { status: 500 }));
 
     const signup = await handleRequest(new Request('https://worker.example/auth/signup', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Host: 'worker.example' },
       body: JSON.stringify({
         email: 'pending@example.com',
         password: 'correct horse battery staple',
         name: 'Pending',
       }),
-    }), env, { fetch: fetchImpl });
+    }), env, { fetch: forbiddenGlobalFetch as unknown as typeof fetch });
     const models = await handleRequest(new Request('https://worker.example/generate-3d/models', {
-      headers: { Authorization: 'Bearer legacy-token' },
-    }), env, { fetch: fetchImpl });
+      headers: { Authorization: 'Bearer legacy-token', Host: 'worker.example' },
+    }), env, { fetch: forbiddenGlobalFetch as unknown as typeof fetch });
 
     expect(signup.status).toBe(201);
     expect(await signup.json()).toEqual({
@@ -138,6 +143,7 @@ describe('Mark-AR target Worker', () => {
       models: [{ id: 'public-1', visibility: 'public' }],
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(forbiddenGlobalFetch).not.toHaveBeenCalled();
   });
 
   it('uses the legacy session endpoint to authorize target access', async () => {
@@ -181,16 +187,21 @@ describe('Mark-AR target Worker', () => {
         },
       }), { headers: { 'Content-Type': 'application/json' } });
     });
+    (env as WorkerEnv & { LEGACY_WORKER: { fetch: typeof fetch } }).LEGACY_WORKER = {
+      fetch: fetchImpl as unknown as typeof fetch,
+    };
+    const forbiddenGlobalFetch = vi.fn(async () => new Response('global fetch used', { status: 500 }));
 
     const response = await handleRequest(new Request(
       'https://worker.example/generate-3d/image-targets',
       { headers: { Authorization: 'Bearer legacy-token' } },
-    ), env, { fetch: fetchImpl });
+    ), env, { fetch: forbiddenGlobalFetch as unknown as typeof fetch });
     const body = await response.json() as { targets: Array<{ id: string }> };
 
     expect(response.status).toBe(200);
     expect(body.targets.map((target) => target.id)).toEqual(['owned-target']);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(forbiddenGlobalFetch).not.toHaveBeenCalled();
   });
 
   it('stores uploaded object images in R2 and returns durable media objects', async () => {

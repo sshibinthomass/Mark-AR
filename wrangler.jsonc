@@ -15,5 +15,11 @@
       "binding": "ASSET_BUCKET",
       "bucket_name": "web-ar-model-assets"
     }
+  ],
+  "services": [
+    {
+      "binding": "LEGACY_WORKER",
+      "service": "web-ar-generate-model"
+    }
   ]
 }
