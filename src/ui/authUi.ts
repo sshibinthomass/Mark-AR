@@ -60,12 +60,17 @@ export function isAuthenticated(state: AuthUiState): state is Extract<AuthUiStat
 }
 
 export function resolveAccessibleRoute(route: AppRoute, state: AuthUiState): AppRoute {
-  return route === 'targets' && !isAuthenticated(state) ? 'account' : route;
+  const protectedRoute = route === 'targets' || route === 'settings';
+  return protectedRoute && !isAuthenticated(state) ? 'account' : route;
 }
 
 export function applyAuthUi(root: HTMLElement, state: AuthUiState): void {
   const authenticated = isAuthenticated(state);
   root.dataset.authState = state.status;
+
+  root.querySelectorAll<HTMLElement>('[data-auth-settings]').forEach((link) => {
+    link.hidden = !authenticated;
+  });
 
   root.querySelectorAll<HTMLElement>('[data-auth-panel]').forEach((panel) => {
     panel.hidden = panel.dataset.authPanel !== state.status;

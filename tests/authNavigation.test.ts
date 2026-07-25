@@ -43,6 +43,18 @@ describe('AuthNavigation', () => {
     expect(navigation.takePending(signedIn)).toBe('targets');
   });
 
+  it('guards a direct Settings request and restores it after authentication', () => {
+    const navigation = new AuthNavigation();
+    const root = renderRouteFixture();
+
+    expect(navigation.activate(root, 'settings', signedOut)).toEqual({
+      activeRoute: 'account',
+      blocked: true,
+    });
+    expect(navigation.takePending(signedOut)).toBeUndefined();
+    expect(navigation.takePending(signedIn)).toBe('settings');
+  });
+
   it('cancels a pending Targets redirect when the user explicitly opens Scan', () => {
     const navigation = new AuthNavigation();
     const root = renderRouteFixture();
@@ -99,6 +111,7 @@ function renderRouteFixture(): HTMLElement {
   root.innerHTML = `
     <section data-page="scan" hidden></section>
     <section data-page="targets" hidden></section>
+    <section data-page="settings" hidden></section>
     <section data-page="account" hidden></section>
   `;
   return root;
