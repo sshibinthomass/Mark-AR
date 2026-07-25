@@ -121,6 +121,57 @@ describe('Mark-AR target Worker', () => {
     expect(bucket.values.has(target.image_object_key)).toBe(false);
   });
 
+  it('preserves the exact object ID when an image-only target becomes YouTube-only', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const token = await signupAndLogin(env);
+    const fetchImpl = vi.fn(async () => new Response('remote-image', {
+      headers: { 'Content-Type': 'image/webp', 'Content-Length': '12' },
+    }));
+    const created = await createUrlTarget(env, token, fetchImpl);
+    const createdTarget = (await created.json() as { target: any }).target;
+
+    expect(created.status).toBe(201);
+    expect(createdTarget.objects.map((object: { id: string }) => object.id)).toEqual(['remote-1']);
+
+    const updated = await handleRequest(new Request(
+      `https://worker.example/generate-3d/image-targets/${createdTarget.id}`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          objects: [{
+            kind: 'youtube',
+            id: 'video-only-1',
+            youtube: {
+              video_id: 'dQw4w9WgXcQ',
+              url: 'https://youtu.be/dQw4w9WgXcQ',
+              thumbnail_url: 'https://example.invalid/ignored.jpg',
+            },
+            placement: placement(),
+          }],
+        }),
+      },
+    ), env, {
+      now: () => new Date('2026-07-25T13:00:00Z'),
+      randomUUID: crypto.randomUUID,
+      fetch: fetchImpl,
+    });
+    const updatedTarget = (await updated.json() as { target: any }).target;
+
+    expect(updated.status).toBe(200);
+    expect(updatedTarget.objects).toHaveLength(1);
+    expect(updatedTarget.objects[0]).toMatchObject({
+      kind: 'youtube',
+      id: 'video-only-1',
+      youtube: {
+        video_id: 'dQw4w9WgXcQ',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        thumbnail_url: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+      },
+    });
+  });
+
   it('rejects private image URLs before fetching them', async () => {
     const bucket = new MemoryBucket();
     const env = createEnv(bucket);
