@@ -397,10 +397,10 @@ async function persistObjects(
     if (candidate.id !== undefined) {
       if (
         typeof candidate.id !== 'string'
-        || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(candidate.id)
+        || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(candidate.id)
       ) {
         return cleanupError(
-          'Target object IDs must use only letters, numbers, dot, underscore, colon, or hyphen.',
+          'Target object IDs must use only letters, numbers, dot, underscore, or hyphen.',
           createdKeys,
           env,
         );
@@ -523,11 +523,50 @@ async function importPublicImage(
     if (declaredLength > MAX_IMAGE_BYTES) return { error: 'Image objects must be 5 MB or smaller.' };
     const mime = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() ?? '';
     if (!IMAGE_MIME_TYPES.has(mime)) return { error: 'Image objects must be PNG, JPEG, or WebP.' };
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_IMAGE_BYTES) return { error: 'Image objects must be 5 MB or smaller.' };
-    return { bytes, mime };
+    const downloaded = await readResponseBodyWithLimit(response, MAX_IMAGE_BYTES);
+    if ('error' in downloaded) return downloaded;
+    return { bytes: downloaded.bytes, mime };
   }
   return { error: 'Image URL redirected too many times.' };
+}
+
+async function readResponseBodyWithLimit(
+  response: Response,
+  maxBytes: number,
+): Promise<{ bytes: Uint8Array } | { error: string }> {
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return bytes.byteLength <= maxBytes
+      ? { bytes }
+      : { error: 'Image objects must be 5 MB or smaller.' };
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return { error: 'Image objects must be 5 MB or smaller.' };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { bytes };
 }
 
 function safePublicUrl(input: string): string | null {

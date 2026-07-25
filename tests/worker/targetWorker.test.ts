@@ -431,8 +431,63 @@ describe('Mark-AR target Worker', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: 'Target object IDs must use only letters, numbers, dot, underscore, colon, or hyphen.',
+      error: 'Target object IDs must use only letters, numbers, dot, underscore, or hyphen.',
     });
+
+    const collisionProne = await handleRequest(new Request(
+      'https://worker.example/generate-3d/image-targets',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: 'Collision-prone ID',
+          image_base64: btoa('marker'),
+          image_mime_type: 'image/png',
+          objects: [{
+            kind: 'youtube',
+            id: 'video:one',
+            youtube: { video_id: 'dQw4w9WgXcQ' },
+            placement: placement(),
+          }],
+        }),
+      },
+    ), env, {
+      now: () => new Date('2026-07-25T12:00:00Z'),
+      randomUUID: () => 'collision-id-target',
+      fetch: vi.fn(),
+    });
+
+    expect(collisionProne.status).toBe(400);
+    expect(await collisionProne.json()).toEqual({
+      error: 'Target object IDs must use only letters, numbers, dot, underscore, or hyphen.',
+    });
+  });
+
+  it('cancels URL image streams immediately after they exceed 5 MB', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const token = await signupAndLogin(env);
+    let cancelled = false;
+    const oneMegabyte = new Uint8Array(1024 * 1024);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let index = 0; index < 6; index += 1) {
+          controller.enqueue(oneMegabyte);
+        }
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const fetchImpl = vi.fn(async () => new Response(stream, {
+      headers: { 'Content-Type': 'image/webp' },
+    }));
+
+    const response = await createUrlTarget(env, token, fetchImpl);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Image objects must be 5 MB or smaller.' });
+    expect(cancelled).toBe(true);
   });
 
   it('rejects private image URLs before fetching them', async () => {
