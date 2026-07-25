@@ -463,6 +463,57 @@ describe('Mark-AR target Worker', () => {
     });
   });
 
+  it('keeps distinct image object IDs distinct in R2 media keys', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const token = await signupAndLogin(env);
+    const response = await handleRequest(new Request(
+      'https://worker.example/generate-3d/image-targets',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: 'Distinct media IDs',
+          image_base64: btoa('marker'),
+          image_mime_type: 'image/png',
+          objects: ['image', 'image-'].map((id) => ({
+            kind: 'image',
+            id,
+            image: {
+              label: id,
+              width: 100,
+              height: 100,
+              aspect_ratio: 1,
+              pending_source: {
+                source: 'upload',
+                image_base64: btoa(id),
+                image_mime_type: 'image/png',
+              },
+            },
+            placement: placement(),
+          })),
+        }),
+      },
+    ), env, {
+      now: () => new Date('2026-07-25T12:00:00Z'),
+      randomUUID: () => 'distinct-image-ids',
+      fetch: vi.fn(),
+    });
+
+    expect(response.status).toBe(201);
+    const body = await response.json() as {
+      target: { objects: Array<{ image: { object_key: string } }> };
+    };
+    const keys = body.target.objects.map((object) => object.image.object_key);
+    expect(keys).toEqual([
+      'image-targets/media/distinct-image-ids/image.png',
+      'image-targets/media/distinct-image-ids/image-.png',
+    ]);
+    expect(new Set(keys).size).toBe(2);
+    expect(bucket.values.has(keys[0])).toBe(true);
+    expect(bucket.values.has(keys[1])).toBe(true);
+  });
+
   it('cancels URL image streams immediately after they exceed 5 MB', async () => {
     const bucket = new MemoryBucket();
     const env = createEnv(bucket);
@@ -481,6 +532,30 @@ describe('Mark-AR target Worker', () => {
     });
     const fetchImpl = vi.fn(async () => new Response(stream, {
       headers: { 'Content-Type': 'image/webp' },
+    }));
+
+    const response = await createUrlTarget(env, token, fetchImpl);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Image objects must be 5 MB or smaller.' });
+    expect(cancelled).toBe(true);
+  });
+
+  it('cancels URL image streams rejected by their declared size', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const token = await signupAndLogin(env);
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const fetchImpl = vi.fn(async () => new Response(stream, {
+      headers: {
+        'Content-Type': 'image/webp',
+        'Content-Length': String((5 * 1024 * 1024) + 1),
+      },
     }));
 
     const response = await createUrlTarget(env, token, fetchImpl);

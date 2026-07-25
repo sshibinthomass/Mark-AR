@@ -488,7 +488,7 @@ async function persistImageObject(
     if (!objectKey || !url) return { error: 'New image objects require an upload or public URL source.' };
     return { image: { url, object_key: objectKey, label, width, height, aspect_ratio: aspectRatio } };
   }
-  const key = `image-targets/media/${safe(targetId)}/${safe(objectId)}.${extension(mime)}`;
+  const key = `image-targets/media/${safe(targetId)}/${objectId}.${extension(mime)}`;
   await env.ASSET_BUCKET.put(key, bytes, { httpMetadata: { contentType: mime } });
   return {
     image: {
@@ -514,20 +514,38 @@ async function importPublicImage(
     const response = await fetchImpl(current, { redirect: 'manual' });
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('Location');
+      await cancelResponseBody(response);
       current = location ? safePublicUrl(new URL(location, current).toString()) : null;
       if (!current) return { error: 'Image URL redirected to an unsafe location.' };
       continue;
     }
-    if (!response.ok) return { error: `Unable to download image (HTTP ${response.status}).` };
+    if (!response.ok) {
+      await cancelResponseBody(response);
+      return { error: `Unable to download image (HTTP ${response.status}).` };
+    }
     const declaredLength = Number(response.headers.get('Content-Length') ?? 0);
-    if (declaredLength > MAX_IMAGE_BYTES) return { error: 'Image objects must be 5 MB or smaller.' };
+    if (declaredLength > MAX_IMAGE_BYTES) {
+      await cancelResponseBody(response);
+      return { error: 'Image objects must be 5 MB or smaller.' };
+    }
     const mime = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() ?? '';
-    if (!IMAGE_MIME_TYPES.has(mime)) return { error: 'Image objects must be PNG, JPEG, or WebP.' };
+    if (!IMAGE_MIME_TYPES.has(mime)) {
+      await cancelResponseBody(response);
+      return { error: 'Image objects must be PNG, JPEG, or WebP.' };
+    }
     const downloaded = await readResponseBodyWithLimit(response, MAX_IMAGE_BYTES);
     if ('error' in downloaded) return downloaded;
     return { bytes: downloaded.bytes, mime };
   }
   return { error: 'Image URL redirected too many times.' };
+}
+
+async function cancelResponseBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // The response has already been released or cancelled.
+  }
 }
 
 async function readResponseBodyWithLimit(
