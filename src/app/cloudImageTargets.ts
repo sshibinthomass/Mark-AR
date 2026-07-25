@@ -187,6 +187,11 @@ type WorkerErrorResponse = {
   error?: string;
 };
 
+type WorkerSingleImageTargetResponse =
+  & WorkerErrorResponse
+  & Partial<WorkerImageTargetEntry>
+  & { target?: WorkerImageTargetEntry | null };
+
 type ClientInput = {
   apiUrl: string;
   authToken?: string | null;
@@ -566,11 +571,12 @@ function animationFromWire(animation: NonNullable<WorkerImageTargetObject['anima
 }
 
 async function parseImageTargetResponse(response: Response, fallback: string): Promise<CloudImageTarget> {
-  const body = (await response.json()) as WorkerImageTargetEntry & WorkerErrorResponse;
+  const body = (await response.json()) as WorkerSingleImageTargetResponse;
   if (!response.ok) {
     throw new ImageTargetRequestError(body.error ?? `${fallback} with HTTP ${response.status}.`, response.status);
   }
-  const target = mapImageTargetEntry(body);
+  const entry = body.target && typeof body.target === 'object' ? body.target : body;
+  const target = mapImageTargetEntry(entry);
   if (!target) {
     throw new Error('Worker response did not include an image target.');
   }

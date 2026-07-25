@@ -198,6 +198,135 @@ describe('cloud image target client', () => {
     });
   });
 
+  it('creates image targets from wrapped target responses', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      target: {
+        id: 'target-wrapped',
+        label: 'Wrapped target',
+        image_url: 'https://worker.example/image-targets/images/target-wrapped.png',
+        image_object_key: 'image-targets/images/target-wrapped.png',
+        objects: [{
+          kind: 'youtube',
+          id: 'video-1',
+          youtube: {
+            video_id: 'M7lc1UVf-VE',
+            url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+            thumbnail_url: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+          },
+          placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.1 },
+        }],
+      },
+    }), { status: 200 }));
+
+    const target = await createImageTarget({
+      apiUrl: 'https://worker.example/generate-3d',
+      fetchImpl,
+      label: 'Wrapped target',
+      imageBase64: 'aW1hZ2U=',
+      imageMimeType: 'image/png',
+      model: { id: 'model-1', label: 'Model', url: 'https://worker.example/model.glb' },
+      placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.1, rotationX: 0, rotationY: 0, rotationZ: 0 },
+    });
+
+    expect(target.id).toBe('target-wrapped');
+    expect(target.objects).toEqual([expect.objectContaining({
+      kind: 'youtube',
+      id: 'video-1',
+      youtube: {
+        videoId: 'M7lc1UVf-VE',
+        url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+        thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+      },
+    })]);
+  });
+
+  it('updates image targets from wrapped target responses', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      target: {
+        id: 'target-wrapped',
+        label: 'Wrapped target',
+        image_url: 'https://worker.example/image-targets/images/target-wrapped.png',
+        image_object_key: 'image-targets/images/target-wrapped.png',
+        objects: [{
+          kind: 'youtube',
+          id: 'video-1',
+          youtube: {
+            video_id: 'M7lc1UVf-VE',
+            url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+            thumbnail_url: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+          },
+          placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.1 },
+        }],
+      },
+    }), { status: 200 }));
+
+    const target = await updateImageTarget({
+      apiUrl: 'https://worker.example/generate-3d',
+      fetchImpl,
+      targetId: 'target-wrapped',
+      label: 'Wrapped target',
+    });
+
+    expect(target.id).toBe('target-wrapped');
+    expect(target.objects).toEqual([expect.objectContaining({
+      kind: 'youtube',
+      id: 'video-1',
+      youtube: {
+        videoId: 'M7lc1UVf-VE',
+        url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+        thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+      },
+    })]);
+  });
+
+  it('loads scan targets from wrapped target responses', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      target: {
+        id: 'target-wrapped',
+        label: 'Wrapped target',
+        image_url: 'https://worker.example/image-targets/images/target-wrapped.png',
+        image_object_key: 'image-targets/images/target-wrapped.png',
+        objects: [{
+          kind: 'youtube',
+          id: 'video-1',
+          youtube: {
+            video_id: 'M7lc1UVf-VE',
+            url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+            thumbnail_url: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+          },
+          placement: { scale: 1, offset_x: 0, offset_y: 0, height: 0.1 },
+        }],
+      },
+    }), { status: 200 }));
+
+    const target = await getImageTargetForScan({
+      apiUrl: 'https://worker.example/generate-3d',
+      scanId: 'target-wrapped',
+      fetchImpl,
+    });
+
+    expect(target.id).toBe('target-wrapped');
+    expect(target.objects).toEqual([expect.objectContaining({
+      kind: 'youtube',
+      id: 'video-1',
+      youtube: {
+        videoId: 'M7lc1UVf-VE',
+        url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+        thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+      },
+    })]);
+  });
+
+  it('rejects successful scan responses with an invalid target envelope', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ target: null }), { status: 200 }));
+
+    await expect(getImageTargetForScan({
+      apiUrl: 'https://worker.example/generate-3d',
+      scanId: 'invalid',
+      fetchImpl,
+    })).rejects.toThrow('Worker response did not include an image target.');
+  });
+
   it('sends optional auth for focused scans and preserves response status on errors', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: 'Login required.' }), { status: 401 }));
 
