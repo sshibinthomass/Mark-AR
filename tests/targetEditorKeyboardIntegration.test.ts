@@ -108,7 +108,7 @@ describe('target editor keyboard integration', () => {
     document.querySelectorAll<HTMLButtonElement>('.target-model-card')[0].click();
     await waitFor(() => latest().objects.length === 1);
 
-    const shiftMove = dispatchEditorKey(document.body, 'ArrowRight', { shiftKey: true });
+    const modifiedMove = dispatchEditorKey(document.body, 'ArrowRight', { ctrlKey: true });
     const shiftDelete = dispatchEditorKey(document.body, 'Delete', { shiftKey: true });
     const consumedMove = new KeyboardEvent('keydown', {
       key: 'ArrowRight',
@@ -118,7 +118,7 @@ describe('target editor keyboard integration', () => {
     consumedMove.preventDefault();
     document.body.dispatchEvent(consumedMove);
 
-    expect(shiftMove.defaultPrevented).toBe(false);
+    expect(modifiedMove.defaultPrevented).toBe(false);
     expect(shiftDelete.defaultPrevented).toBe(false);
     expect(latest().objects).toHaveLength(1);
     expect(latest().objects[0].placement.offsetX).toBe(0);

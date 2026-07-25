@@ -15,13 +15,42 @@ describe('target editor keyboard commands', () => {
     ['PageDown', { type: 'move', offsetX: 0, offsetY: 0, height: -0.02 }],
     ['Delete', { type: 'delete' }],
   ])('maps %s to an editor command', (key, expected) => {
-    expect(targetEditorKeyboardCommand({
-      key,
-      altKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      shiftKey: false,
-    })).toEqual(expected);
+    expect(targetEditorKeyboardCommand(keyEvent({ key }))).toEqual(expected);
+  });
+
+  it.each([
+    [{ key: 'z', ctrlKey: true }, { type: 'undo' }],
+    [{ key: 'z', metaKey: true }, { type: 'undo' }],
+    [{ key: 'z', ctrlKey: true, shiftKey: true }, { type: 'redo' }],
+    [{ key: 'y', ctrlKey: true }, { type: 'redo' }],
+    [{ key: 'd', metaKey: true }, { type: 'duplicate' }],
+    [{ key: 'Tab' }, { type: 'cycle-selection', direction: 1 }],
+    [{ key: 'Tab', shiftKey: true }, { type: 'cycle-selection', direction: -1 }],
+    [{ key: 'ArrowLeft', shiftKey: true }, { type: 'move', offsetX: -0.01, offsetY: 0, height: 0 }],
+    [{ key: 'PageUp', shiftKey: true }, { type: 'move', offsetX: 0, offsetY: 0, height: 0.005 }],
+    [{ key: 'w' }, { type: 'transform-mode', mode: 'translate' }],
+    [{ key: 'e' }, { type: 'transform-mode', mode: 'rotate' }],
+    [{ key: 'r' }, { type: 'transform-mode', mode: 'scale' }],
+    [{ key: '+', shiftKey: true }, { type: 'scale', amount: 0.05 }],
+    [{ key: '=' }, { type: 'scale', amount: 0.05 }],
+    [{ key: '-' }, { type: 'scale', amount: -0.05 }],
+    [{ key: '[' }, { type: 'rotate-y', degrees: -5 }],
+    [{ key: ']' }, { type: 'rotate-y', degrees: 5 }],
+    [{ key: 'Home' }, { type: 'reset-transform' }],
+    [{ key: 'h' }, { type: 'toggle-hidden' }],
+    [{ key: 'l' }, { type: 'toggle-locked' }],
+    [{ key: '1' }, { type: 'camera-preset', preset: 'front' }],
+    [{ key: '3' }, { type: 'camera-preset', preset: 'right' }],
+    [{ key: '7' }, { type: 'camera-preset', preset: 'top' }],
+    [{ key: '0' }, { type: 'camera-preset', preset: 'home' }],
+    [{ key: 'f' }, { type: 'camera-preset', preset: 'home' }],
+    [{ key: ' ' }, { type: 'toggle-animation' }],
+    [{ key: 's', ctrlKey: true }, { type: 'save' }],
+    [{ key: '?', shiftKey: true }, { type: 'toggle-help' }],
+    [{ key: 'Escape' }, { type: 'finish-interaction' }],
+    [{ key: 'Enter' }, { type: 'finish-interaction' }],
+  ])('maps %o to %o', (event, expected) => {
+    expect(targetEditorKeyboardCommand(keyEvent(event))).toEqual(expected);
   });
 
   it('applies a movement command without changing scale or rotation', () => {
@@ -50,27 +79,11 @@ describe('target editor keyboard commands', () => {
   });
 
   it('ignores modified and unsupported shortcuts', () => {
-    expect(targetEditorKeyboardCommand({
-      key: 'ArrowLeft',
-      altKey: false,
-      ctrlKey: true,
-      metaKey: false,
-      shiftKey: false,
-    })).toBeUndefined();
-    expect(targetEditorKeyboardCommand({
-      key: 'Delete',
-      altKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      shiftKey: true,
-    })).toBeUndefined();
-    expect(targetEditorKeyboardCommand({
-      key: 'Home',
-      altKey: false,
-      ctrlKey: false,
-      metaKey: false,
-      shiftKey: false,
-    })).toBeUndefined();
+    expect(targetEditorKeyboardCommand(keyEvent({ key: 'ArrowLeft', ctrlKey: true }))).toBeUndefined();
+    expect(targetEditorKeyboardCommand(keyEvent({ key: 'Delete', shiftKey: true }))).toBeUndefined();
+    expect(targetEditorKeyboardCommand(keyEvent({ key: 'd', ctrlKey: true, shiftKey: true }))).toBeUndefined();
+    expect(targetEditorKeyboardCommand(keyEvent({ key: 'ArrowRight', altKey: true }))).toBeUndefined();
+    expect(targetEditorKeyboardCommand(keyEvent({ key: 'Unknown' }))).toBeUndefined();
   });
 
   it.each(['input', 'textarea', 'select'])('recognizes editable %s targets', (tag) => {
@@ -94,3 +107,15 @@ describe('target editor keyboard commands', () => {
     expect(isEditableKeyboardTarget(null)).toBe(false);
   });
 });
+
+function keyEvent(
+  event: Pick<KeyboardEvent, 'key'> & Partial<Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>>,
+): Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'> {
+  return {
+    key: event.key,
+    altKey: event.altKey ?? false,
+    ctrlKey: event.ctrlKey ?? false,
+    metaKey: event.metaKey ?? false,
+    shiftKey: event.shiftKey ?? false,
+  };
+}
