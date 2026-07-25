@@ -1857,7 +1857,7 @@ button:disabled,
     left: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 2px;
     width: 100%;
     padding: 6px 8px max(6px, env(safe-area-inset-bottom));
@@ -1865,6 +1865,10 @@ button:disabled,
     background: var(--color-interface-white);
     box-shadow: none;
     backdrop-filter: none;
+  }
+
+  [data-auth-state="signed-in"] .route-tabs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .route-tabs a {

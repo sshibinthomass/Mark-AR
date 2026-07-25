@@ -28,11 +28,14 @@ describe('responsive navigation styles', () => {
   const mobile = mediaBlock('(max-width: 767px)');
   const compactAccount = mediaBlock('(max-width: 359px)');
 
-  it('uses a compact brand bar and fixed four-item bottom navigation', () => {
+  it('uses a compact brand bar and adapts the bottom navigation to authentication', () => {
     expect(cssRule(mobile, '.shell-nav')).toContain('min-height: 52px');
     expect(cssRule(mobile, '.shell-nav')).toContain('backdrop-filter: none');
     expect(cssRule(mobile, '.route-tabs')).toContain('position: fixed');
-    expect(cssRule(mobile, '.route-tabs')).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
+    expect(cssRule(mobile, '.route-tabs')).toContain('grid-template-columns: repeat(4, minmax(0, 1fr))');
+    expect(cssRule(mobile, '[data-auth-state="signed-in"] .route-tabs')).toContain(
+      'grid-template-columns: repeat(5, minmax(0, 1fr))',
+    );
     expect(cssRule(mobile, '.route-tabs')).toContain('bottom: 0');
     expect(cssRule(mobile, '.app-shell')).toContain('env(safe-area-inset-bottom)');
     expect(cssRule(mobile, '.route-tabs a')).toContain('min-height: 56px');

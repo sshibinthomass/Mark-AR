@@ -15,6 +15,7 @@ export type KeyboardShortcutSection = Readonly<{
 
 const studioSelectionScope = 'Selection required. Not while typing or editing a form.';
 const previewScope = '3D preview focus required.';
+const previewSelectionScope = '3D preview focus and selection required.';
 
 export const keyboardShortcutSections: readonly KeyboardShortcutSection[] = [
   {
@@ -36,9 +37,9 @@ export const keyboardShortcutSections: readonly KeyboardShortcutSection[] = [
     label: 'Transform tools',
     description: 'Switch tools or finish the current direct interaction.',
     shortcuts: [
-      { action: 'Activate Move', keys: ['W', 'G'], scope: previewScope },
-      { action: 'Activate Rotate', keys: ['E'], scope: previewScope },
-      { action: 'Activate Scale', keys: ['R', 'S'], scope: previewScope },
+      { action: 'Activate Move', keys: ['W', 'G'], scope: previewSelectionScope },
+      { action: 'Activate Rotate', keys: ['E'], scope: previewSelectionScope },
+      { action: 'Activate Scale', keys: ['R', 'S'], scope: previewSelectionScope },
       {
         action: 'Finish the interaction and return to Move',
         keys: ['Escape', 'Enter'],

@@ -31,6 +31,12 @@ describe('keyboard shortcut Settings', () => {
     expect(JSON.stringify(keyboardShortcutSections)).not.toMatch(
       /undo|redo|duplicate|hide|lock|play animation/i,
     );
+    expect(keyboardShortcutSections[1].shortcuts.map((shortcut) => shortcut.scope)).toEqual([
+      '3D preview focus and selection required.',
+      '3D preview focus and selection required.',
+      '3D preview focus and selection required.',
+      '3D preview focus required.',
+    ]);
   });
 
   it('renders sectioned semantic lists, key labels, and scope guidance', () => {
