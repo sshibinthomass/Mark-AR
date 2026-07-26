@@ -1,4 +1,5 @@
 import {
+  BoxHelper,
   Clock,
   Group,
   HemisphereLight,
@@ -16,15 +17,25 @@ import {
   type Camera,
   type Object3D,
 } from 'three';
-import { FloorGestureController, type Point2 } from '../interaction/floorGestureController';
+import { targetObjectLabel } from '../app/targetEditorObjects';
+import {
+  FloorGestureController,
+  type FloorDragGesture,
+  type Point2,
+} from '../interaction/floorGestureController';
 import type { CloudflarePlacedAsset } from './cloudflareMarkerObject';
 import { FloorHitTest } from './floorHitTest';
+import { FloorObjectTransform } from './floorObjectTransform';
 import { FloorSceneTransform } from './floorSceneTransform';
 import {
   prepareFloorSessionLauncher,
   type FloorSessionLauncherPreparation,
 } from './floorSessionLauncher';
-import { createTargetSceneObject, type TargetSceneObject } from './targetSceneObject';
+import {
+  createTargetSceneObject,
+  type TargetSceneObject,
+  type TargetSceneSelectableObject,
+} from './targetSceneObject';
 import { YouTubePlayerManager } from './youtubePlayerManager';
 
 const SCANNING_STATUS = 'Move your phone until the floor ring appears.';
@@ -33,10 +44,25 @@ const ENDED_STATUS = 'Floor AR ended. Scan the image or place it again.';
 
 export type FloorPlacementController = {
   launch(): Promise<void>;
-  place(): boolean;
+  place(): void;
   setRotation(degrees: number): void;
-  reset(): boolean;
+  setSelectAll(enabled: boolean): void;
+  clearSelection(): void;
+  reset(): void;
   stop(): Promise<void>;
+  dispose(): Promise<void>;
+};
+
+export type FloorTransformSelectionState = {
+  selectAll: boolean;
+  active: boolean;
+  objectId?: string;
+  label?: string;
+};
+
+export type FloorSelectionOutline = {
+  object: Object3D;
+  update(): void;
   dispose(): void;
 };
 
@@ -44,7 +70,7 @@ export type FloorPlacementPreparation =
   | { supported: false; message: string }
   | { supported: true; controller: FloorPlacementController };
 
-export type FloorPlacementHooks = {
+export type FloorPlacementRuntimeHooks = {
   onSessionStart(): void;
   onSessionEnd(): void;
   onStatus(message: string): void;
@@ -52,7 +78,10 @@ export type FloorPlacementHooks = {
   onYouTubeActivated(): void;
   onPlacementReady(ready: boolean): void;
   onPlaced(): void;
+  onSelectionChange(state: FloorTransformSelectionState): void;
 };
+
+export type FloorPlacementHooks = FloorPlacementRuntimeHooks;
 
 export type FloorPlacementScene = {
   renderer: WebGLRenderer;
@@ -80,6 +109,7 @@ export type FloorPlacementDependencies = {
     YouTubePlayerManager,
     'register' | 'setMarkerVisible' | 'activateFromPointer' | 'update' | 'resize' | 'dispose'
   >;
+  createSelectionOutline(target: Object3D): FloorSelectionOutline;
 };
 
 type FloorPlacementOptions = {
@@ -87,12 +117,26 @@ type FloorPlacementOptions = {
   overlayRoot: HTMLElement;
   gestureSurface: HTMLElement;
   asset: CloudflarePlacedAsset;
-  hooks: FloorPlacementHooks;
+  hooks: FloorPlacementRuntimeHooks;
 };
 
 type FloorSessionActivation = {
   session: XRSession;
   targetScene: TargetSceneObject;
+};
+
+type ActiveSelection =
+  | { kind: 'all'; root: Group }
+  | {
+      kind: 'object';
+      objectId: string;
+      root: Group;
+      contentRoot: Group;
+      transform: FloorObjectTransform;
+    };
+
+type GestureSessionToken = {
+  session: XRSession | null;
 };
 
 const DEFAULT_DEPENDENCIES: FloorPlacementDependencies = {
@@ -105,6 +149,7 @@ const DEFAULT_DEPENDENCIES: FloorPlacementDependencies = {
   createYouTubePlayerManager: (container, onPlaybackError) => new YouTubePlayerManager(container, {
     onPlaybackError,
   }),
+  createSelectionOutline: createDefaultSelectionOutline,
 };
 
 export async function prepareFloorPlacement(
@@ -130,11 +175,15 @@ export async function prepareFloorPlacement(
 class FloorPlacementRuntime implements FloorPlacementController {
   private readonly transform: FloorSceneTransform;
   private readonly hitTest: FloorHitTest;
-  private readonly gestureController: FloorGestureController;
+  private gestureController: FloorGestureController;
+  private gestureSessionToken: GestureSessionToken;
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
   private readonly dragPlane = new Plane(new Vector3(0, 1, 0));
-  private readonly dragPoint = new Vector3();
+  private readonly selectedWorldPosition = new Vector3();
+  private readonly previousDragPoint = new Vector3();
+  private readonly currentDragPoint = new Vector3();
+  private readonly dragDelta = new Vector3();
   private readonly preventOverlayXRSelect = (event: Event): void => {
     event.preventDefault();
   };
@@ -151,6 +200,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
   private launchGeneration = 0;
   private disposed = false;
+  private disposePromise: Promise<void> | null = null;
   private activeSession: XRSession | null = null;
   private sessionEndListener: (() => void) | null = null;
   private sessionSelectListener: (() => void) | null = null;
@@ -167,6 +217,9 @@ class FloorPlacementRuntime implements FloorPlacementController {
   private lastPlacementReady: boolean | null = null;
   private gesturesConnected = false;
   private gestureDisconnectPerformed = false;
+  private selectAll = true;
+  private activeSelection: ActiveSelection | null = null;
+  private selectionOutline: FloorSelectionOutline | null = null;
 
   constructor(
     options: FloorPlacementOptions,
@@ -183,17 +236,8 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.dependencies = dependencies;
     this.transform = new FloorSceneTransform(floorScene.placementRoot);
     this.hitTest = dependencies.createHitTest(floorScene.reticle);
-    this.gestureController = dependencies.createGestureController(options.gestureSurface, {
-      onTap: (point) => {
-        void this.activateYouTubeOrPlace(point);
-      },
-      onDrag: (point) => {
-        this.dragTo(point);
-      },
-      onPinch: (multiplier) => {
-        this.transform.scaleBy(multiplier);
-      },
-    });
+    this.gestureSessionToken = { session: null };
+    this.gestureController = this.createGestureController(this.gestureSessionToken);
   }
 
   launch(): Promise<void> {
@@ -230,7 +274,22 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.transform.rotateTo(degrees);
   }
 
+  setSelectAll(enabled: boolean): void {
+    if (enabled === this.selectAll) {
+      return;
+    }
+
+    this.clearActiveSelection(false);
+    this.selectAll = enabled;
+    this.emitSelectionChange();
+  }
+
+  clearSelection(): void {
+    this.clearActiveSelection(true);
+  }
+
   reset(): boolean {
+    this.clearSelection();
     const matrix = this.hitTest.latestPoseMatrix;
     if (!this.targetReady || !matrix) {
       return false;
@@ -258,20 +317,22 @@ class FloorPlacementRuntime implements FloorPlacementController {
     ]).then(() => undefined);
   }
 
-  dispose(): void {
-    if (this.disposed) {
-      return;
+  dispose(): Promise<void> {
+    if (this.disposePromise) {
+      return this.disposePromise;
     }
 
     this.disposed = true;
     this.launchGeneration += 1;
-    void this.endPendingResolvedSessions();
+    const pendingXROwnerships = [...this.pendingXROwnerships];
+    const pendingSessionCleanup = this.endPendingResolvedSessions();
     const session = this.activeSession;
+    let activeSessionCleanup = Promise.resolve();
     if (session) {
       this.detachSessionListeners(session);
       this.activeSession = null;
       this.sessionStarted = false;
-      void this.endSessionOnce(session);
+      activeSessionCleanup = this.endSessionOnce(session);
     }
 
     this.cleanupSessionResources(false);
@@ -280,6 +341,15 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.floorScene.renderer.setAnimationLoop(null);
     this.floorScene.renderer.domElement.remove();
     this.floorScene.dispose();
+    const pendingXROwnershipCleanup = Promise.allSettled(pendingXROwnerships).then(
+      () => undefined,
+    );
+    this.disposePromise = Promise.all([
+      pendingSessionCleanup,
+      activeSessionCleanup,
+      pendingXROwnershipCleanup,
+    ]).then(() => undefined);
+    return this.disposePromise;
   }
 
   private async acquireXROwnership(
@@ -423,6 +493,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
       return null;
     }
 
+    this.resetSelectionForSession();
     this.sessionStarted = true;
     this.options.hooks.onSessionStart();
 
@@ -455,6 +526,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
       }
     }
     this.clock = this.dependencies.createClock();
+    this.prepareGestureControllerForSession(session);
     this.connectGestures();
     this.options.hooks.onStatus(SCANNING_STATUS);
     this.floorScene.renderer.setAnimationLoop(this.onAnimationFrame);
@@ -489,6 +561,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (this.targetReady && this.targetScene && this.clock) {
       this.targetScene.update(this.clock.getDelta());
     }
+    this.selectionOutline?.update();
     const stageBounds = this.options.stage.getBoundingClientRect();
     this.youtubeManager?.resize(stageBounds.width, stageBounds.height);
     this.floorScene.renderer.render(this.floorScene.scene, this.floorScene.camera);
@@ -496,15 +569,34 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.youtubeManager?.update(this.currentRenderCamera);
   };
 
-  private async activateYouTubeOrPlace(point: Point2): Promise<void> {
+  private async activateYouTubeOrPlace(
+    point: Point2,
+    token: GestureSessionToken,
+  ): Promise<void> {
+    if (!this.isGestureSessionCurrent(token)) {
+      return;
+    }
+
     if (!this.floorScene.placementRoot.visible) {
       this.place();
       return;
     }
 
+    const selection = this.activeSelection;
+    if (selection) {
+      const hitSelectedTarget = this.pointHitsSelection(point, selection);
+      if (
+        hitSelectedTarget === false
+        && this.isGestureSessionCurrent(token)
+        && this.activeSelection === selection
+      ) {
+        this.clearSelection();
+      }
+      return;
+    }
+
     const manager = this.youtubeManager;
     if (!manager) {
-      this.place();
       return;
     }
     const session = this.activeSession;
@@ -514,25 +606,23 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
     const bounds = this.options.gestureSurface.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) {
-      this.place();
       return;
     }
 
-    const renderCamera = this.currentRenderCamera
-      ?? this.getCurrentXRCamera();
+    const renderCamera = this.getCurrentXRCamera();
     const result = await manager.activateFromPointer({
       x: ((point.x - bounds.left) / bounds.width) * 2 - 1,
       y: -((point.y - bounds.top) / bounds.height) * 2 + 1,
     }, renderCamera);
-    if (this.activeSession !== session || this.youtubeManager !== manager) {
+    if (
+      !this.isGestureSessionCurrent(token)
+      || this.activeSession !== session
+      || this.youtubeManager !== manager
+    ) {
       return;
     }
     if (result === 'activated') {
       this.options.hooks.onYouTubeActivated();
-      return;
-    }
-    if (result === 'missed') {
-      this.place();
     }
   }
 
@@ -560,26 +650,262 @@ class FloorPlacementRuntime implements FloorPlacementController {
     }
   }
 
-  private dragTo(point: Point2): void {
-    if (!this.floorScene.placementRoot.visible) {
+  private dragSelection(
+    gesture: FloorDragGesture,
+    token: GestureSessionToken,
+  ): void {
+    if (
+      !this.isGestureSessionCurrent(token)
+      || !this.floorScene.placementRoot.visible
+    ) {
       return;
     }
 
+    const selection = this.activeSelection;
+    if (!selection) {
+      return;
+    }
     const bounds = this.options.gestureSurface.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) {
       return;
+    }
+
+    selection.root.updateWorldMatrix(true, false);
+    selection.root.getWorldPosition(this.selectedWorldPosition);
+    this.dragPlane.constant = -this.selectedWorldPosition.y;
+    const camera = this.getCurrentXRCamera();
+    if (
+      !this.intersectDragPoint(gesture.previous, bounds, camera, this.previousDragPoint)
+      || !this.intersectDragPoint(gesture.current, bounds, camera, this.currentDragPoint)
+    ) {
+      return;
+    }
+
+    this.dragDelta.subVectors(this.currentDragPoint, this.previousDragPoint);
+    if (selection.kind === 'all') {
+      this.transform.moveByWorldDelta(this.dragDelta);
+    } else {
+      selection.transform.moveByWorldDelta(this.dragDelta);
+    }
+  }
+
+  private createGestureController(token: GestureSessionToken): FloorGestureController {
+    return this.dependencies.createGestureController(this.options.gestureSurface, {
+      isTransformActive: () => (
+        this.isGestureSessionCurrent(token) && this.activeSelection !== null
+      ),
+      onTap: (point) => {
+        void this.activateYouTubeOrPlace(point, token);
+      },
+      onLongPress: (point) => {
+        this.selectFromLongPress(point, token);
+      },
+      onDrag: (gesture) => {
+        this.dragSelection(gesture, token);
+      },
+      onPinch: (multiplier) => {
+        this.scaleSelection(multiplier, token);
+      },
+    });
+  }
+
+  private prepareGestureControllerForSession(session: XRSession): void {
+    if (
+      this.gestureSessionToken.session !== null
+      || this.gestureDisconnectPerformed
+    ) {
+      this.gestureSessionToken = { session: null };
+      this.gestureController = this.createGestureController(this.gestureSessionToken);
+      this.gestureDisconnectPerformed = false;
+    }
+    this.gestureSessionToken.session = session;
+  }
+
+  private isGestureSessionCurrent(token: GestureSessionToken): boolean {
+    return (
+      !this.disposed
+      && token === this.gestureSessionToken
+      && token.session !== null
+      && this.activeSession === token.session
+    );
+  }
+
+  private selectFromLongPress(point: Point2, token: GestureSessionToken): void {
+    if (
+      !this.isGestureSessionCurrent(token)
+      || !this.floorScene.placementRoot.visible
+    ) {
+      return;
+    }
+
+    const selectable = this.closestSelectableAt(point);
+    if (!selectable) {
+      return;
+    }
+
+    if (this.selectAll) {
+      this.activateSelection({
+        kind: 'all',
+        root: this.floorScene.placementRoot,
+      });
+      return;
+    }
+
+    this.activateSelection({
+      kind: 'object',
+      objectId: selectable.objectId,
+      root: selectable.interactionRoot,
+      contentRoot: selectable.contentRoot,
+      transform: new FloorObjectTransform(selectable.interactionRoot),
+    });
+  }
+
+  private scaleSelection(multiplier: number, token: GestureSessionToken): void {
+    if (!this.isGestureSessionCurrent(token)) {
+      return;
+    }
+
+    const selection = this.activeSelection;
+    if (!selection) {
+      return;
+    }
+    if (selection.kind === 'all') {
+      this.transform.scaleBy(multiplier);
+    } else {
+      selection.transform.scaleBy(multiplier);
+    }
+  }
+
+  private closestSelectableAt(point: Point2): TargetSceneSelectableObject | null {
+    const targetScene = this.targetScene;
+    if (!targetScene || !this.setRayFromScreenPoint(point)) {
+      return null;
+    }
+
+    this.floorScene.scene.updateMatrixWorld(true);
+    let closest: TargetSceneSelectableObject | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (const selectable of targetScene.selectableObjects) {
+      const intersection = this.raycaster.intersectObject(selectable.contentRoot, true)[0];
+      if (intersection && intersection.distance < closestDistance) {
+        closest = selectable;
+        closestDistance = intersection.distance;
+      }
+    }
+    return closest;
+  }
+
+  private pointHitsSelection(
+    point: Point2,
+    selection: ActiveSelection,
+  ): boolean | null {
+    if (!this.setRayFromScreenPoint(point)) {
+      return null;
+    }
+
+    this.floorScene.scene.updateMatrixWorld(true);
+    const target = selection.kind === 'all'
+      ? selection.root
+      : selection.contentRoot;
+    return this.raycaster.intersectObject(target, true).length > 0;
+  }
+
+  private setRayFromScreenPoint(point: Point2): boolean {
+    const bounds = this.options.gestureSurface.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      return false;
     }
 
     this.pointer.set(
       ((point.x - bounds.left) / bounds.width) * 2 - 1,
       -((point.y - bounds.top) / bounds.height) * 2 + 1,
     );
-    this.raycaster.setFromCamera(this.pointer, this.floorScene.camera);
-    this.dragPlane.set(new Vector3(0, 1, 0), -this.floorScene.placementRoot.position.y);
-    const intersection = this.raycaster.ray.intersectPlane(this.dragPlane, this.dragPoint);
-    if (intersection) {
-      this.transform.moveTo(intersection);
+    this.raycaster.setFromCamera(this.pointer, this.getCurrentXRCamera());
+    return true;
+  }
+
+  private intersectDragPoint(
+    point: Point2,
+    bounds: DOMRect,
+    camera: Camera,
+    target: Vector3,
+  ): boolean {
+    this.pointer.set(
+      ((point.x - bounds.left) / bounds.width) * 2 - 1,
+      -((point.y - bounds.top) / bounds.height) * 2 + 1,
+    );
+    this.raycaster.setFromCamera(this.pointer, camera);
+    return this.raycaster.ray.intersectPlane(this.dragPlane, target) !== null;
+  }
+
+  private activateSelection(selection: ActiveSelection): void {
+    const outline = this.dependencies.createSelectionOutline(selection.root);
+    this.clearActiveSelection(false);
+    this.activeSelection = selection;
+    this.selectionOutline = outline;
+    this.floorScene.scene.add(outline.object);
+    this.emitSelectionChange();
+  }
+
+  private clearActiveSelection(emitChange: boolean): void {
+    const hadSelection = this.activeSelection !== null || this.selectionOutline !== null;
+    this.activeSelection = null;
+    if (this.selectionOutline) {
+      const outline = this.selectionOutline;
+      this.selectionOutline = null;
+      outline.object.removeFromParent();
+      outline.dispose();
     }
+    if (emitChange && hadSelection) {
+      this.emitSelectionChange();
+    }
+  }
+
+  private resetSelectionForSession(): void {
+    this.clearActiveSelection(false);
+    this.selectAll = true;
+    this.emitSelectionChange();
+  }
+
+  private emitSelectionChange(): void {
+    const selection = this.activeSelection;
+    if (!selection) {
+      this.options.hooks.onSelectionChange({
+        selectAll: this.selectAll,
+        active: false,
+      });
+      return;
+    }
+    if (selection.kind === 'all') {
+      this.options.hooks.onSelectionChange({
+        selectAll: true,
+        active: true,
+        label: 'All objects',
+      });
+      return;
+    }
+
+    const state: FloorTransformSelectionState = {
+      selectAll: false,
+      active: true,
+      objectId: selection.objectId,
+    };
+    const label = this.selectedObjectLabel(selection.objectId);
+    if (label) {
+      state.label = label;
+    }
+    this.options.hooks.onSelectionChange(state);
+  }
+
+  private selectedObjectLabel(objectId: string): string | undefined {
+    const object = this.options.asset.objects?.find((candidate) => candidate.id === objectId);
+    if (object) {
+      return targetObjectLabel(object);
+    }
+    if (this.options.asset.model?.id === objectId) {
+      return this.options.asset.model.label;
+    }
+    return undefined;
   }
 
   private attachSessionListeners(session: XRSession): void {
@@ -673,6 +999,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
   }
 
   private cleanupSessionResources(resetHitTest: boolean): void {
+    this.clearActiveSelection(true);
     this.floorScene.renderer.setAnimationLoop(null);
     this.currentHitValid = false;
     this.targetReady = false;
@@ -702,6 +1029,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.options.overlayRoot.addEventListener('beforexrselect', this.preventOverlayXRSelect);
     this.gestureController.connect();
     this.gesturesConnected = true;
+    this.gestureDisconnectPerformed = false;
   }
 
   private disconnectGestures(): void {
@@ -717,6 +1045,37 @@ class FloorPlacementRuntime implements FloorPlacementController {
   private isCurrent(generation: number): boolean {
     return !this.disposed && generation === this.launchGeneration;
   }
+}
+
+function createDefaultSelectionOutline(target: Object3D): FloorSelectionOutline {
+  const object = new BoxHelper(target, 0x5eead4);
+  object.name = 'floor-transform-selection-outline';
+  object.visible = true;
+  let disposed = false;
+
+  return {
+    object,
+    update() {
+      if (!disposed) {
+        object.update();
+      }
+    },
+    dispose() {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      object.geometry.dispose();
+      const material = object.material;
+      if (Array.isArray(material)) {
+        for (const entry of material) {
+          entry.dispose();
+        }
+      } else {
+        material.dispose();
+      }
+    },
+  };
 }
 
 function createDefaultFloorScene(stage: HTMLElement): FloorPlacementScene {

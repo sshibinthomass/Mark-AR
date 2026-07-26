@@ -1,11 +1,12 @@
 import {
+  BoxHelper,
   Group,
   Matrix4,
   Mesh,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
-  Vector3,
+  type Object3D,
   type WebGLRenderer,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,6 +21,7 @@ import {
 import type {
   InteractiveYouTubeSurface,
   TargetSceneObject,
+  TargetSceneSelectableObject,
 } from '../src/ar/targetSceneObject';
 import {
   YouTubePlayerManager,
@@ -139,6 +141,279 @@ describe('prepareFloorPlacement', () => {
     );
   });
 
+  it('emits Select All with no active selection for every successful new session', async () => {
+    const firstSession = fakeXRSession();
+    const secondSession = fakeXRSession();
+    const harness = createHarness({
+      sessionPromises: [
+        Promise.resolve(firstSession.session),
+        Promise.resolve(secondSession.session),
+      ],
+      targetScenes: [fakeTargetScene(), fakeTargetScene()],
+    });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    await controller.launch();
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith({
+      selectAll: true,
+      active: false,
+    });
+
+    controller.setSelectAll(false);
+    await controller.stop();
+    await controller.launch();
+
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith({
+      selectAll: true,
+      active: false,
+    });
+    expect(harness.hooks.onSelectionChange).toHaveBeenCalledTimes(3);
+  });
+
+  it('selects the placement root synchronously after a Select All long press', async () => {
+    const selectableScene = createSelectableTargetScene();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+
+    harness.renderer.xrCamera.projectionMatrixInverse.identity();
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+
+    expect(harness.gesture.handlers.isTransformActive()).toBe(true);
+    expect(harness.selectionOutlines.create).toHaveBeenCalledWith(
+      harness.floorScene.placementRoot,
+    );
+    const outline = harness.selectionOutlines.created[0];
+    expect(outline.object.parent).toBe(harness.floorScene.scene);
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectAll: true,
+        active: true,
+      }),
+    );
+    expect(harness.renderer.xrCamera.projectionMatrixInverse.equals(
+      harness.renderer.xrCamera.projectionMatrix.clone().invert(),
+    )).toBe(true);
+
+    harness.renderer.emitFrame();
+    expect(outline.update).toHaveBeenCalledOnce();
+  });
+
+  it('creates a visible BoxHelper outline and disposes its rendering resources', async () => {
+    const selectableScene = createSelectableTargetScene();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    delete harness.dependencies.createSelectionOutline;
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    const outline = harness.floorScene.scene.getObjectByName(
+      'floor-transform-selection-outline',
+    ) as BoxHelper;
+    expect(outline).toBeInstanceOf(BoxHelper);
+    expect(outline.visible).toBe(true);
+    const update = vi.spyOn(outline, 'update');
+    const geometryDispose = vi.spyOn(outline.geometry, 'dispose');
+    const materialDispose = vi.spyOn(outline.material, 'dispose');
+
+    harness.renderer.emitFrame();
+    controller.clearSelection();
+
+    expect(update).toHaveBeenCalledOnce();
+    expect(outline.parent).toBeNull();
+    expect(geometryDispose).toHaveBeenCalledOnce();
+    expect(materialDispose).toHaveBeenCalledOnce();
+  });
+
+  it('clears an active selection before emitting a changed selection scope', async () => {
+    const selectableScene = createSelectableTargetScene();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    const outline = harness.selectionOutlines.created[0];
+
+    controller.setSelectAll(false);
+
+    expect(outline.object.parent).toBeNull();
+    expect(outline.dispose).toHaveBeenCalledOnce();
+    expect(firstInvocation(outline.dispose)).toBeLessThan(
+      harness.hooks.onSelectionChange.mock.invocationCallOrder.at(-1) ?? Number.NaN,
+    );
+    expect(harness.gesture.handlers.isTransformActive()).toBe(false);
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith({
+      selectAll: false,
+      active: false,
+    });
+  });
+
+  it('keeps object scope when reset clears an active selection', async () => {
+    const selectableScene = createSelectableTargetScene();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    controller.setSelectAll(false);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+
+    controller.reset();
+
+    expect(harness.gesture.handlers.isTransformActive()).toBe(false);
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith({
+      selectAll: false,
+      active: false,
+    });
+  });
+
+  it('selects only the closest authored object when Select All is off', async () => {
+    const selectableScene = createSelectableTargetScene([
+      { objectId: 'far-object', z: -3 },
+      { objectId: 'near-object', z: -2 },
+    ]);
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    controller.setSelectAll(false);
+
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+
+    const near = selectableScene.entries.find((entry) => entry.objectId === 'near-object');
+    expect(harness.selectionOutlines.create).toHaveBeenCalledWith(near?.interactionRoot);
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectAll: false,
+        active: true,
+        objectId: 'near-object',
+      }),
+    );
+  });
+
+  it('keeps an empty-floor long press inactive', async () => {
+    const harness = createHarness();
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+
+    expect(harness.gesture.handlers.isTransformActive()).toBe(false);
+    expect(harness.selectionOutlines.create).not.toHaveBeenCalled();
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith({
+      selectAll: true,
+      active: false,
+    });
+  });
+
+  it('ignores drag and pinch input while no transform selection is active', async () => {
+    const selectableScene = createSelectableTargetScene();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    const placementPosition = harness.floorScene.placementRoot.position.clone();
+    const placementScale = harness.floorScene.placementRoot.scale.clone();
+    const objectPosition = selectableScene.entries[0].interactionRoot.position.clone();
+    const objectScale = selectableScene.entries[0].interactionRoot.scale.clone();
+
+    harness.gesture.handlers.onDrag({
+      previous: { x: 100, y: 50 },
+      current: { x: 120, y: 50 },
+    });
+    harness.gesture.handlers.onPinch(2);
+
+    expect(harness.floorScene.placementRoot.position).toEqual(placementPosition);
+    expect(harness.floorScene.placementRoot.scale).toEqual(placementScale);
+    expect(selectableScene.entries[0].interactionRoot.position).toEqual(objectPosition);
+    expect(selectableScene.entries[0].interactionRoot.scale).toEqual(objectScale);
+  });
+
+  it('moves and scales one selected authored object without changing its sibling', async () => {
+    const selectableScene = createSelectableTargetScene([
+      { objectId: 'selected-object', z: -2 },
+      { objectId: 'sibling-object', x: 1.5, z: -2 },
+    ]);
+    const selected = selectableScene.entries[0];
+    const sibling = selectableScene.entries[1];
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    controller.setSelectAll(false);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    selected.interactionRoot.position.x = 3;
+    const siblingPosition = sibling.interactionRoot.position.clone();
+    const siblingScale = sibling.interactionRoot.scale.clone();
+    const placementPosition = harness.floorScene.placementRoot.position.clone();
+    const placementScale = harness.floorScene.placementRoot.scale.clone();
+
+    harness.gesture.handlers.onDrag({
+      previous: { x: 100, y: 50 },
+      current: { x: 120, y: 50 },
+    });
+    harness.gesture.handlers.onPinch(2);
+
+    expect(selected.interactionRoot.position.x - 3).toBeCloseTo(0.4428501311);
+    expect(selected.interactionRoot.position.z).toBeCloseTo(0);
+    expect(selected.interactionRoot.scale.toArray()).toEqual([2, 2, 2]);
+    expect(sibling.interactionRoot.position).toEqual(siblingPosition);
+    expect(sibling.interactionRoot.scale).toEqual(siblingScale);
+    expect(harness.floorScene.placementRoot.position).toEqual(placementPosition);
+    expect(harness.floorScene.placementRoot.scale).toEqual(placementScale);
+  });
+
+  it('moves and scales the placement root after a Select All long press', async () => {
+    const selectableScene = createSelectableTargetScene();
+    const interactionPosition = selectableScene.entries[0].interactionRoot.position.clone();
+    const interactionScale = selectableScene.entries[0].interactionRoot.scale.clone();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    harness.floorScene.placementRoot.position.x = 3;
+
+    harness.gesture.handlers.onDrag({
+      previous: { x: 100, y: 50 },
+      current: { x: 120, y: 50 },
+    });
+    harness.gesture.handlers.onPinch(2);
+
+    expect(harness.floorScene.placementRoot.position.x - 3).toBeCloseTo(0.4428501311);
+    expect(harness.floorScene.placementRoot.position.y).toBeCloseTo(0);
+    expect(harness.floorScene.placementRoot.position.z).toBeCloseTo(0);
+    expect(harness.floorScene.placementRoot.scale.toArray()).toEqual([2, 2, 2]);
+    expect(selectableScene.entries[0].interactionRoot.position).toEqual(interactionPosition);
+    expect(selectableScene.entries[0].interactionRoot.scale).toEqual(interactionScale);
+  });
+
+  it('rotates the whole experience without an active transform selection', async () => {
+    const selectableScene = createSelectableTargetScene();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+
+    expect(harness.gesture.handlers.isTransformActive()).toBe(false);
+    controller.setRotation(45);
+
+    expect(harness.floorScene.placementRoot.rotation.y).toBeCloseTo(Math.PI / 4);
+    expect(selectableScene.entries[0].interactionRoot.rotation.y).toBeCloseTo(0);
+  });
+
   it('registers floor YouTube surfaces, activates them after placement, and disposes the manager', async () => {
     const surface = createSurface();
     const harness = createHarness({
@@ -178,6 +453,8 @@ describe('prepareFloorPlacement', () => {
     harness.hitTest.setCurrentHit(new Matrix4());
     harness.renderer.emitFrame();
     expect(controller.place()).toBe(true);
+    const placedPosition = harness.floorScene.placementRoot.position.clone();
+    const place = vi.spyOn(controller, 'place');
 
     harness.gesture.handlers.onTap({ x: 120, y: 80 });
     await flushPromises();
@@ -186,6 +463,8 @@ describe('prepareFloorPlacement', () => {
       expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
       harness.renderer.xrCamera,
     );
+    expect(place).not.toHaveBeenCalled();
+    expect(harness.floorScene.placementRoot.position).toEqual(placedPosition);
     expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
   });
 
@@ -239,7 +518,7 @@ describe('prepareFloorPlacement', () => {
     expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves floor placement when a tap misses every video', async () => {
+  it('does not invoke placement when a post-placement tap misses every video', async () => {
     const harness = createHarness({
       targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
     });
@@ -253,11 +532,59 @@ describe('prepareFloorPlacement', () => {
     expect(controller.place()).toBe(true);
     harness.hitTest.setCurrentHit(new Matrix4().makeTranslation(2, 0, -3));
     harness.renderer.emitFrame();
+    const placedPosition = harness.floorScene.placementRoot.position.clone();
+    const place = vi.spyOn(controller, 'place');
 
     harness.gesture.handlers.onTap({ x: 120, y: 80 });
     await flushPromises();
 
-    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(2);
+    expect(place).not.toHaveBeenCalled();
+    expect(harness.floorScene.placementRoot.position).toEqual(placedPosition);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledOnce();
+  });
+
+  it('keeps selection active and suppresses video playback when tapping the selected target', async () => {
+    const selectableScene = createSelectableTargetScene([
+      { objectId: 'floor-video', z: -2, youtube: true },
+    ]);
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+
+    harness.gesture.handlers.onTap({ x: 100, y: 50 });
+    await flushPromises();
+
+    expect(harness.youtube.activateFromPointer).not.toHaveBeenCalled();
+    expect(harness.gesture.handlers.isTransformActive()).toBe(true);
+    expect(harness.selectionOutlines.created[0].dispose).not.toHaveBeenCalled();
+  });
+
+  it('clears selection without starting playback when tapping outside the selected target', async () => {
+    const selectableScene = createSelectableTargetScene([
+      { objectId: 'floor-video', z: -2, youtube: true },
+    ]);
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    const outline = harness.selectionOutlines.created[0];
+
+    harness.gesture.handlers.onTap({ x: 195, y: 5 });
+    await flushPromises();
+
+    expect(harness.youtube.activateFromPointer).not.toHaveBeenCalled();
+    expect(harness.gesture.handlers.isTransformActive()).toBe(false);
+    expect(outline.object.parent).toBeNull();
+    expect(outline.dispose).toHaveBeenCalledOnce();
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith({
+      selectAll: true,
+      active: false,
+    });
   });
 
   it('reports a nonfatal floor player failure, restores its thumbnail, and allows a later retry', async () => {
@@ -368,7 +695,101 @@ describe('prepareFloorPlacement', () => {
     expect(youtube.activateFromPointer).toHaveBeenCalledOnce();
   });
 
-  it('uses absolute rotation, latest-pose reset, pinch, tap, select, and floor-plane drag', async () => {
+  it.each([
+    'clearSelection',
+    'reset',
+    'external session end',
+    'stop',
+    'relaunch',
+    'dispose',
+  ] as const)('removes and disposes the active outline on %s', async (cleanup) => {
+    const firstSession = fakeXRSession();
+    const secondSession = fakeXRSession();
+    const firstTarget = createSelectableTargetScene();
+    const secondTarget = createSelectableTargetScene();
+    const harness = createHarness({
+      sessionPromises: [
+        Promise.resolve(firstSession.session),
+        Promise.resolve(secondSession.session),
+      ],
+      targetScenes: [firstTarget.targetScene, secondTarget.targetScene],
+    });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    const outline = harness.selectionOutlines.created[0];
+
+    if (cleanup === 'clearSelection') {
+      controller.clearSelection();
+    } else if (cleanup === 'reset') {
+      controller.reset();
+    } else if (cleanup === 'external session end') {
+      firstSession.emit('end');
+    } else if (cleanup === 'stop') {
+      await controller.stop();
+    } else if (cleanup === 'relaunch') {
+      await controller.launch();
+    } else {
+      await controller.dispose();
+    }
+
+    expect(outline.object.parent).toBeNull();
+    expect(outline.dispose).toHaveBeenCalledOnce();
+    expect(harness.hooks.onSelectionChange).toHaveBeenLastCalledWith({
+      selectAll: true,
+      active: false,
+    });
+
+    if (cleanup !== 'dispose') {
+      await controller.dispose();
+    }
+  });
+
+  it('rejects an older gesture token even when the launcher reuses a session object', async () => {
+    const reusedSession = fakeXRSession();
+    const firstTarget = createSelectableTargetScene();
+    const secondTarget = createSelectableTargetScene();
+    const harness = createHarness({
+      sessionPromises: [
+        Promise.resolve(reusedSession.session),
+        Promise.resolve(reusedSession.session),
+      ],
+      targetScenes: [firstTarget.targetScene, secondTarget.targetScene],
+    });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    await launchAndPlace(harness, controller);
+    const staleHandlers = harness.gesture.handlers;
+    staleHandlers.onLongPress({ x: 100, y: 50 });
+    await controller.stop();
+
+    await launchAndPlace(harness, controller);
+    const currentHandlers = harness.gesture.handlers;
+    currentHandlers.onLongPress({ x: 100, y: 50 });
+    expect(currentHandlers).not.toBe(staleHandlers);
+    expect(currentHandlers.isTransformActive()).toBe(true);
+    const position = harness.floorScene.placementRoot.position.clone();
+    const scale = harness.floorScene.placementRoot.scale.clone();
+    const outlineCount = harness.selectionOutlines.created.length;
+
+    staleHandlers.onLongPress({ x: 100, y: 50 });
+    staleHandlers.onDrag({
+      previous: { x: 100, y: 50 },
+      current: { x: 120, y: 50 },
+    });
+    staleHandlers.onPinch(2);
+
+    expect(harness.floorScene.placementRoot.position).toEqual(position);
+    expect(harness.floorScene.placementRoot.scale).toEqual(scale);
+    expect(harness.selectionOutlines.created).toHaveLength(outlineCount);
+    expect(currentHandlers.isTransformActive()).toBe(true);
+  });
+
+  it('uses absolute rotation, latest-pose reset, tap placement, and XR select placement', async () => {
     const harness = createHarness();
     harness.floorScene.camera.position.set(0, 1, 1);
     harness.floorScene.camera.lookAt(0, 0, 0);
@@ -398,16 +819,9 @@ describe('prepareFloorPlacement', () => {
     controller.setRotation(10);
     expect(harness.floorScene.placementRoot.rotation.y).toBeCloseTo(Math.PI / 18);
 
-    harness.gesture.handlers.onPinch(2);
-    expect(harness.floorScene.placementRoot.scale.toArray()).toEqual([2, 2, 2]);
-
     harness.session.emit('select');
     expect(harness.floorScene.placementRoot.rotation.y).toBeCloseTo(Math.PI / 18);
-    expect(harness.floorScene.placementRoot.scale.toArray()).toEqual([2, 2, 2]);
     expect(harness.hooks.onPlaced).toHaveBeenCalledOnce();
-
-    harness.gesture.handlers.onDrag({ x: 50, y: 50 });
-    expect(harness.floorScene.placementRoot.position.distanceTo(new Vector3(0, 0, 0))).toBeCloseTo(0);
 
     harness.hitTest.setCurrentValidity(false);
     harness.renderer.emitFrame();
@@ -419,19 +833,24 @@ describe('prepareFloorPlacement', () => {
     harness.renderer.emitFrame();
     harness.gesture.handlers.onTap({ x: 50, y: 50 });
     harness.session.emit('select');
-    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(2);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledOnce();
   });
 
   it('keeps rotation and scale when DOM-overlay input ends after placement', async () => {
-    const harness = createHarness();
+    const selectableScene = createSelectableTargetScene();
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
     const result = await prepareWithHarness(harness);
     const controller = supportedController(result);
     await controller.launch();
 
-    harness.hitTest.setCurrentHit(new Matrix4().makeTranslation(1, 0, -2));
+    harness.hitTest.setCurrentHit(new Matrix4());
     harness.renderer.emitFrame();
     harness.session.emit('select');
     expect(harness.hooks.onPlaced).toHaveBeenCalledOnce();
+    harness.floorScene.scene.updateMatrixWorld(true);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    expect(harness.gesture.handlers.isTransformActive()).toBe(true);
 
     controller.setRotation(45);
     harness.gesture.handlers.onPinch(2);
@@ -884,6 +1303,7 @@ function baseOptions() {
     onYouTubeActivated: vi.fn(),
     onPlacementReady: vi.fn(),
     onPlaced: vi.fn(),
+    onSelectionChange: vi.fn(),
   };
   return { stage, overlayRoot, gestureSurface, asset, hooks };
 }
@@ -918,6 +1338,7 @@ function createHarness(options: HarnessOptions = {}) {
   const hitTest = fakeHitTest();
   const gesture = fakeGesture();
   const youtube = fakeYouTubeManager();
+  const selectionOutlines = fakeSelectionOutlines();
   const clock = { getDelta: vi.fn(() => 0.25) };
   const dependencies: Partial<FloorPlacementDependencies> = {
     prepareSessionLauncher: async () => ({
@@ -930,6 +1351,7 @@ function createHarness(options: HarnessOptions = {}) {
     createGestureController: vi.fn((_target, handlers) => gesture.install(handlers)),
     createClock: vi.fn(() => clock),
     createYouTubePlayerManager: vi.fn((_container, onPlaybackError) => youtube.install(onPlaybackError)),
+    createSelectionOutline: selectionOutlines.create,
   };
 
   return {
@@ -945,6 +1367,7 @@ function createHarness(options: HarnessOptions = {}) {
     hitTest,
     gesture,
     youtube,
+    selectionOutlines,
     clock,
   };
 }
@@ -958,20 +1381,121 @@ function supportedController(result: Awaited<ReturnType<typeof prepareFloorPlace
   return result.controller;
 }
 
+async function launchAndPlace(
+  harness: ReturnType<typeof createHarness>,
+  controller: ReturnType<typeof supportedController>,
+): Promise<void> {
+  await controller.launch();
+  harness.hitTest.setCurrentHit(new Matrix4());
+  harness.renderer.emitFrame();
+  controller.place();
+  expect(harness.floorScene.placementRoot.visible).toBe(true);
+  harness.floorScene.scene.updateMatrixWorld(true);
+}
+
+function aimXRCameraAtFloorContent(harness: ReturnType<typeof createHarness>): void {
+  harness.floorScene.camera.position.set(10, 10, 10);
+  harness.floorScene.camera.lookAt(10, 10, 9);
+  harness.floorScene.camera.updateProjectionMatrix();
+  harness.floorScene.camera.updateMatrixWorld(true);
+
+  harness.renderer.xrCamera.position.set(0, 1, 1);
+  harness.renderer.xrCamera.lookAt(0, 0, -2);
+  harness.renderer.xrCamera.updateProjectionMatrix();
+  harness.renderer.xrCamera.updateMatrixWorld(true);
+}
+
 function fakeTargetScene(
   ready: Promise<void> = Promise.resolve(),
   youtubeSurfaces: InteractiveYouTubeSurface[] = [],
+  selectableObjects: TargetSceneSelectableObject[] = [],
 ): TargetSceneObject {
   const group = new Group();
+  for (const selectable of selectableObjects) {
+    group.add(selectable.interactionRoot);
+  }
   for (const surface of youtubeSurfaces) {
-    group.add(surface.root);
+    if (!surface.root.parent) {
+      group.add(surface.root);
+    }
   }
   return {
     group,
     ready,
     youtubeSurfaces,
+    selectableObjects,
     update: vi.fn(),
     dispose: vi.fn(),
+  };
+}
+
+type SelectableSceneEntry = {
+  objectId: string;
+  interactionRoot: Group;
+  contentRoot: Group;
+  mesh: Mesh;
+};
+
+function createSelectableTargetScene(
+  specifications: Array<{
+    objectId: string;
+    x?: number;
+    y?: number;
+    z?: number;
+    kind?: TargetSceneSelectableObject['kind'];
+    youtube?: boolean;
+  }> = [{ objectId: 'chair', z: -2 }],
+): {
+  targetScene: TargetSceneObject;
+  entries: SelectableSceneEntry[];
+} {
+  const entries: SelectableSceneEntry[] = [];
+  const selectableObjects: TargetSceneSelectableObject[] = [];
+  const youtubeSurfaces: InteractiveYouTubeSurface[] = [];
+
+  for (const specification of specifications) {
+    const interactionRoot = new Group();
+    interactionRoot.name = `interaction-${specification.objectId}`;
+    const contentRoot = new Group();
+    contentRoot.name = `content-${specification.objectId}`;
+    const mesh = new Mesh(new PlaneGeometry(0.8, 0.8));
+    mesh.name = `mesh-${specification.objectId}`;
+    mesh.position.set(
+      specification.x ?? 0,
+      specification.y ?? 0,
+      specification.z ?? -2,
+    );
+    contentRoot.add(mesh);
+    interactionRoot.add(contentRoot);
+    const entry = {
+      objectId: specification.objectId,
+      interactionRoot,
+      contentRoot,
+      mesh,
+    };
+    entries.push(entry);
+    selectableObjects.push({
+      objectId: specification.objectId,
+      kind: specification.kind ?? (specification.youtube ? 'youtube' : 'model'),
+      interactionRoot,
+      contentRoot,
+    });
+    if (specification.youtube) {
+      youtubeSurfaces.push({
+        objectId: specification.objectId,
+        root: contentRoot,
+        mesh,
+        youtube: {
+          videoId: 'dQw4w9WgXcQ',
+          title: `Video ${specification.objectId}`,
+        },
+      });
+    }
+  }
+
+  return {
+    targetScene: fakeTargetScene(Promise.resolve(), youtubeSurfaces, selectableObjects),
+    entries,
   };
 }
 
@@ -1095,19 +1619,43 @@ function fakeGesture() {
   const connect = vi.fn();
   const disconnect = vi.fn();
   let handlers: FloorGestureHandlers | undefined;
+  const installedHandlers: FloorGestureHandlers[] = [];
 
   return {
     connect,
     disconnect,
+    installedHandlers,
     get handlers() {
       if (!handlers) throw new Error('gesture handlers were not installed');
       return handlers;
     },
     install(nextHandlers: FloorGestureHandlers) {
       handlers = nextHandlers;
+      installedHandlers.push(nextHandlers);
       return { connect, disconnect } as ReturnType<FloorPlacementDependencies['createGestureController']>;
     },
   };
+}
+
+function fakeSelectionOutlines() {
+  const created: Array<{
+    target: Object3D;
+    object: Group;
+    update: ReturnType<typeof vi.fn>;
+    dispose: ReturnType<typeof vi.fn>;
+  }> = [];
+  const create = vi.fn((target: Object3D) => {
+    const outline = {
+      target,
+      object: new Group(),
+      update: vi.fn(),
+      dispose: vi.fn(),
+    };
+    created.push(outline);
+    return outline;
+  });
+
+  return { create, created };
 }
 
 function fakeXRSession() {
