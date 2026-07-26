@@ -156,7 +156,7 @@ describe('YouTubePlayerManager', () => {
     expect(container.querySelector('.youtube-transport-controls')).toBeNull();
   });
 
-  it('routes a renderer-layer click through the rendered button bounds exactly once', async () => {
+  it('routes a coordinate- and time-matching compatibility click exactly once', async () => {
     const container = document.createElement('div');
     document.body.append(container);
     const rendererElement = document.createElement('div');
@@ -197,59 +197,55 @@ describe('YouTubePlayerManager', () => {
       pointerId: 5,
       clientX: 122,
       clientY: 62,
+      timeStamp: 100,
     });
-    rendererElement.dispatchEvent(new MouseEvent('mousedown', {
-      bubbles: true,
-      cancelable: true,
+    dispatchMouse(rendererElement, 'mousedown', {
       clientX: 122,
       clientY: 62,
-    }));
+      timeStamp: 101,
+    });
     dispatchPointer(rendererElement, 'pointerup', {
       pointerId: 5,
       clientX: 122,
       clientY: 62,
+      timeStamp: 102,
     });
-    rendererElement.dispatchEvent(new MouseEvent('mouseup', {
-      bubbles: true,
-      cancelable: true,
+    dispatchMouse(rendererElement, 'mouseup', {
       clientX: 122,
       clientY: 62,
-    }));
-    rendererElement.dispatchEvent(new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
+      timeStamp: 103,
+    });
+    dispatchMouse(rendererElement, 'click', {
       clientX: 122,
       clientY: 62,
-    }));
+      timeStamp: 104,
+    });
 
     expect(player.port.pauseVideo).toHaveBeenCalledOnce();
     expect(bubbledClicks).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(toggle);
 
-    rendererElement.dispatchEvent(new MouseEvent('mousemove', {
-      bubbles: true,
-      cancelable: true,
+    dispatchMouse(rendererElement, 'mousemove', {
       clientX: 200,
       clientY: 120,
-    }));
+      timeStamp: 105,
+    });
     expect(bubbledMouseMoves).toHaveBeenCalledOnce();
 
-    rendererElement.dispatchEvent(new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
+    dispatchMouse(rendererElement, 'click', {
       clientX: 122,
       clientY: 62,
-    }));
+      timeStamp: 106,
+    });
 
     expect(player.port.pauseVideo).toHaveBeenCalledOnce();
     expect(bubbledClicks).toHaveBeenCalledOnce();
 
-    rendererElement.dispatchEvent(new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
+    dispatchMouse(rendererElement, 'click', {
       clientX: 200,
       clientY: 120,
-    }));
+      timeStamp: 107,
+    });
 
     expect(player.port.pauseVideo).toHaveBeenCalledOnce();
     expect(bubbledClicks).toHaveBeenCalledTimes(2);
@@ -260,6 +256,243 @@ describe('YouTubePlayerManager', () => {
     manager.dispose();
     container.remove();
   });
+
+  it.each(['pointer', 'touch'] as const)(
+    'treats the next unrelated mouse gesture as fresh after a completed %s contact',
+    async (inputType) => {
+      const harness = await createLayerRoutingHarness();
+      const receivedEvents: string[] = [];
+      for (const eventName of ['mousedown', 'mouseup', 'click']) {
+        harness.container.addEventListener(eventName, () => receivedEvents.push(eventName));
+      }
+
+      completeLayerContact(harness.rendererElement, inputType, {
+        id: 21,
+        clientX: 122,
+        clientY: 62,
+        startTime: 100,
+        endTime: 110,
+      });
+      dispatchMouse(harness.rendererElement, 'mousedown', {
+        clientX: 20,
+        clientY: 20,
+        timeStamp: 120,
+      });
+      dispatchMouse(harness.rendererElement, 'mouseup', {
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 130,
+      });
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 140,
+      });
+
+      expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+      expect(receivedEvents).toEqual(['mousedown', 'mouseup', 'click']);
+      harness.manager.dispose();
+    },
+  );
+
+  it('discards completed eligibility when a compatibility click misses its coordinates', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledClicks = vi.fn();
+    harness.container.addEventListener('click', bubbledClicks);
+    completeLayerContact(harness.rendererElement, 'pointer', {
+      id: 22,
+      clientX: 122,
+      clientY: 62,
+      startTime: 200,
+      endTime: 210,
+    });
+
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 20,
+      clientY: 20,
+      timeStamp: 220,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 230,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(bubbledClicks).toHaveBeenCalledTimes(2);
+    harness.manager.dispose();
+  });
+
+  it('does not cross-authorize a different pointer identity at matching coordinates', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledClicks = vi.fn();
+    harness.container.addEventListener('click', bubbledClicks);
+    completeLayerContact(harness.rendererElement, 'pointer', {
+      id: 22,
+      clientX: 122,
+      clientY: 62,
+      startTime: 240,
+      endTime: 250,
+    });
+
+    dispatchMouse(harness.rendererElement, 'click', {
+      pointerId: 99,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 260,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(bubbledClicks).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it.each([
+    { pointerType: 'touch', expectedRoutes: 1 },
+    { pointerType: 'pen', expectedRoutes: 2 },
+  ] as const)(
+    'keeps nearby $pointerType pointer and touch completions correctly independent',
+    async ({ pointerType, expectedRoutes }) => {
+      const harness = await createLayerRoutingHarness();
+      const bubbledClicks = vi.fn();
+      harness.container.addEventListener('click', bubbledClicks);
+      dispatchPointer(harness.rendererElement, 'pointerdown', {
+        pointerId: 41,
+        pointerType,
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 270,
+      });
+      dispatchTouch(harness.rendererElement, 'touchstart', [{
+        identifier: 7,
+        clientX: 122,
+        clientY: 62,
+      }], undefined, 271);
+      dispatchPointer(harness.rendererElement, 'pointerup', {
+        pointerId: 41,
+        pointerType,
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 280,
+      });
+      dispatchTouch(harness.rendererElement, 'touchend', [], [{
+        identifier: 7,
+        clientX: 122,
+        clientY: 62,
+      }], 281);
+
+      dispatchMouse(harness.rendererElement, 'click', {
+        pointerId: 41,
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 290,
+      });
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 300,
+      });
+
+      expect(harness.player.port.pauseVideo).toHaveBeenCalledTimes(expectedRoutes);
+      expect(bubbledClicks).toHaveBeenCalledTimes(2 - expectedRoutes);
+      harness.manager.dispose();
+    },
+  );
+
+  it('expires completed eligibility before a later same-coordinate mouse gesture', async () => {
+    const harness = await createLayerRoutingHarness();
+    const receivedEvents: string[] = [];
+    for (const eventName of ['mousedown', 'mouseup', 'click']) {
+      harness.container.addEventListener(eventName, () => receivedEvents.push(eventName));
+    }
+    completeLayerContact(harness.rendererElement, 'touch', {
+      id: 23,
+      clientX: 122,
+      clientY: 62,
+      startTime: 300,
+      endTime: 310,
+    });
+    harness.toggle.disabled = true;
+
+    dispatchMouse(harness.rendererElement, 'mousedown', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 5_000,
+    });
+    dispatchMouse(harness.rendererElement, 'mouseup', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 5_010,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 5_020,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(receivedEvents).toEqual(['mousedown', 'mouseup', 'click']);
+    harness.manager.dispose();
+  });
+
+  it.each(['pointer', 'touch'] as const)(
+    'retains interleaved completed %s contacts for their matching clicks',
+    async (inputType) => {
+      const harness = await createLayerRoutingHarness();
+      const firstContact = {
+        id: 24,
+        clientX: 122,
+        clientY: 62,
+      };
+      const secondContact = {
+        id: 25,
+        clientX: 182,
+        clientY: 62,
+      };
+
+      startLayerContact(
+        harness.rendererElement,
+        inputType,
+        firstContact,
+        400,
+      );
+      startLayerContact(
+        harness.rendererElement,
+        inputType,
+        secondContact,
+        401,
+        [firstContact],
+      );
+      endLayerContact(
+        harness.rendererElement,
+        inputType,
+        firstContact,
+        410,
+        [secondContact],
+      );
+      endLayerContact(
+        harness.rendererElement,
+        inputType,
+        secondContact,
+        411,
+      );
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: firstContact.clientX,
+        clientY: firstContact.clientY,
+        timeStamp: 420,
+      });
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: secondContact.clientX,
+        clientY: secondContact.clientY,
+        timeStamp: 421,
+      });
+
+      expect(harness.player.port.pauseVideo).toHaveBeenCalledOnce();
+      expect(harness.player.port.seekTo).toHaveBeenCalledOnce();
+      expect(harness.player.port.seekTo).toHaveBeenCalledWith(10, true);
+      harness.manager.dispose();
+    },
+  );
 
   it.each(['pointer', 'mouse', 'touch'] as const)(
     'does not route an outside-start %s sequence that ends over a transport button',
@@ -752,8 +985,8 @@ describe('YouTubePlayerManager', () => {
     rendererElement.dispatchEvent(new MouseEvent('click', {
       bubbles: true,
       cancelable: true,
-      clientX: 90,
-      clientY: 50,
+      clientX: 400,
+      clientY: 200,
     }));
 
     expect(receivedEvents).toEqual([]);
@@ -996,6 +1229,56 @@ function createPlayerDouble() {
   };
 }
 
+async function createLayerRoutingHarness() {
+  const container = document.createElement('div');
+  const rendererElement = document.createElement('div');
+  const player = createPlayerDouble();
+  let onStateChange: ((state: number) => void) | undefined;
+  const manager = createManager({
+    createCssRenderer: () => ({
+      domElement: rendererElement,
+      setSize: vi.fn(),
+      render: vi.fn(),
+    }),
+    createPlayer: async (_host, _youtube, stateHandler) => {
+      onStateChange = stateHandler;
+      return player.port;
+    },
+    hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+  }, container);
+  manager.register('marker-1', createSurface());
+  manager.setMarkerVisible('marker-1', true);
+  await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+  onStateChange?.(1);
+
+  const toggle = container.querySelector<HTMLButtonElement>(
+    '[data-youtube-action="toggle"]',
+  )!;
+  const forward = container.querySelector<HTMLButtonElement>(
+    '[data-youtube-action="forward"]',
+  )!;
+  mockClientRect(toggle, {
+    left: 100,
+    top: 40,
+    width: 44,
+    height: 44,
+  });
+  mockClientRect(forward, {
+    left: 160,
+    top: 40,
+    width: 44,
+    height: 44,
+  });
+
+  return {
+    container,
+    rendererElement,
+    player,
+    manager,
+    toggle,
+  };
+}
+
 function createManager(
   overrides: ConstructorParameters<typeof YouTubePlayerManager>[1] = {},
   container = document.createElement('div'),
@@ -1064,13 +1347,16 @@ function dispatchPointer(
     pointerType?: string;
     clientX: number;
     clientY: number;
+    timeStamp?: number;
   },
 ): void {
   const event = new Event(type, {
     bubbles: true,
     cancelable: true,
-  }) as Event & typeof values;
-  Object.assign(event, values);
+  }) as Event & Omit<typeof values, 'timeStamp'>;
+  const { timeStamp, ...pointerValues } = values;
+  Object.assign(event, pointerValues);
+  setEventTimeStamp(event, timeStamp);
   target.dispatchEvent(event);
 }
 
@@ -1085,9 +1371,118 @@ function dispatchTouch(
   type: string,
   touches: TouchPoint[],
   changedTouches: TouchPoint[] = touches,
+  timeStamp?: number,
 ): void {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'touches', { value: touches });
   Object.defineProperty(event, 'changedTouches', { value: changedTouches });
+  setEventTimeStamp(event, timeStamp);
   target.dispatchEvent(event);
+}
+
+function dispatchMouse(
+  target: HTMLElement,
+  type: string,
+  values: {
+    clientX: number;
+    clientY: number;
+    pointerId?: number;
+    timeStamp?: number;
+  },
+): void {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: values.clientX,
+    clientY: values.clientY,
+  });
+  if (values.pointerId !== undefined) {
+    Object.defineProperty(event, 'pointerId', { value: values.pointerId });
+  }
+  setEventTimeStamp(event, values.timeStamp);
+  target.dispatchEvent(event);
+}
+
+type LayerContact = {
+  id: number;
+  clientX: number;
+  clientY: number;
+};
+
+function completeLayerContact(
+  target: HTMLElement,
+  inputType: 'pointer' | 'touch',
+  contact: LayerContact & {
+    startTime: number;
+    endTime: number;
+  },
+): void {
+  startLayerContact(target, inputType, contact, contact.startTime);
+  endLayerContact(target, inputType, contact, contact.endTime);
+}
+
+function startLayerContact(
+  target: HTMLElement,
+  inputType: 'pointer' | 'touch',
+  contact: LayerContact,
+  timeStamp: number,
+  otherActiveContacts: LayerContact[] = [],
+): void {
+  if (inputType === 'pointer') {
+    dispatchPointer(target, 'pointerdown', {
+      pointerId: contact.id,
+      clientX: contact.clientX,
+      clientY: contact.clientY,
+      timeStamp,
+    });
+    return;
+  }
+  const touch = toTouchPoint(contact);
+  dispatchTouch(
+    target,
+    'touchstart',
+    [...otherActiveContacts.map(toTouchPoint), touch],
+    [touch],
+    timeStamp,
+  );
+}
+
+function endLayerContact(
+  target: HTMLElement,
+  inputType: 'pointer' | 'touch',
+  contact: LayerContact,
+  timeStamp: number,
+  remainingContacts: LayerContact[] = [],
+): void {
+  if (inputType === 'pointer') {
+    dispatchPointer(target, 'pointerup', {
+      pointerId: contact.id,
+      clientX: contact.clientX,
+      clientY: contact.clientY,
+      timeStamp,
+    });
+    return;
+  }
+  dispatchTouch(
+    target,
+    'touchend',
+    remainingContacts.map(toTouchPoint),
+    [toTouchPoint(contact)],
+    timeStamp,
+  );
+}
+
+function toTouchPoint(contact: LayerContact): TouchPoint {
+  return {
+    identifier: contact.id,
+    clientX: contact.clientX,
+    clientY: contact.clientY,
+  };
+}
+
+function setEventTimeStamp(event: Event, timeStamp: number | undefined): void {
+  if (timeStamp === undefined) {
+    return;
+  }
+  Object.defineProperty(event, 'timeStamp', { value: timeStamp });
 }
