@@ -73,7 +73,7 @@ describe('Mark-AR target Worker', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'new-user@example.com',
-        password: 'correct horse battery staple',
+        password: '12345678',
         name: 'New user',
       }),
     }), env);
@@ -82,6 +82,25 @@ describe('Mark-AR target Worker', () => {
     expect(response.status).toBe(201);
     expect(body.user.status).toBe('pending');
     expect(body).not.toHaveProperty('token');
+  });
+
+  it('rejects local signup passwords shorter than eight characters', async () => {
+    const bucket = new MemoryBucket();
+    const env = createEnv(bucket);
+    const response = await handleRequest(new Request('https://worker.example/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'short-password@example.com',
+        password: '1234567',
+        name: 'Short password',
+      }),
+    }), env);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: 'Name, a valid email, and a password of at least 8 characters are required.',
+    });
   });
 
   it('filters the local model fallback for anonymous, owner, and non-owner callers', async () => {

@@ -170,8 +170,8 @@ async function handleAuth(
     const email = normalizeEmail(body.email);
     const password = typeof body.password === 'string' ? body.password : '';
     const name = typeof body.name === 'string' ? body.name.trim() : '';
-    if (!email || password.length < 12 || !name) {
-      return json({ error: 'Name, a valid email, and a password of at least 12 characters are required.' }, 400);
+    if (!email || password.length < 8 || !name) {
+      return json({ error: 'Name, a valid email, and a password of at least 8 characters are required.' }, 400);
     }
     const index = await readJson<{ users: User[] }>(env, USERS_KEY, { users: [] });
     if (index.users.some((user) => user.email === email)) return json({ error: 'An account already exists for this email.' }, 409);
