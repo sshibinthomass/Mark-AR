@@ -16,7 +16,11 @@ import {
   type FloorPlacementHooks,
   type FloorPlacementScene,
 } from '../src/ar/floorPlacementRuntime';
-import type { TargetSceneObject } from '../src/ar/targetSceneObject';
+import type {
+  InteractiveYouTubeSurface,
+  TargetSceneObject,
+} from '../src/ar/targetSceneObject';
+import type { YouTubePlayerManager } from '../src/ar/youtubePlayerManager';
 
 const UNSUPPORTED_MESSAGE =
   'Floor placement needs Android Chrome with WebXR. Image scanning is still available.';
@@ -129,6 +133,94 @@ describe('prepareFloorPlacement', () => {
     expect(harness.hooks.onStatus).toHaveBeenLastCalledWith(
       'Move your phone until the floor ring appears.',
     );
+  });
+
+  it('registers floor YouTube surfaces, activates them after placement, and disposes the manager', async () => {
+    const surface = createSurface();
+    const harness = createHarness({
+      targetScenes: [fakeTargetScene(Promise.resolve(), [surface])],
+    });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await controller.launch();
+
+    expect(harness.youtube.register).toHaveBeenCalledWith('floor-target', surface);
+    expect(harness.youtube.setMarkerVisible).not.toHaveBeenCalledWith('floor-target', true);
+
+    harness.hitTest.setCurrentHit(new Matrix4());
+    harness.renderer.emitFrame();
+    expect(harness.youtube.resize).toHaveBeenCalledWith(300, 150);
+    expect(harness.youtube.update).toHaveBeenCalledWith(harness.floorScene.camera);
+    expect(controller.place()).toBe(true);
+    expect(harness.youtube.setMarkerVisible).toHaveBeenCalledWith('floor-target', true);
+
+    controller.dispose();
+    expect(harness.youtube.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('plays a tapped floor video without replacing the placed transform', async () => {
+    const harness = createHarness({
+      targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
+    });
+    harness.youtube.activateFromPointer.mockResolvedValue('activated');
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await controller.launch();
+
+    harness.hitTest.setCurrentHit(new Matrix4());
+    harness.renderer.emitFrame();
+    expect(controller.place()).toBe(true);
+
+    harness.gesture.handlers.onTap({ x: 120, y: 80 });
+    await flushPromises();
+
+    expect(harness.youtube.activateFromPointer).toHaveBeenCalledWith(
+      expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
+      harness.floorScene.camera,
+    );
+    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves floor placement when a tap misses every video', async () => {
+    const harness = createHarness({
+      targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
+    });
+    harness.youtube.activateFromPointer.mockResolvedValue('missed');
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await controller.launch();
+
+    harness.hitTest.setCurrentHit(new Matrix4());
+    harness.renderer.emitFrame();
+    expect(controller.place()).toBe(true);
+    harness.hitTest.setCurrentHit(new Matrix4().makeTranslation(2, 0, -3));
+    harness.renderer.emitFrame();
+
+    harness.gesture.handlers.onTap({ x: 120, y: 80 });
+    await flushPromises();
+
+    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports a failed floor player without moving the scene', async () => {
+    const harness = createHarness({
+      targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
+    });
+    harness.youtube.activateFromPointer.mockResolvedValue('failed');
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await controller.launch();
+
+    harness.hitTest.setCurrentHit(new Matrix4());
+    harness.renderer.emitFrame();
+    expect(controller.place()).toBe(true);
+
+    harness.gesture.handlers.onTap({ x: 120, y: 80 });
+    harness.youtube.emitError('Embedding disabled');
+    await flushPromises();
+
+    expect(harness.hooks.onStatus).toHaveBeenCalledWith('Embedding disabled');
+    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
   });
 
   it('uses absolute rotation, latest-pose reset, pinch, tap, select, and floor-plane drag', async () => {
@@ -614,6 +706,28 @@ function baseOptions() {
   const overlayRoot = document.createElement('div');
   const gestureSurface = document.createElement('div');
   overlayRoot.append(gestureSurface);
+  stage.getBoundingClientRect = () => ({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 300,
+    bottom: 150,
+    width: 300,
+    height: 150,
+    toJSON: () => ({}),
+  });
+  gestureSurface.getBoundingClientRect = () => ({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 200,
+    bottom: 100,
+    width: 200,
+    height: 100,
+    toJSON: () => ({}),
+  });
   const asset: CloudflarePlacedAsset = {
     model: { id: 'chair', label: 'Chair', url: 'chair.glb' },
   };
@@ -656,6 +770,7 @@ function createHarness(options: HarnessOptions = {}) {
   const createTargetSceneObject = vi.fn(() => targetScenes.shift() ?? fallbackTarget);
   const hitTest = fakeHitTest();
   const gesture = fakeGesture();
+  const youtube = fakeYouTubeManager();
   const clock = { getDelta: vi.fn(() => 0.25) };
   const dependencies: Partial<FloorPlacementDependencies> = {
     prepareSessionLauncher: async () => ({
@@ -667,6 +782,7 @@ function createHarness(options: HarnessOptions = {}) {
     createHitTest: vi.fn(() => hitTest.value),
     createGestureController: vi.fn((_target, handlers) => gesture.install(handlers)),
     createClock: vi.fn(() => clock),
+    createYouTubePlayerManager: vi.fn((_container, onPlaybackError) => youtube.install(onPlaybackError)),
   };
 
   return {
@@ -681,6 +797,7 @@ function createHarness(options: HarnessOptions = {}) {
     createTargetSceneObject,
     hitTest,
     gesture,
+    youtube,
     clock,
   };
 }
@@ -694,12 +811,57 @@ function supportedController(result: Awaited<ReturnType<typeof prepareFloorPlace
   return result.controller;
 }
 
-function fakeTargetScene(ready: Promise<void> = Promise.resolve()): TargetSceneObject {
+function fakeTargetScene(
+  ready: Promise<void> = Promise.resolve(),
+  youtubeSurfaces: InteractiveYouTubeSurface[] = [],
+): TargetSceneObject {
   return {
     group: new Group(),
     ready,
+    youtubeSurfaces,
     update: vi.fn(),
     dispose: vi.fn(),
+  };
+}
+
+function createSurface(): InteractiveYouTubeSurface {
+  const root = new Group();
+  const mesh = new Mesh();
+  root.add(mesh);
+  return {
+    objectId: 'floor-video',
+    root,
+    mesh,
+    youtube: {
+      videoId: 'dQw4w9WgXcQ',
+      title: 'Floor video',
+    },
+  };
+}
+
+function fakeYouTubeManager() {
+  let onPlaybackError: ((message: string) => void) | undefined;
+  const value = {
+    register: vi.fn(),
+    setMarkerVisible: vi.fn(),
+    activateFromPointer: vi.fn(),
+    update: vi.fn(),
+    resize: vi.fn(),
+    dispose: vi.fn(),
+  };
+
+  return {
+    ...value,
+    install(nextOnPlaybackError: (message: string) => void) {
+      onPlaybackError = nextOnPlaybackError;
+      return value as Pick<
+        YouTubePlayerManager,
+        'register' | 'setMarkerVisible' | 'activateFromPointer' | 'update' | 'resize' | 'dispose'
+      >;
+    },
+    emitError(message: string) {
+      onPlaybackError?.(message);
+    },
   };
 }
 
