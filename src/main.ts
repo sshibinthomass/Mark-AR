@@ -1176,6 +1176,15 @@ async function prepareFocusedFloorPlacement(
           }
           setFloorPlacementUi({ state: 'floor-playback-error', message });
         },
+        onYouTubeActivated() {
+          if (!isCurrentFloorHook() || !floorScenePlaced) {
+            return;
+          }
+          setFloorPlacementUi({
+            state: 'floor-placed',
+            message: `${target.label} placed on the floor.`,
+          });
+        },
         onPlacementReady(ready) {
           if (!isCurrentFloorHook()) {
             return;

@@ -49,6 +49,7 @@ export type FloorPlacementHooks = {
   onSessionEnd(): void;
   onStatus(message: string): void;
   onYouTubeError(message: string): void;
+  onYouTubeActivated(): void;
   onPlacementReady(ready: boolean): void;
   onPlaced(): void;
 };
@@ -526,6 +527,10 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (this.activeSession !== session || this.youtubeManager !== manager) {
       return;
     }
+    if (result === 'activated') {
+      this.options.hooks.onYouTubeActivated();
+      return;
+    }
     if (result === 'missed') {
       this.place();
     }
@@ -539,7 +544,9 @@ class FloorPlacementRuntime implements FloorPlacementController {
     const getCamera = this.floorScene.renderer.xr.getCamera as unknown as (
       baseCamera: PerspectiveCamera,
     ) => Camera;
-    return getCamera.call(this.floorScene.renderer.xr, this.floorScene.camera);
+    const camera = getCamera.call(this.floorScene.renderer.xr, this.floorScene.camera);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    return camera;
   }
 
   private emitPlacementReady(ready: boolean, reportStatus = true): void {

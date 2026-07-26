@@ -90,6 +90,7 @@ const floorRuntimeMocks = vi.hoisted(() => {
       onSessionEnd(): void;
       onStatus(message: string): void;
       onYouTubeError?(message: string): void;
+      onYouTubeActivated?(): void;
       onPlacementReady(ready: boolean): void;
       onPlaced(): void;
     },
@@ -578,7 +579,7 @@ describe('target-specific scan route integration', () => {
     expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
   });
 
-  it('shows floor playback errors without entering fatal recovery or losing placed controls', async () => {
+  it('clears a floor playback error after a successful retry without replacing the scene', async () => {
     await openFocusedScan();
     required<HTMLButtonElement>('#floor-ar-toggle').click();
     floorRuntimeMocks.hooks?.onPlacementReady(true);
@@ -595,6 +596,18 @@ describe('target-specific scan route integration', () => {
     expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
     expect(required<HTMLButtonElement>('#floor-ar-place').disabled).toBe(false);
     expect(required<HTMLButtonElement>('#floor-ar-back').hidden).toBe(false);
+
+    floorRuntimeMocks.hooks?.onYouTubeActivated?.();
+
+    expect(required('#floor-ar-status')).toMatchObject({
+      textContent: 'Only this marker placed on the floor.',
+      dataset: {},
+    });
+    expect(required('#floor-ar-status').hasAttribute('data-tone')).toBe(false);
+    expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
+    expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
+    expect(floorRuntimeMocks.place).not.toHaveBeenCalled();
   });
 
   it('stops floor AR and restarts MindAR with the same focused target when Back to image scan is clicked', async () => {

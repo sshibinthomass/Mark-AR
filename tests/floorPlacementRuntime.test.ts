@@ -3,6 +3,7 @@ import {
   Matrix4,
   Mesh,
   PerspectiveCamera,
+  PlaneGeometry,
   Scene,
   Vector3,
   type WebGLRenderer,
@@ -188,6 +189,56 @@ describe('prepareFloorPlacement', () => {
     expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
   });
 
+  it('repairs a stale XR projection inverse before an off-center YouTube raycast', async () => {
+    const surface = createRaycastSurface();
+    const harness = createHarness({
+      targetScenes: [fakeTargetScene(Promise.resolve(), [surface])],
+    });
+    harness.renderer.xrCamera.fov = 90;
+    harness.renderer.xrCamera.aspect = 1;
+    harness.renderer.xrCamera.near = 0.1;
+    harness.renderer.xrCamera.far = 10;
+    harness.renderer.xrCamera.updateProjectionMatrix();
+    harness.renderer.xrCamera.projectionMatrixInverse.identity();
+    harness.renderer.xrCamera.updateMatrixWorld(true);
+    const player: YouTubePlayerPort = {
+      playVideo: vi.fn(),
+      pauseVideo: vi.fn(),
+      destroy: vi.fn(),
+    };
+    harness.dependencies.createYouTubePlayerManager = vi.fn((container, onPlaybackError) => (
+      new YouTubePlayerManager(container, {
+        createCssRenderer: () => ({
+          domElement: document.createElement('div'),
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createCssObject: (element) => {
+          const object = new Group() as Group & { element: HTMLElement };
+          object.element = element;
+          return object;
+        },
+        createPlayer: async () => player,
+        onPlaybackError,
+      })
+    ));
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await controller.launch();
+
+    harness.hitTest.setCurrentHit(new Matrix4());
+    harness.renderer.emitFrame();
+    expect(controller.place()).toBe(true);
+    harness.floorScene.scene.updateMatrixWorld(true);
+
+    harness.gesture.handlers.onTap({ x: 150, y: 50 });
+    await flushPromises();
+
+    expect(player.playVideo).toHaveBeenCalledOnce();
+    expect(surface.mesh.visible).toBe(false);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves floor placement when a tap misses every video', async () => {
     const harness = createHarness({
       targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
@@ -272,6 +323,7 @@ describe('prepareFloorPlacement', () => {
     );
     expect(player.playVideo).toHaveBeenCalledOnce();
     expect(surface.mesh.visible).toBe(false);
+    expect(harness.hooks.onYouTubeActivated).toHaveBeenCalledOnce();
     expect(harness.floorScene.placementRoot.position.toArray()).toEqual(placedPosition);
     expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
   });
@@ -829,6 +881,7 @@ function baseOptions() {
     onSessionEnd: vi.fn(),
     onStatus: vi.fn(),
     onYouTubeError: vi.fn(),
+    onYouTubeActivated: vi.fn(),
     onPlacementReady: vi.fn(),
     onPlaced: vi.fn(),
   };
@@ -909,12 +962,32 @@ function fakeTargetScene(
   ready: Promise<void> = Promise.resolve(),
   youtubeSurfaces: InteractiveYouTubeSurface[] = [],
 ): TargetSceneObject {
+  const group = new Group();
+  for (const surface of youtubeSurfaces) {
+    group.add(surface.root);
+  }
   return {
-    group: new Group(),
+    group,
     ready,
     youtubeSurfaces,
     update: vi.fn(),
     dispose: vi.fn(),
+  };
+}
+
+function createRaycastSurface(): InteractiveYouTubeSurface {
+  const root = new Group();
+  const mesh = new Mesh(new PlaneGeometry(0.5, 0.5));
+  mesh.position.set(1, 0, -2);
+  root.add(mesh);
+  return {
+    objectId: 'off-center-floor-video',
+    root,
+    mesh,
+    youtube: {
+      videoId: 'dQw4w9WgXcQ',
+      title: 'Off-center floor video',
+    },
   };
 }
 
