@@ -41,7 +41,7 @@ describe('YouTubePlayerManager', () => {
     manager.register('marker-1', surface);
     manager.setMarkerVisible('marker-1', true);
 
-    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe(true);
+    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe('activated');
     expect(playerState.played).toBe(1);
     expect(surface.mesh.visible).toBe(false);
     expect(container.querySelector('[data-youtube-player-object="video-1"]')).toBeTruthy();
@@ -80,10 +80,10 @@ describe('YouTubePlayerManager', () => {
     });
     manager.register('marker-1', surface);
 
-    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe(false);
+    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe('missed');
     manager.setMarkerVisible('marker-1', true);
-    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe(true);
-    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe(false);
+    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe('activated');
+    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe('missed');
     expect(createdPlayers).toBe(1);
     manager.dispose();
   });
@@ -110,7 +110,7 @@ describe('YouTubePlayerManager', () => {
     manager.register('marker-1', surface);
     manager.setMarkerVisible('marker-1', true);
 
-    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe(false);
+    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe('failed');
     expect(surface.mesh.visible).toBe(true);
     expect(container.dataset.youtubeError).toBe('Embedding disabled');
 
@@ -118,7 +118,56 @@ describe('YouTubePlayerManager', () => {
     manager.dispose();
     expect(container.children).toHaveLength(0);
   });
+
+  it('distinguishes a miss from failed player creation and reports the failure', async () => {
+    const errorMessages: string[] = [];
+    const manager = createManager({
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      createPlayer: async () => { throw new Error('Embedding disabled'); },
+      onPlaybackError: (message) => errorMessages.push(message),
+    });
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+
+    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera()))
+      .toBe('failed');
+    expect(errorMessages).toEqual(['Embedding disabled']);
+  });
+
+  it('returns missed when no visible YouTube plane is hit', async () => {
+    const manager = createManager({
+      hitTest: () => undefined,
+    });
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+
+    expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera()))
+      .toBe('missed');
+  });
 });
+
+function createManager(
+  overrides: ConstructorParameters<typeof YouTubePlayerManager>[1] = {},
+) {
+  return new YouTubePlayerManager(document.createElement('div'), {
+    createCssRenderer: () => ({
+      domElement: document.createElement('div'),
+      setSize: vi.fn(),
+      render: vi.fn(),
+    }),
+    createCssObject: (element) => {
+      const object = new Group() as Group & { element: HTMLElement };
+      object.element = element;
+      return object;
+    },
+    createPlayer: async () => ({
+      playVideo() {},
+      pauseVideo() {},
+      destroy() {},
+    }),
+    ...overrides,
+  });
+}
 
 function createSurface() {
   const root = new Group();
