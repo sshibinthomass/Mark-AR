@@ -13,6 +13,7 @@ import {
   Vector3,
   WebGLRenderer,
   sRGBEncoding,
+  type Camera,
   type Object3D,
 } from 'three';
 import { FloorGestureController, type Point2 } from '../interaction/floorGestureController';
@@ -24,6 +25,7 @@ import {
   type FloorSessionLauncherPreparation,
 } from './floorSessionLauncher';
 import { createTargetSceneObject, type TargetSceneObject } from './targetSceneObject';
+import { YouTubePlayerManager } from './youtubePlayerManager';
 
 const SCANNING_STATUS = 'Move your phone until the floor ring appears.';
 const READY_STATUS = 'Floor found. Tap Place.';
@@ -46,6 +48,8 @@ export type FloorPlacementHooks = {
   onSessionStart(): void;
   onSessionEnd(): void;
   onStatus(message: string): void;
+  onYouTubeError(message: string): void;
+  onYouTubeActivated(): void;
   onPlacementReady(ready: boolean): void;
   onPlaced(): void;
 };
@@ -69,6 +73,13 @@ export type FloorPlacementDependencies = {
     handlers: ConstructorParameters<typeof FloorGestureController>[1],
   ): FloorGestureController;
   createClock(): Pick<Clock, 'getDelta'>;
+  createYouTubePlayerManager(
+    container: HTMLElement,
+    onPlaybackError: (message: string) => void,
+  ): Pick<
+    YouTubePlayerManager,
+    'register' | 'setMarkerVisible' | 'activateFromPointer' | 'update' | 'resize' | 'dispose'
+  >;
 };
 
 type FloorPlacementOptions = {
@@ -91,6 +102,9 @@ const DEFAULT_DEPENDENCIES: FloorPlacementDependencies = {
   createHitTest: (reticle) => new FloorHitTest(reticle),
   createGestureController: (target, handlers) => new FloorGestureController(target, handlers),
   createClock: () => new Clock(),
+  createYouTubePlayerManager: (container, onPlaybackError) => new YouTubePlayerManager(container, {
+    onPlaybackError,
+  }),
 };
 
 export async function prepareFloorPlacement(
@@ -142,6 +156,11 @@ class FloorPlacementRuntime implements FloorPlacementController {
   private sessionSelectListener: (() => void) | null = null;
   private sessionStarted = false;
   private targetScene: TargetSceneObject | null = null;
+  private youtubeManager: Pick<
+    YouTubePlayerManager,
+    'register' | 'setMarkerVisible' | 'activateFromPointer' | 'update' | 'resize' | 'dispose'
+  > | null = null;
+  private currentRenderCamera: Camera | null = null;
   private clock: Pick<Clock, 'getDelta'> | null = null;
   private targetReady = false;
   private currentHitValid = false;
@@ -165,8 +184,8 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.transform = new FloorSceneTransform(floorScene.placementRoot);
     this.hitTest = dependencies.createHitTest(floorScene.reticle);
     this.gestureController = dependencies.createGestureController(options.gestureSurface, {
-      onTap: () => {
-        this.place();
+      onTap: (point) => {
+        void this.activateYouTubeOrPlace(point);
       },
       onDrag: (point) => {
         this.dragTo(point);
@@ -203,6 +222,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
     this.transform.placeAt(matrix);
     this.options.hooks.onPlaced();
+    this.youtubeManager?.setMarkerVisible('floor-target', true);
     return true;
   }
 
@@ -419,6 +439,21 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
     this.targetScene = targetScene;
     this.floorScene.placementRoot.add(targetScene.group);
+    if (targetScene.youtubeSurfaces.length > 0) {
+      let sessionManager: FloorPlacementRuntime['youtubeManager'] = null;
+      sessionManager = this.dependencies.createYouTubePlayerManager(
+        this.options.overlayRoot,
+        (message) => {
+          if (this.activeSession === session && this.youtubeManager === sessionManager) {
+            this.options.hooks.onYouTubeError(message);
+          }
+        },
+      );
+      this.youtubeManager = sessionManager;
+      for (const surface of targetScene.youtubeSurfaces) {
+        sessionManager.register('floor-target', surface);
+      }
+    }
     this.clock = this.dependencies.createClock();
     this.connectGestures();
     this.options.hooks.onStatus(SCANNING_STATUS);
@@ -454,11 +489,64 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (this.targetReady && this.targetScene && this.clock) {
       this.targetScene.update(this.clock.getDelta());
     }
+    const stageBounds = this.options.stage.getBoundingClientRect();
+    this.youtubeManager?.resize(stageBounds.width, stageBounds.height);
     this.floorScene.renderer.render(this.floorScene.scene, this.floorScene.camera);
+    this.currentRenderCamera = this.getCurrentXRCamera();
+    this.youtubeManager?.update(this.currentRenderCamera);
   };
+
+  private async activateYouTubeOrPlace(point: Point2): Promise<void> {
+    if (!this.floorScene.placementRoot.visible) {
+      this.place();
+      return;
+    }
+
+    const manager = this.youtubeManager;
+    if (!manager) {
+      this.place();
+      return;
+    }
+    const session = this.activeSession;
+    if (!session) {
+      return;
+    }
+
+    const bounds = this.options.gestureSurface.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      this.place();
+      return;
+    }
+
+    const renderCamera = this.currentRenderCamera
+      ?? this.getCurrentXRCamera();
+    const result = await manager.activateFromPointer({
+      x: ((point.x - bounds.left) / bounds.width) * 2 - 1,
+      y: -((point.y - bounds.top) / bounds.height) * 2 + 1,
+    }, renderCamera);
+    if (this.activeSession !== session || this.youtubeManager !== manager) {
+      return;
+    }
+    if (result === 'activated') {
+      this.options.hooks.onYouTubeActivated();
+      return;
+    }
+    if (result === 'missed') {
+      this.place();
+    }
+  }
 
   private updatePlacementReadiness(): void {
     this.emitPlacementReady(this.targetReady && this.currentHitValid);
+  }
+
+  private getCurrentXRCamera(): Camera {
+    const getCamera = this.floorScene.renderer.xr.getCamera as unknown as (
+      baseCamera: PerspectiveCamera,
+    ) => Camera;
+    const camera = getCamera.call(this.floorScene.renderer.xr, this.floorScene.camera);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    return camera;
   }
 
   private emitPlacementReady(ready: boolean, reportStatus = true): void {
@@ -592,6 +680,9 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (resetHitTest) {
       this.hitTest.reset();
     }
+    this.youtubeManager?.dispose();
+    this.youtubeManager = null;
+    this.currentRenderCamera = null;
     if (this.targetScene) {
       const targetScene = this.targetScene;
       this.targetScene = null;

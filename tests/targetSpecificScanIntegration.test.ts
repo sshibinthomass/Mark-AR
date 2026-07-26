@@ -89,6 +89,8 @@ const floorRuntimeMocks = vi.hoisted(() => {
       onSessionStart(): void;
       onSessionEnd(): void;
       onStatus(message: string): void;
+      onYouTubeError?(message: string): void;
+      onYouTubeActivated?(): void;
       onPlacementReady(ready: boolean): void;
       onPlaced(): void;
     },
@@ -226,6 +228,33 @@ describe('target-specific scan route integration', () => {
     expect(stage.querySelector('[data-scanner-guide]')).toBeNull();
     expect(stage.querySelector('.stage-idle')?.textContent).toBe('Scan an experience');
     expect(document.querySelectorAll('[data-scanner-guide]')).toHaveLength(0);
+  });
+
+  it('ignores a playback error emitted by a replaced marker session', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    const start = required<HTMLButtonElement>('#start-ar');
+    start.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+    const staleHooks = markerArMocks.startMarkerAR.mock.calls[0][1] as {
+      onYouTubeError(message: string): void;
+    };
+
+    start.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
+    const currentHooks = markerArMocks.startMarkerAR.mock.calls[1][1] as {
+      onYouTubeError(message: string): void;
+    };
+
+    staleHooks.onYouTubeError('Embedding disabled');
+    expect(required('#ar-status').textContent).not.toBe('Embedding disabled');
+
+    currentHooks.onYouTubeError('Current embedding disabled');
+    expect(required('#ar-status')).toMatchObject({
+      textContent: 'Current embedding disabled',
+      dataset: { tone: 'error' },
+    });
   });
 
   it('owns one scanner guide inside the camera stage and toggles it from aggregate marker visibility', async () => {
@@ -548,6 +577,37 @@ describe('target-specific scan route integration', () => {
     );
     expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
     expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
+  });
+
+  it('clears a floor playback error after a successful retry without replacing the scene', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onPlacementReady(true);
+    floorRuntimeMocks.hooks?.onPlaced();
+
+    floorRuntimeMocks.hooks?.onYouTubeError?.('Embedding disabled');
+
+    expect(required('#floor-ar-status')).toMatchObject({
+      textContent: 'Embedding disabled',
+      dataset: { tone: 'error' },
+    });
+    expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
+    expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
+    expect(required<HTMLButtonElement>('#floor-ar-place').disabled).toBe(false);
+    expect(required<HTMLButtonElement>('#floor-ar-back').hidden).toBe(false);
+
+    floorRuntimeMocks.hooks?.onYouTubeActivated?.();
+
+    expect(required('#floor-ar-status')).toMatchObject({
+      textContent: 'Only this marker placed on the floor.',
+      dataset: {},
+    });
+    expect(required('#floor-ar-status').hasAttribute('data-tone')).toBe(false);
+    expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
+    expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
+    expect(floorRuntimeMocks.place).not.toHaveBeenCalled();
   });
 
   it('stops floor AR and restarts MindAR with the same focused target when Back to image scan is clicked', async () => {

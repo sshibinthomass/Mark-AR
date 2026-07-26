@@ -57,6 +57,7 @@ export type StartMarkerARHooks = {
   targets?: RuntimeMarkerTarget[];
   onCompileProgress?: (percent: number) => void;
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void;
+  onYouTubeError?: (message: string) => void;
   onReady?: () => void;
   signal?: AbortSignal;
 };
@@ -142,8 +143,8 @@ export async function startMarkerAR(
       markerObject.dispose?.();
     }
     youtubeManager?.dispose();
-    if (pointerHandler && mindarThree) {
-      mindarThree.renderer.domElement.removeEventListener('pointerup', pointerHandler);
+    if (pointerHandler) {
+      container.removeEventListener('pointerup', pointerHandler);
     }
     if (resizeHandler) {
       window.removeEventListener('resize', resizeHandler);
@@ -185,7 +186,9 @@ export async function startMarkerAR(
   const hasYouTube = targets.some((target) => (
     target.cloudflareAsset?.objects?.some(isYouTubeTargetObject)
   ));
-  youtubeManager = hasYouTube ? new YouTubePlayerManager(container) : undefined;
+  youtubeManager = hasYouTube ? new YouTubePlayerManager(container, {
+    onPlaybackError: hooks.onYouTubeError,
+  }) : undefined;
   markerObjects = setupScene(
     instance,
     targets,
@@ -194,6 +197,14 @@ export async function startMarkerAR(
   );
   if (youtubeManager) {
     pointerHandler = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element
+        && event.target.closest(
+          '.youtube-css3d-player, button, a, input, select, textarea, [role="button"]',
+        )
+      ) {
+        return;
+      }
       const rect = instance.renderer.domElement.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) {
         return;
@@ -203,7 +214,7 @@ export async function startMarkerAR(
         y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
       }, instance.camera as Camera);
     };
-    instance.renderer.domElement.addEventListener('pointerup', pointerHandler);
+    container.addEventListener('pointerup', pointerHandler);
     resizeHandler = () => youtubeManager?.resize(container.clientWidth, container.clientHeight);
     window.addEventListener('resize', resizeHandler);
   }

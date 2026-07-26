@@ -18,6 +18,8 @@ export type YouTubePlayerPort = {
   destroy(): void;
 };
 
+export type YouTubeActivationResult = 'activated' | 'missed' | 'failed';
+
 type CssRendererPort = {
   domElement: HTMLElement;
   setSize(width: number, height: number): void;
@@ -50,6 +52,7 @@ type YouTubePlayerManagerDeps = {
     camera: Camera,
     surfaces: RegisteredSurface[],
   ) => RegisteredSurface | undefined;
+  onPlaybackError?: (message: string) => void;
   scene?: Scene;
 };
 
@@ -63,6 +66,7 @@ export class YouTubePlayerManager {
     youtube: TargetYouTubeContent,
   ) => Promise<YouTubePlayerPort>;
   private readonly hitTest: NonNullable<YouTubePlayerManagerDeps['hitTest']>;
+  private readonly onPlaybackError?: (message: string) => void;
   private readonly surfaces: RegisteredSurface[] = [];
   private readonly activePlayers = new Map<string, ActivePlayer>();
   private disposed = false;
@@ -77,6 +81,7 @@ export class YouTubePlayerManager {
     this.createCssObject = deps.createCssObject ?? ((element) => new CSS3DObject(element));
     this.createPlayer = deps.createPlayer ?? createYouTubePlayer;
     this.hitTest = deps.hitTest ?? raycastYouTubeSurface;
+    this.onPlaybackError = deps.onPlaybackError;
     this.renderer.domElement.classList.add('youtube-css3d-layer');
     Object.assign(this.renderer.domElement.style, {
       position: 'absolute',
@@ -114,9 +119,9 @@ export class YouTubePlayerManager {
   async activateFromPointer(
     pointer: { x: number; y: number },
     camera: Camera,
-  ): Promise<boolean> {
+  ): Promise<YouTubeActivationResult> {
     if (this.disposed) {
-      return false;
+      return 'missed';
     }
     const eligible = this.surfaces.filter((surface) => (
       surface.markerVisible
@@ -125,7 +130,7 @@ export class YouTubePlayerManager {
     ));
     const surface = this.hitTest(pointer, camera, eligible);
     if (!surface) {
-      return false;
+      return 'missed';
     }
 
     const wrapper = document.createElement('div');
@@ -153,7 +158,7 @@ export class YouTubePlayerManager {
         player.destroy();
         this.scene.remove(cssObject);
         wrapper.remove();
-        return false;
+        return 'missed';
       }
       this.activePlayers.set(surface.objectId, {
         surface,
@@ -163,15 +168,20 @@ export class YouTubePlayerManager {
       });
       player.playVideo();
       delete this.container.dataset.youtubeError;
-      return true;
+      return 'activated';
     } catch (error) {
       this.scene.remove(cssObject);
       wrapper.remove();
+      if (this.disposed || !surface.markerVisible) {
+        return 'missed';
+      }
       surface.mesh.visible = surface.markerVisible;
-      this.container.dataset.youtubeError = error instanceof Error
+      const message = error instanceof Error
         ? error.message
         : 'YouTube playback is unavailable.';
-      return false;
+      this.container.dataset.youtubeError = message;
+      this.onPlaybackError?.(message);
+      return 'failed';
     }
   }
 

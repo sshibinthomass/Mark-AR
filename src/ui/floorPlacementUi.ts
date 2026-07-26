@@ -6,6 +6,7 @@ export type FloorPlacementUiState =
   | { state: 'floor-scanning'; message: string }
   | { state: 'floor-ready'; message: string }
   | { state: 'floor-placed'; message: string }
+  | { state: 'floor-playback-error'; message: string }
   | { state: 'floor-ended'; message: string }
   | { state: 'floor-error'; message: string };
 
@@ -33,7 +34,7 @@ export function applyFloorPlacementUi(
   }
 
   const floorVisible = state.state.startsWith('floor-');
-  const floorPlaced = state.state === 'floor-placed';
+  const floorPlaced = state.state === 'floor-placed' || state.state === 'floor-playback-error';
   const placeEnabled = state.state === 'floor-ready' || floorPlaced;
   const restartVisible = state.state === 'floor-ended' || state.state === 'floor-error';
   const statusMessage = 'message' in state ? state.message : '';
@@ -62,7 +63,7 @@ export function applyFloorPlacementUi(
   message.textContent = floorVisible ? '' : statusMessage;
   floorStatus.textContent = floorVisible ? statusMessage : '';
   message.removeAttribute('data-tone');
-  if (state.state === 'floor-error') {
+  if (state.state === 'floor-error' || state.state === 'floor-playback-error') {
     floorStatus.dataset.tone = 'error';
   } else {
     floorStatus.removeAttribute('data-tone');

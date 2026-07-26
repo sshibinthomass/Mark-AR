@@ -11,6 +11,7 @@ const runtimeMocks = vi.hoisted(() => ({
   markerUpdate: vi.fn(),
   managerActivate: vi.fn(),
   managerDispose: vi.fn(),
+  managerOnPlaybackError: undefined as ((message: string) => void) | undefined,
   managerRegister: vi.fn(),
   managerSetMarkerVisible: vi.fn(),
   managerUpdate: vi.fn(),
@@ -49,6 +50,13 @@ vi.mock('../src/ar/targetCompiler', () => ({
 
 vi.mock('../src/ar/youtubePlayerManager', () => ({
   YouTubePlayerManager: class {
+    constructor(
+      _container: HTMLElement,
+      options: { onPlaybackError?: (message: string) => void } = {},
+    ) {
+      runtimeMocks.managerOnPlaybackError = options.onPlaybackError;
+    }
+
     register = runtimeMocks.managerRegister;
     setMarkerVisible = runtimeMocks.managerSetMarkerVisible;
     activateFromPointer = runtimeMocks.managerActivate;
@@ -75,6 +83,17 @@ vi.mock('../src/vendor/mind-ar/mindar-image-three.prod.js', async () => {
     stop = runtimeMocks.mindarStop;
 
     constructor(options: Record<string, unknown>) {
+      this.renderer.domElement.getBoundingClientRect = () => ({
+        bottom: 180,
+        height: 180,
+        left: 0,
+        right: 320,
+        top: 0,
+        width: 320,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      });
       runtimeMocks.constructorOptions.push(options);
       runtimeMocks.instances.push(this);
     }
@@ -151,8 +170,9 @@ beforeEach(() => {
   runtimeMocks.compileMarkerTargets.mockReset();
   runtimeMocks.markerDispose.mockReset();
   runtimeMocks.markerUpdate.mockReset();
-  runtimeMocks.managerActivate.mockReset().mockResolvedValue(false);
+  runtimeMocks.managerActivate.mockReset().mockResolvedValue('missed');
   runtimeMocks.managerDispose.mockReset();
+  runtimeMocks.managerOnPlaybackError = undefined;
   runtimeMocks.managerRegister.mockReset();
   runtimeMocks.managerSetMarkerVisible.mockReset();
   runtimeMocks.managerUpdate.mockReset();
@@ -264,6 +284,63 @@ describe('startMarkerAR', () => {
 
     session.stop();
     expect(runtimeMocks.managerDispose).toHaveBeenCalledOnce();
+  });
+
+  it('routes marker taps from the stage while the canvas is non-interactive', async () => {
+    const container = document.createElement('div');
+    runtimeMocks.youtubeSurfaces.push({ objectId: 'video-1' });
+    runtimeMocks.compileMarkerTargets.mockResolvedValue(createCompiledTargets());
+
+    const session = await startMarkerAR(container, {
+      targets: [createCloudflareRuntimeTarget(true)],
+    });
+    runtimeMocks.anchors[0].onTargetFound?.();
+    container.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true,
+      clientX: 160,
+      clientY: 90,
+    }));
+
+    expect(runtimeMocks.managerActivate).toHaveBeenCalledWith(
+      { x: 0, y: 0 },
+      expect.anything(),
+    );
+    session.stop();
+    runtimeMocks.managerActivate.mockClear();
+    container.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    expect(runtimeMocks.managerActivate).not.toHaveBeenCalled();
+  });
+
+  it('does not reprocess taps from an active player control', async () => {
+    const container = document.createElement('div');
+    runtimeMocks.youtubeSurfaces.push({ objectId: 'video-1' });
+    runtimeMocks.compileMarkerTargets.mockResolvedValue(createCompiledTargets());
+    const session = await startMarkerAR(container, {
+      targets: [createCloudflareRuntimeTarget(true)],
+    });
+    const control = document.createElement('button');
+    control.className = 'youtube-css3d-player';
+    container.append(control);
+
+    control.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+
+    expect(runtimeMocks.managerActivate).not.toHaveBeenCalled();
+    session.stop();
+  });
+
+  it('forwards marker playback failures through the runtime hook', async () => {
+    const container = document.createElement('div');
+    const onYouTubeError = vi.fn();
+    runtimeMocks.compileMarkerTargets.mockResolvedValue(createCompiledTargets());
+
+    const session = await startMarkerAR(container, {
+      targets: [createCloudflareRuntimeTarget(true)],
+      onYouTubeError,
+    });
+    runtimeMocks.managerOnPlaybackError?.('Embedding disabled');
+
+    expect(onYouTubeError).toHaveBeenCalledWith('Embedding disabled');
+    session.stop();
   });
 
   it('disables MindAR body-level loading, scanning, and error overlays', async () => {
