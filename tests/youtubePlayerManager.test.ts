@@ -144,12 +144,68 @@ describe('YouTubePlayerManager', () => {
     expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera()))
       .toBe('missed');
   });
+
+  it('does not report a rejected player creation after disposal', async () => {
+    const creation = createDeferred<YouTubePlayerPort>();
+    const errors: string[] = [];
+    const container = document.createElement('div');
+    const surface = createSurface();
+    const manager = createManager({
+      createPlayer: () => creation.promise,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      onPlaybackError: (message) => errors.push(message),
+    }, container);
+    manager.register('marker-1', surface);
+    manager.setMarkerVisible('marker-1', true);
+
+    const activation = manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+    manager.dispose();
+    creation.reject(new Error('Embedding disabled'));
+
+    expect(await activation).toBe('missed');
+    expect(errors).toEqual([]);
+    expect(surface.mesh.visible).toBe(false);
+    expect(container.children).toHaveLength(0);
+  });
+
+  it('does not report a rejected player creation after marker loss', async () => {
+    const creation = createDeferred<YouTubePlayerPort>();
+    const errors: string[] = [];
+    const container = document.createElement('div');
+    const surface = createSurface();
+    const manager = createManager({
+      createPlayer: () => creation.promise,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      onPlaybackError: (message) => errors.push(message),
+    }, container);
+    manager.register('marker-1', surface);
+    manager.setMarkerVisible('marker-1', true);
+
+    const activation = manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+    manager.setMarkerVisible('marker-1', false);
+    creation.reject(new Error('Embedding disabled'));
+
+    expect(await activation).toBe('missed');
+    expect(errors).toEqual([]);
+    expect(surface.mesh.visible).toBe(false);
+    expect(container.querySelector('[data-youtube-player-object="video-1"]')).toBeNull();
+    manager.dispose();
+  });
 });
+
+function createDeferred<T>() {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((_resolve, rejectPromise) => {
+    reject = rejectPromise;
+  });
+  return { promise, reject };
+}
 
 function createManager(
   overrides: ConstructorParameters<typeof YouTubePlayerManager>[1] = {},
+  container = document.createElement('div'),
 ) {
-  return new YouTubePlayerManager(document.createElement('div'), {
+  return new YouTubePlayerManager(container, {
     createCssRenderer: () => ({
       domElement: document.createElement('div'),
       setSize: vi.fn(),

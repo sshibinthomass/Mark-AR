@@ -228,6 +228,33 @@ describe('target-specific scan route integration', () => {
     expect(document.querySelectorAll('[data-scanner-guide]')).toHaveLength(0);
   });
 
+  it('ignores a playback error emitted by a replaced marker session', async () => {
+    window.history.replaceState(null, '', '#/scan');
+
+    await import('../src/main');
+    const start = required<HTMLButtonElement>('#start-ar');
+    start.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 1);
+    const staleHooks = markerArMocks.startMarkerAR.mock.calls[0][1] as {
+      onYouTubeError(message: string): void;
+    };
+
+    start.click();
+    await waitFor(() => markerArMocks.startMarkerAR.mock.calls.length === 2);
+    const currentHooks = markerArMocks.startMarkerAR.mock.calls[1][1] as {
+      onYouTubeError(message: string): void;
+    };
+
+    staleHooks.onYouTubeError('Embedding disabled');
+    expect(required('#ar-status').textContent).not.toBe('Embedding disabled');
+
+    currentHooks.onYouTubeError('Current embedding disabled');
+    expect(required('#ar-status')).toMatchObject({
+      textContent: 'Current embedding disabled',
+      dataset: { tone: 'error' },
+    });
+  });
+
   it('owns one scanner guide inside the camera stage and toggles it from aggregate marker visibility', async () => {
     window.history.replaceState(null, '', '#/scan');
 

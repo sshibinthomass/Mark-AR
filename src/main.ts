@@ -612,7 +612,11 @@ async function startCurrentArSession(): Promise<void> {
         setScannerGuideVisible(stage, visibleMarkerIds.size === 0);
         setScannerStatus(visible ? `${marker.label} active` : `${marker.label} lost`);
       },
-      onYouTubeError: (message) => setScannerStatus(message, 'error'),
+      onYouTubeError: (message) => {
+        if (isCurrentStart()) {
+          setScannerStatus(message, 'error');
+        }
+      },
       onReady: () => {
         if (isCurrentStart()) {
           setScannerStatus(startTarget

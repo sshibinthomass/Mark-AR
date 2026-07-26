@@ -170,7 +170,7 @@ beforeEach(() => {
   runtimeMocks.compileMarkerTargets.mockReset();
   runtimeMocks.markerDispose.mockReset();
   runtimeMocks.markerUpdate.mockReset();
-  runtimeMocks.managerActivate.mockReset().mockResolvedValue(false);
+  runtimeMocks.managerActivate.mockReset().mockResolvedValue('missed');
   runtimeMocks.managerDispose.mockReset();
   runtimeMocks.managerOnPlaybackError = undefined;
   runtimeMocks.managerRegister.mockReset();

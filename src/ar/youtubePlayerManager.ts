@@ -172,6 +172,9 @@ export class YouTubePlayerManager {
     } catch (error) {
       this.scene.remove(cssObject);
       wrapper.remove();
+      if (this.disposed || !surface.markerVisible) {
+        return 'missed';
+      }
       surface.mesh.visible = surface.markerVisible;
       const message = error instanceof Error
         ? error.message
