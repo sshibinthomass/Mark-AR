@@ -52,8 +52,9 @@ import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
   type PreviewCameraView,
 } from './previewCamera';
-import { createTextObject3D } from './textObject3d';
 import { prepareMediaPlane } from './mediaPlane3d';
+import { prepareTextObject3D, type PreparedTextObject3D } from './textObject3d';
+import { applyLockedObjectTint } from './lockedObjectTint';
 import { createNormalizedTargetModelGroup } from './targetModelNormalization';
 import { applyTargetAnimation, applyTargetPlacement } from './targetObjectTransform';
 
@@ -69,6 +70,7 @@ type PointerPoint = {
 };
 
 type CameraDragMode = 'orbit' | 'pan' | 'zoom';
+type PreviewTextObject = Group | PreparedTextObject3D;
 export type PreviewTransformMode = 'translate' | 'rotate' | 'scale';
 const selectionTargetKey = '@selection';
 const groupTargetPrefix = '@group:';
@@ -89,7 +91,7 @@ type PreviewDeps = {
   cancelFrame?: (frameId: number) => void;
   loadTexture?: (url: string) => Promise<Texture | undefined>;
   loadModel?: (url: string) => Promise<Group | undefined>;
-  createTextObject?: (text: TargetTextContent) => Group;
+  createTextObject?: (text: TargetTextContent) => PreviewTextObject;
   onPlacementChange?: (change: PreviewPlacementChange) => void;
   onPlacementsChange?: (changes: PreviewPlacementChange[]) => void;
   onGroupPlacementChange?: (change: PreviewGroupPlacementChange) => void;
@@ -108,6 +110,10 @@ export type PreviewState = {
   selectedObjectId?: string;
   camera?: Partial<PreviewCameraView>;
   transformMode?: PreviewTransformMode;
+  hiddenObjectIds?: string[];
+  lockedObjectIds?: readonly string[];
+  selectionLocked?: boolean;
+  animationPlaying?: boolean;
 };
 
 export class ImageTargetPreview {
@@ -118,7 +124,7 @@ export class ImageTargetPreview {
   private readonly cancelFrame: (frameId: number) => void;
   private readonly loadTexture: (url: string) => Promise<Texture | undefined>;
   private readonly loadModel: (url: string) => Promise<Group | undefined>;
-  private readonly createTextObject: (text: TargetTextContent) => Group;
+  private readonly createTextObject: (text: TargetTextContent) => PreviewTextObject;
   private readonly onPlacementChange?: (change: PreviewPlacementChange) => void;
   private readonly onPlacementsChange?: (changes: PreviewPlacementChange[]) => void;
   private readonly onGroupPlacementChange?: (change: PreviewGroupPlacementChange) => void;
@@ -152,6 +158,10 @@ export class ImageTargetPreview {
   private groups: TargetEditorGroup[] = [];
   private selection: TargetEditorSelection = { objectIds: [] };
   private selectedObjectId?: string;
+  private hiddenObjectIds = new Set<string>();
+  private lockedObjectIds = new Set<string>();
+  private selectionLocked = false;
+  private animationPlaying = true;
   private selectionTransformStart?: {
     pivot: ImageTargetPlacement;
     objects: TargetEditorObject[];
@@ -177,7 +187,7 @@ export class ImageTargetPreview {
     this.cancelFrame = deps.cancelFrame ?? window.cancelAnimationFrame.bind(window);
     this.loadTexture = deps.loadTexture ?? defaultLoadTexture;
     this.loadModel = deps.loadModel ?? defaultLoadModel;
-    this.createTextObject = deps.createTextObject ?? createTextObject3D;
+    this.createTextObject = deps.createTextObject ?? prepareTextObject3D;
     this.onPlacementChange = deps.onPlacementChange;
     this.onPlacementsChange = deps.onPlacementsChange;
     this.onGroupPlacementChange = deps.onGroupPlacementChange;
@@ -247,6 +257,10 @@ export class ImageTargetPreview {
     this.emptySelectionClick = undefined;
     this.selectionTransformStart = undefined;
     this.groups = normalizePreviewGroups(state.groups);
+    this.hiddenObjectIds = new Set(state.hiddenObjectIds ?? []);
+    this.lockedObjectIds = new Set(state.lockedObjectIds ?? []);
+    this.selectionLocked = Boolean(state.selectionLocked);
+    this.animationPlaying = state.animationPlaying ?? this.animationPlaying;
     const validGroupIds = new Set(this.groups.map((group) => group.id));
     this.previewObjects = previewObjects.map((object) => {
       const hasValidGroup = Boolean(object.groupId && object.localPlacement && validGroupIds.has(object.groupId));
@@ -299,9 +313,25 @@ export class ImageTargetPreview {
     }
 
     for (const object of this.previewObjects) {
+      if (this.hiddenObjectIds.has(object.id)) {
+        continue;
+      }
       if (isTextTargetObject(object)) {
-        const textObject = this.createTextObject(object.text);
+        const preparedTextObject = this.createTextObject(object.text);
+        const textObject = preparedTextObject instanceof Group
+          ? preparedTextObject
+          : preparedTextObject.group;
+        if (!(preparedTextObject instanceof Group)) {
+          await preparedTextObject.ready;
+          if (this.disposed || updateToken !== this.updateToken) {
+            preparedTextObject.dispose();
+            return;
+          }
+        }
         textObject.name = `target-object-${object.id}`;
+        if (this.lockedObjectIds.has(object.id)) {
+          applyLockedObjectTint(textObject);
+        }
         this.loadedModels.set(object.id, textObject);
         this.applyPlacementToObject(object.id);
         this.parentForObject(object).add(textObject);
@@ -325,6 +355,9 @@ export class ImageTargetPreview {
           return;
         }
         prepared.group.name = `target-object-${object.id}`;
+        if (this.lockedObjectIds.has(object.id)) {
+          applyLockedObjectTint(prepared.group);
+        }
         this.loadedModels.set(object.id, prepared.group);
         this.applyPlacementToObject(object.id);
         this.parentForObject(object).add(prepared.group);
@@ -345,6 +378,9 @@ export class ImageTargetPreview {
         continue;
       }
       model.name = `target-object-${object.id}`;
+      if (this.lockedObjectIds.has(object.id)) {
+        applyLockedObjectTint(model);
+      }
       this.loadedModels.set(object.id, model);
       this.applyPlacementToObject(object.id);
       this.parentForObject(object).add(model);
@@ -357,6 +393,13 @@ export class ImageTargetPreview {
       return;
     }
     this.setPreviewTransformMode(mode);
+  }
+
+  setAnimationPlaying(playing: boolean): void {
+    if (this.disposed) {
+      return;
+    }
+    this.animationPlaying = playing;
   }
 
   dispose(): void {
@@ -402,7 +445,9 @@ export class ImageTargetPreview {
       return;
     }
     const deltaSeconds = this.frameDeltaSeconds(timestamp);
-    this.elapsedSeconds += deltaSeconds;
+    if (this.animationPlaying) {
+      this.elapsedSeconds += deltaSeconds;
+    }
     this.applyObjectAnimations();
     this.renderer.render(this.scene, this.camera);
     this.frameId = this.requestFrame(this.render);
@@ -688,6 +733,9 @@ export class ImageTargetPreview {
   };
 
   private startDragGesture(pointer: PointerPoint): void {
+    if (this.selectionLocked) {
+      return;
+    }
     const selected = this.selectedPlacement();
     if (!selected) {
       return;
@@ -706,6 +754,9 @@ export class ImageTargetPreview {
   }
 
   private startPinchGesture(): void {
+    if (this.selectionLocked) {
+      return;
+    }
     const selected = this.selectedPlacement();
     if (!selected) {
       return;
@@ -724,6 +775,9 @@ export class ImageTargetPreview {
   }
 
   private startScaleDragGesture(pointer: PointerPoint): void {
+    if (this.selectionLocked) {
+      return;
+    }
     const selected = this.selectedPlacement();
     if (!selected) {
       return;
@@ -742,6 +796,9 @@ export class ImageTargetPreview {
   }
 
   private startRotateDragGesture(pointer: PointerPoint): void {
+    if (this.selectionLocked) {
+      return;
+    }
     const selected = this.selectedPlacement();
     if (!selected) {
       return;
@@ -797,7 +854,8 @@ export class ImageTargetPreview {
 
   private shouldStartObjectTransform(event: PointerEvent, pickedObjectId?: string): boolean {
     return Boolean(
-      this.selectedLoadedModel() &&
+      !this.selectionLocked &&
+        this.selectedLoadedModel() &&
         (event.altKey || (pickedObjectId && pickedObjectId === this.selectedObjectId)),
     );
   }
@@ -1011,7 +1069,7 @@ export class ImageTargetPreview {
 
   private attachTransformControls(): void {
     const selectedModel = this.selectedLoadedModel();
-    if (!selectedModel) {
+    if (!selectedModel || this.selectionLocked) {
       this.transformControls.detach();
       this.transformControls.visible = false;
       return;

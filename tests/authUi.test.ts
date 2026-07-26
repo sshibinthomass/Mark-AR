@@ -111,6 +111,9 @@ describe('auth UI state', () => {
     expect(resolveAccessibleRoute('targets', signedOut)).toBe('account');
     expect(resolveAccessibleRoute('targets', checking)).toBe('account');
     expect(resolveAccessibleRoute('targets', signedIn)).toBe('targets');
+    expect(resolveAccessibleRoute('settings', signedOut)).toBe('account');
+    expect(resolveAccessibleRoute('settings', checking)).toBe('account');
+    expect(resolveAccessibleRoute('settings', signedIn)).toBe('settings');
     expect(resolveAccessibleRoute('scan', signedOut)).toBe('scan');
     expect(isAuthenticated(signedOut)).toBe(false);
     expect(isAuthenticated(checking)).toBe(false);
@@ -173,6 +176,19 @@ describe('auth UI state', () => {
     expect(root.querySelector('[data-auth-access-label]')?.textContent).toBe('Unlocked');
     expect(root.querySelector('[data-auth-email]')?.textContent).toBe('artist@example.com');
     expect(root.querySelector('[data-auth-protected-label]')?.textContent).toBe('Create target');
+  });
+
+  it('shows the Settings tab only for signed-in users', () => {
+    const root = document.createElement('div');
+    root.innerHTML = renderAppShell();
+    const settingsLink = root.querySelector<HTMLElement>('[data-auth-settings]');
+
+    applyAuthUi(root, checking);
+    expect(settingsLink?.hidden).toBe(true);
+    applyAuthUi(root, signedOut);
+    expect(settingsLink?.hidden).toBe(true);
+    applyAuthUi(root, signedIn);
+    expect(settingsLink?.hidden).toBe(false);
   });
 
   it('publishes an account error tone and clears it with the next normal state', () => {

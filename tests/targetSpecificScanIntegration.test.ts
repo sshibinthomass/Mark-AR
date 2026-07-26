@@ -710,6 +710,25 @@ describe('target-specific scan route integration', () => {
     expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
   });
 
+  it('redirects to Account when a signed-in user logs out from Settings', async () => {
+    authMocks.loadWorkerAuthToken.mockReturnValue('token-123');
+    authMocks.getCurrentWebArUser.mockResolvedValue({
+      email: 'viewer@example.com',
+      role: 'user',
+      status: 'active',
+    });
+    window.history.replaceState(null, '', '#/settings');
+
+    await import('../src/main');
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-active-page') === 'settings');
+
+    required<HTMLButtonElement>('#worker-logout').click();
+    await waitFor(() => required('[data-app-shell]').getAttribute('data-active-page') === 'account');
+
+    expect(window.location.hash).toBe('#/account');
+    expect(required<HTMLElement>('[data-auth-settings]').hidden).toBe(true);
+  });
+
   it('aborts a pending marker start on floor switch and stops its late resolved session', async () => {
     const markerStart = deferred<{ stop(): void }>();
     const lateSessionStop = vi.fn();

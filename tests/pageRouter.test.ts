@@ -78,4 +78,31 @@ describe('activateRoute', () => {
     expect(result).toEqual({ activeRoute: 'targets', blocked: false });
     expect(root.dataset.activePage).toBe('targets');
   });
+
+  it('blocks Settings while signed out and activates it while signed in', () => {
+    const root = document.createElement('main');
+    root.innerHTML = `
+      <section data-page="settings" hidden>
+        <h2 data-page-heading tabindex="-1">Settings</h2>
+      </section>
+      <section data-page="account"></section>
+    `;
+
+    expect(activateAccessibleRoute(root, 'settings', {
+      status: 'signed-out',
+      message: 'Sign in to open Settings.',
+    })).toEqual({
+      activeRoute: 'account',
+      blocked: true,
+    });
+    expect(activateAccessibleRoute(root, 'settings', {
+      status: 'signed-in',
+      message: 'Settings unlocked.',
+      email: 'artist@example.com',
+    })).toEqual({
+      activeRoute: 'settings',
+      blocked: false,
+    });
+    expect(root.dataset.activePage).toBe('settings');
+  });
 });

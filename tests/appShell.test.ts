@@ -13,12 +13,14 @@ describe('renderAppShell', () => {
         href: link.getAttribute('href'),
         text: link.textContent?.trim(),
         hasIcon: Boolean(link.querySelector('.route-icon')),
+        hidden: link.hidden,
       })),
     ).toEqual([
-      { route: 'home', href: '#/', text: 'Home', hasIcon: true },
-      { route: 'scan', href: '#/scan', text: 'Scan', hasIcon: true },
-      { route: 'targets', href: '#/account', text: 'Studio', hasIcon: true },
-      { route: 'account', href: '#/account', text: 'Sign in', hasIcon: true },
+      { route: 'home', href: '#/', text: 'Home', hasIcon: true, hidden: false },
+      { route: 'scan', href: '#/scan', text: 'Scan', hasIcon: true, hidden: false },
+      { route: 'targets', href: '#/account', text: 'Studio', hasIcon: true, hidden: false },
+      { route: 'settings', href: '#/settings', text: 'Settings', hasIcon: true, hidden: true },
+      { route: 'account', href: '#/account', text: 'Sign in', hasIcon: true, hidden: false },
     ]);
     expect(container.querySelector<HTMLImageElement>('.brand-link img')).toMatchObject({
       alt: 'AnchorAR by Arvenilo',
@@ -42,7 +44,7 @@ describe('renderAppShell', () => {
       ['Use cases', 'use-cases'],
     ]);
     expect([...container.querySelectorAll('.route-tabs a')].map((link) => link.textContent?.trim())).toEqual([
-      'Home', 'Scan', 'Studio', 'Sign in',
+      'Home', 'Scan', 'Studio', 'Settings', 'Sign in',
     ]);
     expect(
       [...container.querySelectorAll<HTMLElement>('[data-page-heading]')].map((heading) => ({
@@ -54,6 +56,7 @@ describe('renderAppShell', () => {
       { id: 'home-page-title', text: 'Interactive stories, anchored in reality.', tabIndex: -1 },
       { id: 'scan-page-title', text: 'Scan an experience', tabIndex: -1 },
       { id: 'targets-page-title', text: 'AnchorAR Studio', tabIndex: -1 },
+      { id: 'settings-page-title', text: 'Keyboard settings', tabIndex: -1 },
       { id: 'account-page-title', text: 'Your account', tabIndex: -1 },
     ]);
     expect(
@@ -62,6 +65,7 @@ describe('renderAppShell', () => {
         text: link.textContent?.trim(),
       })),
     ).toEqual([
+      { href: '#/', text: 'Home' },
       { href: '#/', text: 'Home' },
       { href: '#/', text: 'Home' },
       { href: '#/', text: 'Home' },
@@ -99,7 +103,11 @@ describe('renderAppShell', () => {
     ).toEqual(['Scan an experience', 'Create in AnchorAR Studio', 'Access your account']);
     expect(
       [...container.querySelectorAll<HTMLElement>('[data-page]')].map((page) => page.dataset.page),
-    ).toEqual(['home', 'scan', 'targets', 'account']);
+    ).toEqual(['home', 'scan', 'targets', 'settings', 'account']);
+    expect(container.querySelector('#settings-page-title')?.textContent).toBe('Keyboard settings');
+    expect(container.querySelectorAll('[data-page="settings"] .keyboard-shortcut-row')).toHaveLength(27);
+    expect(container.querySelector('#target-keyboard-help')?.getAttribute('role')).toBe('dialog');
+    expect(container.querySelectorAll('#target-keyboard-help .keyboard-shortcut-row')).toHaveLength(27);
     expect(layoutOrder(container, '.scanner-panel')).toEqual([
       'scanner-stage',
       'scanner-controls',

@@ -16,6 +16,8 @@ export type TargetObjectListItemOptions = {
   index: number;
   selectedObjectId?: string;
   selectedObjectIds?: string[];
+  hidden?: boolean;
+  locked?: boolean;
   onSelect: (objectId: string, additive: boolean) => void;
   onDelete: (objectId: string) => void;
 };
@@ -28,6 +30,8 @@ export type TargetObjectListOptions = {
   onSelectGroup: (groupId: string) => void;
   onUngroup: (groupId: string) => void;
   onDeleteObject: (objectId: string) => void;
+  hiddenKeys?: ReadonlySet<string>;
+  lockedKeys?: ReadonlySet<string>;
 };
 
 export function renderTargetObjectListItem({
@@ -35,12 +39,16 @@ export function renderTargetObjectListItem({
   index,
   selectedObjectId,
   selectedObjectIds = selectedObjectId ? [selectedObjectId] : [],
+  hidden = false,
+  locked = false,
   onSelect,
   onDelete,
 }: TargetObjectListItemOptions): HTMLElement {
   const row = document.createElement('div');
   row.className = 'target-object-row';
   row.dataset.objectId = object.id;
+  row.dataset.hidden = String(hidden);
+  row.dataset.locked = String(locked);
   row.setAttribute('role', 'listitem');
   row.setAttribute('aria-selected', String(selectedObjectIds.includes(object.id)));
 
@@ -70,17 +78,17 @@ export function renderTargetObjectListItem({
     meta.textContent = text.fillMode === 'gradient'
       ? `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel} ${directionLabel}`
       : `${languageOption(text.language).label} / ${fontOption(text.font).label} / ${fillLabel}`;
-    selectButton.append(swatch, label, meta);
+    selectButton.append(swatch, label, meta, ...createStateBadges(hidden, locked));
 
-    row.append(selectButton, createDeleteButton(object.id, `Delete text ${text.value}`, onDelete));
+    row.append(selectButton, createDeleteButton(object.id, `Delete text ${text.value}`, onDelete, locked));
     return row;
   }
 
   row.classList.add(`target-object-row-${object.kind ?? 'model'}`);
   label.textContent = targetObjectLabel(object);
   meta.textContent = `${index + 1} / ${Number(object.placement.scale.toFixed(2))}x`;
-  selectButton.append(label, meta);
-  row.append(selectButton, createDeleteButton(object.id, `Delete object ${targetObjectLabel(object)}`, onDelete));
+  selectButton.append(label, meta, ...createStateBadges(hidden, locked));
+  row.append(selectButton, createDeleteButton(object.id, `Delete object ${targetObjectLabel(object)}`, onDelete, locked));
   return row;
 }
 
@@ -92,6 +100,8 @@ export function renderTargetObjectList({
   onSelectGroup,
   onUngroup,
   onDeleteObject,
+  hiddenKeys = new Set(),
+  lockedKeys = new Set(),
 }: TargetObjectListOptions): HTMLElement {
   const list = document.createElement('div');
   list.className = 'target-object-list-content';
@@ -113,6 +123,8 @@ export function renderTargetObjectList({
       onSelectGroup,
       onUngroup,
       onDeleteObject,
+      hiddenKeys,
+      lockedKeys,
     }));
   }
 
@@ -124,6 +136,8 @@ export function renderTargetObjectList({
       object,
       index,
       selectedObjectIds: selection.objectIds,
+      hidden: hiddenKeys.has(`object:${object.id}`),
+      locked: lockedKeys.has(`object:${object.id}`),
       onSelect: onSelectObject,
       onDelete: onDeleteObject,
     }));
@@ -140,6 +154,8 @@ function createGroupRow({
   onSelectGroup,
   onUngroup,
   onDeleteObject,
+  hiddenKeys = new Set(),
+  lockedKeys = new Set(),
 }: Omit<TargetObjectListOptions, 'groups'> & { group: TargetEditorGroup; members: TargetEditorObject[] }): HTMLElement {
   const row = document.createElement('section');
   row.className = 'target-object-group';
@@ -161,7 +177,11 @@ function createGroupRow({
   label.textContent = group.label;
   const count = document.createElement('small');
   count.textContent = `${members.length} object${members.length === 1 ? '' : 's'}`;
-  selectButton.append(label, count);
+  const groupHidden = hiddenKeys.has(`group:${group.id}`);
+  const groupLocked = lockedKeys.has(`group:${group.id}`);
+  row.dataset.hidden = String(groupHidden);
+  row.dataset.locked = String(groupLocked);
+  selectButton.append(label, count, ...createStateBadges(groupHidden, groupLocked));
   selectButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -173,6 +193,7 @@ function createGroupRow({
   ungroupButton.className = 'target-object-ungroup';
   ungroupButton.dataset.ungroupTargetGroup = group.id;
   ungroupButton.textContent = 'Ungroup';
+  ungroupButton.disabled = groupLocked;
   ungroupButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -188,6 +209,8 @@ function createGroupRow({
       object,
       index,
       selectedObjectIds: selection.objectIds,
+      hidden: groupHidden || hiddenKeys.has(`object:${object.id}`),
+      locked: groupLocked || lockedKeys.has(`object:${object.id}`),
       onSelect: onSelectObject,
       onDelete: onDeleteObject,
     }));
@@ -198,15 +221,36 @@ function createGroupRow({
   return row;
 }
 
+function createStateBadges(hidden: boolean, locked: boolean): HTMLElement[] {
+  const badges: HTMLElement[] = [];
+  if (hidden) {
+    badges.push(createStateBadge('hidden', 'Hidden'));
+  }
+  if (locked) {
+    badges.push(createStateBadge('locked', 'Locked'));
+  }
+  return badges;
+}
+
+function createStateBadge(state: 'hidden' | 'locked', label: string): HTMLElement {
+  const badge = document.createElement('span');
+  badge.className = `target-object-state target-object-state-${state}`;
+  badge.dataset.objectState = state;
+  badge.textContent = label;
+  return badge;
+}
+
 function createDeleteButton(
   objectId: string,
   label: string,
   onDelete: (objectId: string) => void,
+  disabled = false,
 ): HTMLButtonElement {
   const deleteButton = document.createElement('button');
   deleteButton.type = 'button';
   deleteButton.className = 'target-object-delete';
   deleteButton.dataset.deleteTargetObject = objectId;
+  deleteButton.disabled = disabled;
   decorateDeleteIconButton(deleteButton, label);
   deleteButton.addEventListener('click', () => onDelete(objectId));
   return deleteButton;

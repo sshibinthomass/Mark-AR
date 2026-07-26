@@ -1722,6 +1722,157 @@ button:disabled,
   cursor: progress;
 }
 
+.keyboard-settings {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.target-keyboard-help {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: rgb(3 8 18 / 78%);
+  backdrop-filter: blur(10px);
+}
+
+.target-keyboard-help[hidden] {
+  display: none;
+}
+
+.target-keyboard-help-panel {
+  width: min(1080px, 100%);
+  max-height: min(86vh, 900px);
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-card);
+  background: var(--color-interface-white);
+  box-shadow: 0 32px 90px rgb(0 0 0 / 45%);
+}
+
+.target-keyboard-help-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.target-keyboard-help-head h2 {
+  margin: 0.25rem 0 0;
+}
+
+.target-object-state {
+  display: inline-flex;
+  width: max-content;
+  margin-top: 0.2rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--color-context-slate);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.target-object-state-hidden {
+  color: #9a6700;
+}
+
+.target-object-state-locked {
+  color: #2457a7;
+}
+
+.keyboard-settings-intro {
+  max-width: 68ch;
+  color: var(--color-context-slate);
+}
+
+.keyboard-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.keyboard-shortcut-card {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-card);
+  background: var(--color-interface-white);
+  box-shadow: none;
+}
+
+.keyboard-shortcut-card h3,
+.keyboard-shortcut-card p {
+  margin: 0;
+}
+
+.keyboard-shortcut-card header {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.keyboard-shortcut-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keyboard-shortcut-row {
+  display: grid;
+  grid-template-columns: minmax(8.5rem, auto) 1fr;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.keyboard-shortcut-row:last-child {
+  border-bottom: 0;
+}
+
+.keyboard-shortcut-keys,
+.keyboard-shortcut-copy {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.keyboard-shortcut-keys {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.keyboard-shortcut-copy {
+  flex-direction: column;
+}
+
+.keyboard-shortcut-copy small {
+  color: var(--color-context-slate);
+}
+
+.keyboard-shortcut-keys kbd {
+  min-width: 2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--color-border-dark);
+  border-bottom-width: 3px;
+  border-radius: var(--radius-control);
+  background: var(--color-reality-mist);
+  color: var(--color-spatial-ink);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
 @media (max-width: 1023px) {
   .app-shell {
     padding-right: var(--space-6);
@@ -1840,6 +1991,10 @@ button:disabled,
     backdrop-filter: none;
   }
 
+  [data-auth-state="signed-in"] .route-tabs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
   .route-tabs a {
     flex-direction: column;
     gap: 2px;
@@ -1847,6 +2002,18 @@ button:disabled,
     min-height: 56px;
     padding: 6px 4px;
     font-size: 0.6875rem;
+  }
+
+  .keyboard-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .keyboard-shortcut-row {
+    grid-template-columns: 1fr;
+  }
+
+  .keyboard-shortcut-card {
+    padding: var(--space-4);
   }
 
   [data-active-page="scan"][data-scan-session="starting"] .route-tabs,

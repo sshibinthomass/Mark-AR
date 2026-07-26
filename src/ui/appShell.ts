@@ -7,6 +7,7 @@ import {
   TEXT_STYLE_PRESETS,
 } from '../app/targetEditorObjects';
 import { brandAssetUrls } from '../app/brandAssets';
+import { renderKeyboardSettings } from './keyboardSettings';
 import { hrefForRoute, type AppRoute } from './pageRoutes';
 
 type ModeCard = {
@@ -45,6 +46,7 @@ const routeIconPaths: Record<AppRoute, string> = {
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9 21v-7h6v7"/>',
   scan: '<path d="M4 8V4h4"/><path d="M16 4h4v4"/><path d="M20 16v4h-4"/><path d="M8 20H4v-4"/><path d="M7 12h10"/>',
   targets: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 15 3-3 2 2 3-4 2 3"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1.03H3v-4h.05A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.05V3h4v.05a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.95 10H21v4h-.05A1.7 1.7 0 0 0 19.4 15Z"/>',
   account: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>',
 };
 
@@ -69,6 +71,7 @@ export function renderAppShell(): string {
             ${renderRouteLink('home', 'Home')}
             ${renderRouteLink('scan', 'Scan')}
             ${renderRouteLink('targets', 'Studio')}
+            ${renderRouteLink('settings', 'Settings')}
             ${renderRouteLink('account', '<span data-auth-account-label>Sign in</span>')}
           </div>
         </div>
@@ -514,6 +517,34 @@ export function renderAppShell(): string {
             </div>
           </section>
         </section>
+        <div
+          id="target-keyboard-help"
+          class="target-keyboard-help"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="target-keyboard-help-title"
+          hidden
+        >
+          <div class="target-keyboard-help-panel">
+            <header class="target-keyboard-help-head">
+              <div>
+                <p class="eyebrow">Studio reference</p>
+                <h2 id="target-keyboard-help-title">Keyboard shortcuts</h2>
+              </div>
+              <button id="close-target-keyboard-help" type="button" aria-label="Close keyboard shortcuts">Close</button>
+            </header>
+            ${renderKeyboardSettings(undefined, 'target-keyboard-help-shortcuts')}
+          </div>
+        </div>
+      </section>
+
+      <section class="page settings-page" data-page="settings" hidden aria-label="Keyboard settings">
+        ${renderPageHeader(
+          'settings',
+          'Keyboard settings',
+          'A quick reference for the keyboard controls available in AnchorAR Studio.',
+        )}
+        ${renderKeyboardSettings()}
       </section>
 
       <section class="page" data-page="account" hidden aria-label="AnchorAR account">
@@ -602,7 +633,8 @@ function renderRouteLink(route: AppRoute, label: string): string {
   if (route === 'targets') {
     return `<a href="${hrefForRoute('account')}" data-route-link="targets" data-auth-protected data-auth-locked="true" data-unlocked-href="${hrefForRoute('targets')}" aria-label="AnchorAR Studio — sign in required" title="Sign in with an approved account to use AnchorAR Studio">${renderRouteLabel(route, label)}</a>`;
   }
-  return `<a href="${hrefForRoute(route)}" data-route-link="${route}">${renderRouteLabel(route, label)}</a>`;
+  const authAttributes = route === 'settings' ? ' data-auth-settings hidden' : '';
+  return `<a href="${hrefForRoute(route)}" data-route-link="${route}"${authAttributes}>${renderRouteLabel(route, label)}</a>`;
 }
 
 function renderRouteLabel(route: AppRoute, label: string): string {

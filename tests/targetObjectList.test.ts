@@ -147,4 +147,26 @@ describe('renderTargetObjectList', () => {
     expect(onSelectObject).toHaveBeenNthCalledWith(1, 'chair', true);
     expect(onSelectObject).toHaveBeenNthCalledWith(2, 'lamp', true);
   });
+
+  it('marks temporary state and disables destructive controls for locked rows', () => {
+    const list = renderTargetObjectList({
+      objects,
+      groups,
+      selection: { objectIds: [], groupId: 'group-1' },
+      hiddenKeys: new Set(['object:plant']),
+      lockedKeys: new Set(['group:group-1', 'object:plant']),
+      onSelectObject: vi.fn(),
+      onSelectGroup: vi.fn(),
+      onUngroup: vi.fn(),
+      onDeleteObject: vi.fn(),
+    });
+
+    const group = list.querySelector<HTMLElement>('[data-target-object-group="group-1"]')!;
+    const plant = list.querySelector<HTMLElement>('[data-object-id="plant"]')!;
+    expect(group.dataset.locked).toBe('true');
+    expect(group.querySelector<HTMLButtonElement>('[data-ungroup-target-group]')?.disabled).toBe(true);
+    expect(plant.dataset.hidden).toBe('true');
+    expect(plant.dataset.locked).toBe('true');
+    expect(plant.querySelector<HTMLButtonElement>('[data-delete-target-object]')?.disabled).toBe(true);
+  });
 });
