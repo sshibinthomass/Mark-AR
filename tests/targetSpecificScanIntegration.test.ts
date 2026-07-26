@@ -89,6 +89,7 @@ const floorRuntimeMocks = vi.hoisted(() => {
       onSessionStart(): void;
       onSessionEnd(): void;
       onStatus(message: string): void;
+      onYouTubeError?(message: string): void;
       onPlacementReady(ready: boolean): void;
       onPlaced(): void;
     },
@@ -575,6 +576,25 @@ describe('target-specific scan route integration', () => {
     );
     expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
     expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
+  });
+
+  it('shows floor playback errors without entering fatal recovery or losing placed controls', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onPlacementReady(true);
+    floorRuntimeMocks.hooks?.onPlaced();
+
+    floorRuntimeMocks.hooks?.onYouTubeError?.('Embedding disabled');
+
+    expect(required('#floor-ar-status')).toMatchObject({
+      textContent: 'Embedding disabled',
+      dataset: { tone: 'error' },
+    });
+    expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-reset').hidden).toBe(false);
+    expect(required<HTMLInputElement>('#floor-ar-rotation').disabled).toBe(false);
+    expect(required<HTMLButtonElement>('#floor-ar-place').disabled).toBe(false);
+    expect(required<HTMLButtonElement>('#floor-ar-back').hidden).toBe(false);
   });
 
   it('stops floor AR and restarts MindAR with the same focused target when Back to image scan is clicked', async () => {

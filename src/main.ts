@@ -1170,6 +1170,12 @@ async function prepareFocusedFloorPlacement(
           }
           applyFocusedFloorStatus(message);
         },
+        onYouTubeError(message) {
+          if (!isCurrentFloorHook()) {
+            return;
+          }
+          setFloorPlacementUi({ state: 'floor-playback-error', message });
+        },
         onPlacementReady(ready) {
           if (!isCurrentFloorHook()) {
             return;

@@ -20,7 +20,10 @@ import type {
   InteractiveYouTubeSurface,
   TargetSceneObject,
 } from '../src/ar/targetSceneObject';
-import type { YouTubePlayerManager } from '../src/ar/youtubePlayerManager';
+import {
+  YouTubePlayerManager,
+  type YouTubePlayerPort,
+} from '../src/ar/youtubePlayerManager';
 
 const UNSUPPORTED_MESSAGE =
   'Floor placement needs Android Chrome with WebXR. Image scanning is still available.';
@@ -150,7 +153,11 @@ describe('prepareFloorPlacement', () => {
     harness.hitTest.setCurrentHit(new Matrix4());
     harness.renderer.emitFrame();
     expect(harness.youtube.resize).toHaveBeenCalledWith(300, 150);
-    expect(harness.youtube.update).toHaveBeenCalledWith(harness.floorScene.camera);
+    expect(harness.renderer.xr.getCamera).toHaveBeenCalledWith(harness.floorScene.camera);
+    expect(harness.youtube.update).toHaveBeenCalledWith(harness.renderer.xrCamera);
+    expect(firstInvocation(harness.renderer.render)).toBeLessThan(
+      firstInvocation(harness.renderer.xr.getCamera),
+    );
     expect(controller.place()).toBe(true);
     expect(harness.youtube.setMarkerVisible).toHaveBeenCalledWith('floor-target', true);
 
@@ -176,7 +183,7 @@ describe('prepareFloorPlacement', () => {
 
     expect(harness.youtube.activateFromPointer).toHaveBeenCalledWith(
       expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
-      harness.floorScene.camera,
+      harness.renderer.xrCamera,
     );
     expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
   });
@@ -202,11 +209,41 @@ describe('prepareFloorPlacement', () => {
     expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(2);
   });
 
-  it('reports a failed floor player without moving the scene', async () => {
+  it('reports a nonfatal floor player failure, restores its thumbnail, and allows a later retry', async () => {
+    const surface = createSurface();
     const harness = createHarness({
-      targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
+      targetScenes: [fakeTargetScene(Promise.resolve(), [surface])],
     });
-    harness.youtube.activateFromPointer.mockResolvedValue('failed');
+    const player: YouTubePlayerPort = {
+      playVideo: vi.fn(),
+      pauseVideo: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const hitTest = vi.fn((_pointer, _camera, surfaces) => surfaces[0]);
+    let playerAttempts = 0;
+    harness.dependencies.createYouTubePlayerManager = vi.fn((container, onPlaybackError) => (
+      new YouTubePlayerManager(container, {
+        createCssRenderer: () => ({
+          domElement: document.createElement('div'),
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createCssObject: (element) => {
+          const object = new Group() as Group & { element: HTMLElement };
+          object.element = element;
+          return object;
+        },
+        createPlayer: async () => {
+          playerAttempts += 1;
+          if (playerAttempts === 1) {
+            throw new Error('Embedding disabled');
+          }
+          return player;
+        },
+        hitTest,
+        onPlaybackError,
+      })
+    ));
     const result = await prepareWithHarness(harness);
     const controller = supportedController(result);
     await controller.launch();
@@ -214,13 +251,69 @@ describe('prepareFloorPlacement', () => {
     harness.hitTest.setCurrentHit(new Matrix4());
     harness.renderer.emitFrame();
     expect(controller.place()).toBe(true);
+    const placedPosition = harness.floorScene.placementRoot.position.toArray();
 
     harness.gesture.handlers.onTap({ x: 120, y: 80 });
-    harness.youtube.emitError('Embedding disabled');
     await flushPromises();
 
-    expect(harness.hooks.onStatus).toHaveBeenCalledWith('Embedding disabled');
+    expect(surface.mesh.visible).toBe(true);
+    expect(harness.hooks.onYouTubeError).toHaveBeenCalledWith('Embedding disabled');
+    expect(harness.hooks.onStatus).not.toHaveBeenCalledWith('Embedding disabled');
+    expect(harness.floorScene.placementRoot.position.toArray()).toEqual(placedPosition);
     expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
+
+    harness.gesture.handlers.onTap({ x: 120, y: 80 });
+    await flushPromises();
+
+    expect(hitTest).toHaveBeenLastCalledWith(
+      expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }),
+      harness.renderer.xrCamera,
+      expect.any(Array),
+    );
+    expect(player.playVideo).toHaveBeenCalledOnce();
+    expect(surface.mesh.visible).toBe(false);
+    expect(harness.floorScene.placementRoot.position.toArray()).toEqual(placedPosition);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an old activation miss after stop and relaunch', async () => {
+    const activation = deferred<'missed'>();
+    const firstSession = fakeXRSession();
+    const secondSession = fakeXRSession();
+    const youtube = fakeYouTubeManager();
+    youtube.activateFromPointer.mockReturnValueOnce(activation.promise);
+    const harness = createHarness({
+      sessionPromises: [Promise.resolve(firstSession.session), Promise.resolve(secondSession.session)],
+      targetScenes: [
+        fakeTargetScene(Promise.resolve(), [createSurface()]),
+        fakeTargetScene(Promise.resolve(), [createSurface()]),
+      ],
+    });
+    harness.dependencies.createYouTubePlayerManager = vi.fn(
+      (_container, onPlaybackError) => youtube.install(onPlaybackError),
+    );
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    await controller.launch();
+    harness.hitTest.setCurrentHit(new Matrix4());
+    harness.renderer.emitFrame();
+    expect(controller.place()).toBe(true);
+    harness.gesture.handlers.onTap({ x: 120, y: 80 });
+    expect(youtube.activateFromPointer).toHaveBeenCalledOnce();
+
+    await controller.stop();
+    await controller.launch();
+    harness.hitTest.setCurrentHit(new Matrix4().makeTranslation(3, 0, -4));
+    harness.renderer.emitFrame();
+    expect(harness.floorScene.placementRoot.visible).toBe(false);
+
+    activation.resolve('missed');
+    await flushPromises();
+
+    expect(harness.floorScene.placementRoot.visible).toBe(false);
+    expect(harness.hooks.onPlaced).toHaveBeenCalledTimes(1);
+    expect(youtube.activateFromPointer).toHaveBeenCalledOnce();
   });
 
   it('uses absolute rotation, latest-pose reset, pinch, tap, select, and floor-plane drag', async () => {
@@ -735,6 +828,7 @@ function baseOptions() {
     onSessionStart: vi.fn(),
     onSessionEnd: vi.fn(),
     onStatus: vi.fn(),
+    onYouTubeError: vi.fn(),
     onPlacementReady: vi.fn(),
     onPlaced: vi.fn(),
   };
@@ -840,7 +934,6 @@ function createSurface(): InteractiveYouTubeSurface {
 }
 
 function fakeYouTubeManager() {
-  let onPlaybackError: ((message: string) => void) | undefined;
   const value = {
     register: vi.fn(),
     setMarkerVisible: vi.fn(),
@@ -852,15 +945,11 @@ function fakeYouTubeManager() {
 
   return {
     ...value,
-    install(nextOnPlaybackError: (message: string) => void) {
-      onPlaybackError = nextOnPlaybackError;
+    install(_onPlaybackError: (message: string) => void) {
       return value as Pick<
         YouTubePlayerManager,
         'register' | 'setMarkerVisible' | 'activateFromPointer' | 'update' | 'resize' | 'dispose'
       >;
-    },
-    emitError(message: string) {
-      onPlaybackError?.(message);
     },
   };
 }
@@ -868,11 +957,13 @@ function fakeYouTubeManager() {
 function fakeRenderer() {
   let animationLoop: XRFrameRequestCallback | null = null;
   const referenceSpace = {} as XRReferenceSpace;
+  const xrCamera = new PerspectiveCamera(70, 1, 0.01, 40);
   const xr = {
     enabled: true,
     setReferenceSpaceType: vi.fn(),
     setSession: vi.fn(async () => undefined),
     getReferenceSpace: vi.fn(() => referenceSpace),
+    getCamera: vi.fn(() => xrCamera),
   };
   const domElement = document.createElement('canvas');
   const setAnimationLoop = vi.fn((callback: XRFrameRequestCallback | null) => {
@@ -889,6 +980,7 @@ function fakeRenderer() {
   return {
     renderer,
     xr,
+    xrCamera,
     domElement,
     referenceSpace,
     setAnimationLoop,

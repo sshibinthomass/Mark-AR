@@ -13,6 +13,7 @@ import {
   Vector3,
   WebGLRenderer,
   sRGBEncoding,
+  type Camera,
   type Object3D,
 } from 'three';
 import { FloorGestureController, type Point2 } from '../interaction/floorGestureController';
@@ -47,6 +48,7 @@ export type FloorPlacementHooks = {
   onSessionStart(): void;
   onSessionEnd(): void;
   onStatus(message: string): void;
+  onYouTubeError(message: string): void;
   onPlacementReady(ready: boolean): void;
   onPlaced(): void;
 };
@@ -157,6 +159,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     YouTubePlayerManager,
     'register' | 'setMarkerVisible' | 'activateFromPointer' | 'update' | 'resize' | 'dispose'
   > | null = null;
+  private currentRenderCamera: Camera | null = null;
   private clock: Pick<Clock, 'getDelta'> | null = null;
   private targetReady = false;
   private currentHitValid = false;
@@ -436,12 +439,18 @@ class FloorPlacementRuntime implements FloorPlacementController {
     this.targetScene = targetScene;
     this.floorScene.placementRoot.add(targetScene.group);
     if (targetScene.youtubeSurfaces.length > 0) {
-      this.youtubeManager = this.dependencies.createYouTubePlayerManager(
+      let sessionManager: FloorPlacementRuntime['youtubeManager'] = null;
+      sessionManager = this.dependencies.createYouTubePlayerManager(
         this.options.overlayRoot,
-        (message) => this.options.hooks.onStatus(message),
+        (message) => {
+          if (this.activeSession === session && this.youtubeManager === sessionManager) {
+            this.options.hooks.onYouTubeError(message);
+          }
+        },
       );
+      this.youtubeManager = sessionManager;
       for (const surface of targetScene.youtubeSurfaces) {
-        this.youtubeManager.register('floor-target', surface);
+        sessionManager.register('floor-target', surface);
       }
     }
     this.clock = this.dependencies.createClock();
@@ -482,7 +491,8 @@ class FloorPlacementRuntime implements FloorPlacementController {
     const stageBounds = this.options.stage.getBoundingClientRect();
     this.youtubeManager?.resize(stageBounds.width, stageBounds.height);
     this.floorScene.renderer.render(this.floorScene.scene, this.floorScene.camera);
-    this.youtubeManager?.update(this.floorScene.camera);
+    this.currentRenderCamera = this.getCurrentXRCamera();
+    this.youtubeManager?.update(this.currentRenderCamera);
   };
 
   private async activateYouTubeOrPlace(point: Point2): Promise<void> {
@@ -496,6 +506,10 @@ class FloorPlacementRuntime implements FloorPlacementController {
       this.place();
       return;
     }
+    const session = this.activeSession;
+    if (!session) {
+      return;
+    }
 
     const bounds = this.options.gestureSurface.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) {
@@ -503,10 +517,15 @@ class FloorPlacementRuntime implements FloorPlacementController {
       return;
     }
 
+    const renderCamera = this.currentRenderCamera
+      ?? this.getCurrentXRCamera();
     const result = await manager.activateFromPointer({
       x: ((point.x - bounds.left) / bounds.width) * 2 - 1,
       y: -((point.y - bounds.top) / bounds.height) * 2 + 1,
-    }, this.floorScene.camera);
+    }, renderCamera);
+    if (this.activeSession !== session || this.youtubeManager !== manager) {
+      return;
+    }
     if (result === 'missed') {
       this.place();
     }
@@ -514,6 +533,13 @@ class FloorPlacementRuntime implements FloorPlacementController {
 
   private updatePlacementReadiness(): void {
     this.emitPlacementReady(this.targetReady && this.currentHitValid);
+  }
+
+  private getCurrentXRCamera(): Camera {
+    const getCamera = this.floorScene.renderer.xr.getCamera as unknown as (
+      baseCamera: PerspectiveCamera,
+    ) => Camera;
+    return getCamera.call(this.floorScene.renderer.xr, this.floorScene.camera);
   }
 
   private emitPlacementReady(ready: boolean, reportStatus = true): void {
@@ -649,6 +675,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     }
     this.youtubeManager?.dispose();
     this.youtubeManager = null;
+    this.currentRenderCamera = null;
     if (this.targetScene) {
       const targetScene = this.targetScene;
       this.targetScene = null;
