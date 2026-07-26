@@ -82,7 +82,6 @@ type NativePointerContact = {
   ownerGeneration: number;
   controls: HTMLElement;
   orphaned: boolean;
-  capturedByContainer: boolean;
 };
 
 type TransportHitCandidate = {
@@ -142,6 +141,7 @@ type YouTubePlayerManagerDeps = {
 
 export class YouTubePlayerManager {
   private readonly container: HTMLElement;
+  private readonly inputWindow: Window | null;
   private readonly renderer: CssRendererPort;
   private readonly scene: Scene;
   private readonly createCssObject: (element: HTMLElement) => CssObjectPort;
@@ -166,6 +166,7 @@ export class YouTubePlayerManager {
   private transportProjectionSnapshot: TransportProjectionSnapshot | undefined;
   private nextActivationGeneration = 1;
   private nextPlayerStackOrder = 0;
+  private nativePointerWindowBridgeConnected = false;
   private disposed = false;
 
   constructor(
@@ -173,6 +174,7 @@ export class YouTubePlayerManager {
     deps: YouTubePlayerManagerDeps = {},
   ) {
     this.container = container;
+    this.inputWindow = container.ownerDocument.defaultView;
     this.renderer = deps.createCssRenderer?.() ?? new CSS3DRenderer();
     this.scene = deps.scene ?? new Scene();
     this.createCssObject = deps.createCssObject ?? ((element) => new CSS3DObject(element));
@@ -426,7 +428,7 @@ export class YouTubePlayerManager {
 
   private disconnectTransportInputRouter(): void {
     const layer = this.renderer.domElement;
-    this.releaseAndClearNativePointerContacts();
+    this.clearNativePointerContacts();
     this.container.removeEventListener(
       'pointerdown',
       this.onNativePointerStartCapture,
@@ -467,8 +469,7 @@ export class YouTubePlayerManager {
     if (!contact?.orphaned) {
       return;
     }
-    this.nativePointerContacts.delete(event.pointerId);
-    this.releaseContainerPointerCapture(event.pointerId, contact);
+    this.forgetNativePointerContact(event.pointerId);
   };
 
   private readonly onNativePointerCompletionCapture = (
@@ -488,8 +489,7 @@ export class YouTubePlayerManager {
     if (reachesCurrentOwner) {
       return;
     }
-    this.nativePointerContacts.delete(event.pointerId);
-    this.releaseContainerPointerCapture(event.pointerId, contact);
+    this.forgetNativePointerContact(event.pointerId);
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -843,17 +843,13 @@ export class YouTubePlayerManager {
     if (active?.generation !== ownerGeneration) {
       return;
     }
-    const previousContact = this.nativePointerContacts.get(pointerId);
-    if (previousContact) {
-      this.releaseContainerPointerCapture(pointerId, previousContact);
-    }
     this.nativePointerContacts.set(pointerId, {
       ownerObjectId,
       ownerGeneration,
       controls: active.controls.element,
       orphaned: false,
-      capturedByContainer: false,
     });
+    this.syncNativePointerWindowBridge();
   }
 
   private endNativePointerContact(
@@ -866,8 +862,7 @@ export class YouTubePlayerManager {
       contact?.ownerObjectId === ownerObjectId
       && contact.ownerGeneration === ownerGeneration
     ) {
-      this.nativePointerContacts.delete(pointerId);
-      this.releaseContainerPointerCapture(pointerId, contact);
+      this.forgetNativePointerContact(pointerId);
     }
   }
 
@@ -885,38 +880,80 @@ export class YouTubePlayerManager {
       && contact.ownerGeneration === ownerGeneration
     ) {
       contact.orphaned = true;
-      const setPointerCapture = this.container.setPointerCapture;
-      if (typeof setPointerCapture === 'function') {
-        try {
-          setPointerCapture.call(this.container, pointerId);
-          contact.capturedByContainer = true;
-        } catch {
-          // The contact may already have completed outside this event turn.
-        }
-      }
+      this.syncNativePointerWindowBridge();
     }
   }
 
-  private releaseContainerPointerCapture(
-    pointerId: number,
-    contact: NativePointerContact,
-  ): void {
-    if (!contact.capturedByContainer) {
+  private forgetNativePointerContact(pointerId: number): void {
+    if (!this.nativePointerContacts.delete(pointerId)) {
       return;
     }
-    contact.capturedByContainer = false;
-    try {
-      this.container.releasePointerCapture?.(pointerId);
-    } catch {
-      // Native completion can auto-release capture before manager cleanup.
+    this.syncNativePointerWindowBridge();
+  }
+
+  private clearNativePointerContacts(): void {
+    this.nativePointerContacts.clear();
+    this.disconnectNativePointerWindowBridge();
+  }
+
+  private syncNativePointerWindowBridge(): void {
+    const hasOrphan = [...this.nativePointerContacts.values()]
+      .some((contact) => contact.orphaned);
+    if (hasOrphan) {
+      this.connectNativePointerWindowBridge();
+    } else {
+      this.disconnectNativePointerWindowBridge();
     }
   }
 
-  private releaseAndClearNativePointerContacts(): void {
-    for (const [pointerId, contact] of this.nativePointerContacts) {
-      this.releaseContainerPointerCapture(pointerId, contact);
-      this.nativePointerContacts.delete(pointerId);
+  private connectNativePointerWindowBridge(): void {
+    if (
+      this.nativePointerWindowBridgeConnected
+      || !this.inputWindow
+    ) {
+      return;
     }
+    this.inputWindow.addEventListener(
+      'pointerdown',
+      this.onNativePointerStartCapture,
+      true,
+    );
+    this.inputWindow.addEventListener(
+      'pointerup',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
+    this.inputWindow.addEventListener(
+      'pointercancel',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
+    this.nativePointerWindowBridgeConnected = true;
+  }
+
+  private disconnectNativePointerWindowBridge(): void {
+    if (
+      !this.nativePointerWindowBridgeConnected
+      || !this.inputWindow
+    ) {
+      return;
+    }
+    this.inputWindow.removeEventListener(
+      'pointerdown',
+      this.onNativePointerStartCapture,
+      true,
+    );
+    this.inputWindow.removeEventListener(
+      'pointerup',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
+    this.inputWindow.removeEventListener(
+      'pointercancel',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
+    this.nativePointerWindowBridgeConnected = false;
   }
 
   private refreshTransportHitGeometry(camera: Camera): void {

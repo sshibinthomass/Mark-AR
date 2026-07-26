@@ -1465,22 +1465,17 @@ describe('YouTubePlayerManager', () => {
     harness.manager.dispose();
   });
 
-  it('captures an orphaned native pointer through an outside release without swallowing later ID reuse', async () => {
+  it('contains exactly one orphan pointerup outside the container when capture transfer throws', async () => {
     const harness = await createLayerRoutingHarness();
     const outside = document.body.appendChild(document.createElement('div'));
-    const capturedPointerIds = new Set<number>();
-    const setPointerCapture = vi.fn((pointerId: number) => {
-      capturedPointerIds.add(pointerId);
-    });
-    const releasePointerCapture = vi.fn((pointerId: number) => {
-      capturedPointerIds.delete(pointerId);
-    });
     Object.assign(harness.container, {
-      setPointerCapture,
-      releasePointerCapture,
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+      hasPointerCapture: vi.fn(() => false),
     });
-    const floorGesture = vi.fn();
-    harness.container.addEventListener('pointerup', floorGesture);
+    const outsideRelease = vi.fn();
+    outside.addEventListener('pointerup', outsideRelease);
 
     dispatchPointer(harness.toggle, 'pointerdown', {
       pointerId: 60,
@@ -1488,101 +1483,184 @@ describe('YouTubePlayerManager', () => {
       clientY: 62,
     });
     harness.manager.setMarkerVisible('marker-1', false);
-    const capturedReleaseTarget = capturedPointerIds.has(60)
-      ? harness.container
-      : outside;
-    dispatchPointer(capturedReleaseTarget, 'pointerup', {
+    dispatchPointer(outside, 'pointerup', {
+      pointerId: 60,
+      clientX: 900,
+      clientY: 700,
+    });
+    dispatchPointer(outside, 'pointerup', {
       pointerId: 60,
       clientX: 900,
       clientY: 700,
     });
 
-    dispatchPointer(harness.container, 'pointerdown', {
-      pointerId: 60,
-      clientX: 300,
-      clientY: 200,
-    });
-    dispatchPointer(harness.container, 'pointerup', {
-      pointerId: 60,
-      clientX: 300,
-      clientY: 200,
-    });
-
-    expect(setPointerCapture).toHaveBeenCalledWith(60);
-    expect(releasePointerCapture).toHaveBeenCalledWith(60);
-    expect(floorGesture).toHaveBeenCalledOnce();
-    expect(capturedPointerIds).not.toContain(60);
+    const outsideReleaseCount = outsideRelease.mock.calls.length;
     outside.remove();
     harness.manager.dispose();
+    expect(outsideReleaseCount).toBe(1);
   });
 
-  it('drops an orphan when capture transfer fails before an unrelated pointer ID reuse', async () => {
+  it('contains exactly one orphan pointercancel outside the container after silent capture failure', async () => {
     const harness = await createLayerRoutingHarness();
-    const setPointerCapture = vi.fn(() => {
-      throw new DOMException('The pointer is no longer active.', 'NotFoundError');
-    });
-    Object.assign(harness.container, { setPointerCapture });
-    const floorGesture = vi.fn();
-    harness.container.addEventListener('pointerup', floorGesture);
-
-    dispatchPointer(harness.toggle, 'pointerdown', {
-      pointerId: 62,
-      clientX: 122,
-      clientY: 62,
-    });
-    harness.manager.setMarkerVisible('marker-1', false);
-
-    dispatchPointer(harness.container, 'pointerdown', {
-      pointerId: 62,
-      clientX: 300,
-      clientY: 200,
-    });
-    dispatchPointer(harness.container, 'pointerup', {
-      pointerId: 62,
-      clientX: 300,
-      clientY: 200,
-    });
-
-    expect(setPointerCapture).toHaveBeenCalledWith(62);
-    expect(floorGesture).toHaveBeenCalledOnce();
-    harness.manager.dispose();
-  });
-
-  it('releases manager-owned orphan pointer capture and state on manager disposal', async () => {
-    const harness = await createLayerRoutingHarness();
-    const capturedPointerIds = new Set<number>();
-    const setPointerCapture = vi.fn((pointerId: number) => {
-      capturedPointerIds.add(pointerId);
-    });
-    const releasePointerCapture = vi.fn((pointerId: number) => {
-      capturedPointerIds.delete(pointerId);
-    });
+    const outside = document.body.appendChild(document.createElement('div'));
     Object.assign(harness.container, {
-      setPointerCapture,
-      releasePointerCapture,
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => false),
     });
+    const outsideCancel = vi.fn();
+    outside.addEventListener('pointercancel', outsideCancel);
 
     dispatchPointer(harness.toggle, 'pointerdown', {
-      pointerId: 61,
+      pointerId: 62,
       clientX: 122,
       clientY: 62,
     });
     harness.manager.setMarkerVisible('marker-1', false);
-    expect(capturedPointerIds).toContain(61);
+    dispatchPointer(outside, 'pointercancel', {
+      pointerId: 62,
+      clientX: 900,
+      clientY: 700,
+    });
+    dispatchPointer(outside, 'pointercancel', {
+      pointerId: 62,
+      clientX: 900,
+      clientY: 700,
+    });
 
+    const outsideCancelCount = outsideCancel.mock.calls.length;
+    outside.remove();
     harness.manager.dispose();
+    expect(outsideCancelCount).toBe(1);
+  });
+
+  it('does not swallow an inside pointerup after the orphan ID is reused outside', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+    });
+    const outsideStart = vi.fn();
     const floorGesture = vi.fn();
+    outside.addEventListener('pointerdown', outsideStart);
     harness.container.addEventListener('pointerup', floorGesture);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 63,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(outside, 'pointerdown', {
+      pointerId: 63,
+      clientX: 900,
+      clientY: 700,
+    });
     dispatchPointer(harness.container, 'pointerup', {
-      pointerId: 61,
+      pointerId: 63,
       clientX: 300,
       clientY: 200,
     });
 
-    expect(setPointerCapture).toHaveBeenCalledWith(61);
-    expect(releasePointerCapture).toHaveBeenCalledWith(61);
-    expect(capturedPointerIds).not.toContain(61);
-    expect(floorGesture).toHaveBeenCalledOnce();
+    const outsideStartCount = outsideStart.mock.calls.length;
+    const floorGestureCount = floorGesture.mock.calls.length;
+    outside.remove();
+    harness.manager.dispose();
+    expect(outsideStartCount).toBe(1);
+    expect(floorGestureCount).toBe(1);
+  });
+
+  it('leaves unrelated pointer IDs untouched while an orphan is pending', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+    });
+    const unrelatedEvents: string[] = [];
+    outside.addEventListener('pointerdown', () => unrelatedEvents.push('pointerdown'));
+    outside.addEventListener('pointerup', () => unrelatedEvents.push('pointerup'));
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 64,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(outside, 'pointerdown', {
+      pointerId: 640,
+      clientX: 900,
+      clientY: 700,
+    });
+    dispatchPointer(outside, 'pointerup', {
+      pointerId: 640,
+      clientX: 900,
+      clientY: 700,
+    });
+
+    const receivedEvents = [...unrelatedEvents];
+    outside.remove();
+    harness.manager.dispose();
+    expect(receivedEvents).toEqual(['pointerdown', 'pointerup']);
+  });
+
+  it('removes window containment listeners and orphan state on manager disposal', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+    });
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 65,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    harness.manager.dispose();
+    const outsideRelease = vi.fn();
+    outside.addEventListener('pointerup', outsideRelease);
+    dispatchPointer(outside, 'pointerup', {
+      pointerId: 65,
+      clientX: 900,
+      clientY: 700,
+    });
+
+    const outsideReleaseCount = outsideRelease.mock.calls.length;
+    outside.remove();
+    expect(outsideReleaseCount).toBe(1);
+  });
+
+  it('unregisters every Window capture listener when disposed with an orphan', async () => {
+    const harness = await createLayerRoutingHarness();
+    const inputWindow = harness.container.ownerDocument.defaultView!;
+    const addEventListener = vi.spyOn(inputWindow, 'addEventListener');
+    const removeEventListener = vi.spyOn(inputWindow, 'removeEventListener');
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 66,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    harness.manager.dispose();
+
+    for (const eventName of ['pointerdown', 'pointerup', 'pointercancel']) {
+      const registration = addEventListener.mock.calls.find((call) => (
+        call[0] === eventName
+        && call[2] === true
+      ));
+      expect(registration).toBeDefined();
+      expect(removeEventListener).toHaveBeenCalledWith(
+        eventName,
+        registration![1],
+        true,
+      );
+    }
   });
 
   it('forgets a normally canceled native contact before later owner deactivation', async () => {
