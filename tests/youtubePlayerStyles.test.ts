@@ -10,17 +10,16 @@ function cssRule(selector: string): string {
 }
 
 describe('YouTube AR transport styles', () => {
-  it('places the spatial transport bar above the video', () => {
-    const wrapper = cssRule('.youtube-css3d-player');
+  it('provides base offsets for the separate transport CSS3D element', () => {
     const controls = cssRule('.youtube-transport-controls');
 
-    expect(wrapper).toContain('position: relative');
     expect(controls).toContain('position: absolute');
-    expect(controls).toContain('bottom: calc(100% + 14px)');
-    expect(controls).toContain('left: 50%');
-    expect(controls).toContain('transform: translateX(-50%)');
+    expect(controls).toContain('top: 0');
+    expect(controls).toContain('left: 0');
     expect(controls).toContain('display: flex');
     expect(controls).toContain('pointer-events: auto');
+    expect(controls).not.toContain('bottom:');
+    expect(controls).not.toContain('transform:');
   });
 
   it('gives the 3D buttons mobile touch targets and visible keyboard focus', () => {

@@ -42,9 +42,20 @@ type ActivePlayer = {
   surface: RegisteredSurface;
   player: YouTubePlayerPort;
   cssObject: CssObjectPort;
+  controlsCssObject: CssObjectPort;
   wrapper: HTMLElement;
   controls: YouTubeTransportControls;
 };
+
+const YOUTUBE_PLAYER_WIDTH_PX = 480;
+const YOUTUBE_PLAYER_HEIGHT_PX = 270;
+const YOUTUBE_TRANSPORT_GAP_PX = 14;
+const YOUTUBE_TRANSPORT_HEIGHT_PX = 60;
+const YOUTUBE_TRANSPORT_Y_OFFSET_PX = (
+  YOUTUBE_PLAYER_HEIGHT_PX / 2
+  + YOUTUBE_TRANSPORT_GAP_PX
+  + YOUTUBE_TRANSPORT_HEIGHT_PX / 2
+);
 
 type YouTubePlayerManagerDeps = {
   createCssRenderer?: () => CssRendererPort;
@@ -97,10 +108,6 @@ export class YouTubePlayerManager {
       overflow: 'hidden',
       pointerEvents: 'auto',
     });
-    const viewElement = this.renderer.domElement.firstElementChild;
-    if (viewElement instanceof HTMLElement) {
-      viewElement.style.pointerEvents = 'auto';
-    }
     this.container.append(this.renderer.domElement);
     this.resize(this.container.clientWidth, this.container.clientHeight);
   }
@@ -149,8 +156,8 @@ export class YouTubePlayerManager {
     wrapper.dataset.youtubePlayerObject = surface.objectId;
     wrapper.className = 'youtube-css3d-player';
     Object.assign(wrapper.style, {
-      width: '480px',
-      height: '270px',
+      width: `${YOUTUBE_PLAYER_WIDTH_PX}px`,
+      height: `${YOUTUBE_PLAYER_HEIGHT_PX}px`,
       pointerEvents: 'auto',
       background: '#000',
     });
@@ -158,9 +165,12 @@ export class YouTubePlayerManager {
     host.style.width = '100%';
     host.style.height = '100%';
     const controls = createYouTubeTransportControls();
-    wrapper.append(controls.element, host);
-    this.renderer.domElement.append(wrapper);
+    wrapper.append(host);
+    this.renderer.domElement.append(wrapper, controls.element);
     const cssObject = this.createCssObject(wrapper);
+    const controlsCssObject = this.createCssObject(controls.element);
+    controlsCssObject.position.y = YOUTUBE_TRANSPORT_Y_OFFSET_PX;
+    cssObject.add(controlsCssObject);
     this.scene.add(cssObject);
     surface.mesh.visible = false;
 
@@ -175,6 +185,7 @@ export class YouTubePlayerManager {
         player.pauseVideo();
         player.destroy();
         controls.dispose();
+        cssObject.remove(controlsCssObject);
         this.scene.remove(cssObject);
         wrapper.remove();
         return 'missed';
@@ -183,6 +194,7 @@ export class YouTubePlayerManager {
         surface,
         player,
         cssObject,
+        controlsCssObject,
         wrapper,
         controls,
       });
@@ -192,6 +204,7 @@ export class YouTubePlayerManager {
       return 'activated';
     } catch (error) {
       controls.dispose();
+      cssObject.remove(controlsCssObject);
       this.scene.remove(cssObject);
       wrapper.remove();
       if (this.disposed || !surface.markerVisible) {
@@ -218,7 +231,7 @@ export class YouTubePlayerManager {
         active.cssObject.quaternion,
         active.cssObject.scale,
       );
-      active.cssObject.scale.multiplyScalar(1 / 270);
+      active.cssObject.scale.multiplyScalar(1 / YOUTUBE_PLAYER_HEIGHT_PX);
     }
     this.renderer.render(this.scene, camera);
   }
@@ -248,6 +261,7 @@ export class YouTubePlayerManager {
     active.player.pauseVideo();
     active.player.destroy();
     active.controls.dispose();
+    active.cssObject.remove(active.controlsCssObject);
     this.scene.remove(active.cssObject);
     active.wrapper.remove();
     active.surface.mesh.visible = showThumbnail && active.surface.markerVisible;

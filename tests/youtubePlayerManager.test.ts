@@ -27,7 +27,7 @@ describe('YouTubePlayerManager', () => {
     });
 
     expect(rendererElement.style.pointerEvents).toBe('auto');
-    expect(viewElement.style.pointerEvents).toBe('auto');
+    expect(viewElement.style.pointerEvents).toBe('none');
 
     manager.dispose();
   });
@@ -108,6 +108,46 @@ describe('YouTubePlayerManager', () => {
     expect(controls?.querySelector('[data-youtube-action="toggle"]')?.textContent)
       .toBe('Play');
     manager.dispose();
+  });
+
+  it('renders controls as a separate CSS3D object above the video object', async () => {
+    const container = document.createElement('div');
+    const cssObjects: Array<Group & { element: HTMLElement }> = [];
+    const manager = createManager({
+      createCssObject: (element) => {
+        const object = new Group() as Group & { element: HTMLElement };
+        object.element = element;
+        cssObjects.push(object);
+        return object;
+      },
+      createPlayer: async () => createPlayerDouble().port,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+
+    expect(await manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    )).toBe('activated');
+
+    expect(cssObjects).toHaveLength(2);
+    const videoObject = cssObjects.find((object) => (
+      object.element.classList.contains('youtube-css3d-player')
+    ));
+    const controlsObject = cssObjects.find((object) => (
+      object.element.classList.contains('youtube-transport-controls')
+    ));
+    expect(videoObject).toBeDefined();
+    expect(controlsObject).toBeDefined();
+    expect(controlsObject?.parent).toBe(videoObject);
+    expect(controlsObject?.position.y).toBe(179);
+    expect(controlsObject?.position.y).toBeGreaterThan(0);
+    expect(videoObject?.element.contains(controlsObject!.element)).toBe(false);
+
+    manager.dispose();
+    expect(container.querySelector('.youtube-css3d-player')).toBeNull();
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
   });
 
   it('removes the complete transport bar when the marker is lost', async () => {

@@ -522,8 +522,8 @@ h1 {
 
 .youtube-transport-controls {
   position: absolute;
-  bottom: calc(100% + 14px);
-  left: 50%;
+  top: 0;
+  left: 0;
   z-index: 2;
   display: flex;
   gap: 8px;
@@ -533,7 +533,6 @@ h1 {
   border-radius: 14px;
   background: rgb(5 25 28 / 92%);
   box-shadow: 0 12px 24px rgb(0 0 0 / 45%);
-  transform: translateX(-50%);
   pointer-events: auto;
 }
 
