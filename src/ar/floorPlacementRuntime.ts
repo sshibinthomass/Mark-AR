@@ -518,7 +518,7 @@ class FloorPlacementRuntime implements FloorPlacementController {
     if (targetScene.youtubeSurfaces.length > 0) {
       let sessionManager: FloorPlacementRuntime['youtubeManager'] = null;
       sessionManager = this.dependencies.createYouTubePlayerManager(
-        this.options.overlayRoot,
+        this.options.gestureSurface,
         (message) => {
           if (this.activeSession === session && this.youtubeManager === sessionManager) {
             this.options.hooks.onYouTubeError(message);

@@ -95,7 +95,7 @@ export class YouTubePlayerManager {
       position: 'absolute',
       inset: '0',
       overflow: 'hidden',
-      pointerEvents: 'none',
+      pointerEvents: 'auto',
     });
     this.container.append(this.renderer.domElement);
     this.resize(this.container.clientWidth, this.container.clientHeight);

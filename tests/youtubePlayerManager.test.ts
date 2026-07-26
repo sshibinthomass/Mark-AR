@@ -13,6 +13,22 @@ import {
 } from '../src/ar/youtubePlayerManager';
 
 describe('YouTubePlayerManager', () => {
+  it('keeps the CSS3D renderer layer pointer-interactive for player controls', () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const manager = new YouTubePlayerManager(container, {
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+    });
+
+    expect(rendererElement.style.pointerEvents).toBe('auto');
+
+    manager.dispose();
+  });
+
   it('activates a visible hit inline and restores the thumbnail after target loss', async () => {
     const container = document.createElement('div');
     const surface = createSurface();
