@@ -257,6 +257,223 @@ describe('YouTubePlayerManager', () => {
     container.remove();
   });
 
+  it('does not promote a same-owner contact from one command to another', async () => {
+    const harness = await createLayerRoutingHarness();
+
+    dispatchPointer(harness.rendererElement, 'pointerdown', {
+      pointerId: 31,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 100,
+    });
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 31,
+      clientX: 182,
+      clientY: 62,
+      timeStamp: 110,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 182,
+      clientY: 62,
+      timeStamp: 120,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(harness.player.port.seekTo).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('never promotes a transport-bar background origin into a command', async () => {
+    const harness = await createLayerRoutingHarness();
+    mockClientRect(harness.controls, {
+      left: 80,
+      top: 30,
+      width: 240,
+      height: 60,
+    });
+
+    dispatchPointer(harness.rendererElement, 'pointerdown', {
+      pointerId: 32,
+      clientX: 90,
+      clientY: 50,
+      timeStamp: 200,
+    });
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 32,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 210,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 220,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(harness.player.port.seekTo).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('does not retarget an authorized contact after scene motion moves another player beneath it', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const firstPlayer = createPlayerDouble();
+    const secondPlayer = createPlayerDouble();
+    const players = [firstPlayer, secondPlayer];
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const player = players[playerIndex];
+        playerIndex += 1;
+        return player.port;
+      },
+      hitTest: (pointer, _camera, surfaces) => surfaces.find((surface) => (
+        surface.objectId === (pointer.x < 0 ? 'video-1' : 'video-2')
+      )),
+    }, container);
+    manager.register('marker-1', createSurface('video-1'));
+    manager.register('marker-2', createSurface('video-2'));
+    manager.setMarkerVisible('marker-1', true);
+    manager.setMarkerVisible('marker-2', true);
+    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
+    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    stateHandlers.forEach((handler) => handler(1));
+    firstPlayer.port.pauseVideo.mockClear();
+    secondPlayer.port.pauseVideo.mockClear();
+
+    const [firstToggle, secondToggle] = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    mockClientRect(firstToggle, {
+      left: 100,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    mockClientRect(secondToggle, {
+      left: 300,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 33,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 300,
+    });
+
+    mockClientRect(firstToggle, {
+      left: 300,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    mockClientRect(secondToggle, {
+      left: 100,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 33,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 310,
+    });
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 320,
+    });
+
+    expect(firstPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(secondPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
+  it('purges command authorization when its owner deactivates before click', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const lowerPlayer = createPlayerDouble();
+    const upperPlayer = createPlayerDouble();
+    const players = [lowerPlayer, upperPlayer];
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const player = players[playerIndex];
+        playerIndex += 1;
+        return player.port;
+      },
+      hitTest: (pointer, _camera, surfaces) => surfaces.find((surface) => (
+        surface.objectId === (pointer.x < 0 ? 'video-lower' : 'video-upper')
+      )),
+    }, container);
+    manager.register('marker-lower', createSurface('video-lower'));
+    manager.register('marker-upper', createSurface('video-upper'));
+    manager.setMarkerVisible('marker-lower', true);
+    manager.setMarkerVisible('marker-upper', true);
+    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
+    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    stateHandlers.forEach((handler) => handler(1));
+
+    const toggles = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    for (const toggle of toggles) {
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+    }
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 34,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 400,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 34,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 410,
+    });
+    manager.setMarkerVisible('marker-upper', false);
+    lowerPlayer.port.pauseVideo.mockClear();
+    upperPlayer.port.pauseVideo.mockClear();
+
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 420,
+    });
+
+    expect(lowerPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(upperPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
   it.each(['pointer', 'touch'] as const)(
     'treats the next unrelated mouse gesture as fresh after a completed %s contact',
     async (inputType) => {
@@ -916,6 +1133,110 @@ describe('YouTubePlayerManager', () => {
     manager.dispose();
   });
 
+  it('routes overlapping projected controls to the currently nearer player', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    mockClientRect(rendererElement, {
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 600,
+    });
+    const nearPlayer = createPlayerDouble();
+    const farPlayer = createPlayerDouble();
+    const players = [nearPlayer, farPlayer];
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const nearSurface = createSurface('video-near');
+    nearSurface.root.position.z = -2;
+    const farSurface = createSurface('video-far');
+    farSurface.root.position.z = -4;
+    farSurface.root.scale.setScalar(2);
+    const manager = new YouTubePlayerManager(container, {
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createCssObject: (element) => {
+        const object = new Group() as Group & { element: HTMLElement };
+        object.element = element;
+        return object;
+      },
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const player = players[playerIndex];
+        playerIndex += 1;
+        return player.port;
+      },
+      hitTest: (pointer, _camera, surfaces) => surfaces.find((surface) => (
+        surface.objectId === (pointer.x < 0 ? 'video-near' : 'video-far')
+      )),
+    });
+    manager.register('marker-near', nearSurface);
+    manager.register('marker-far', farSurface);
+    manager.setMarkerVisible('marker-near', true);
+    manager.setMarkerVisible('marker-far', true);
+    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
+    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    stateHandlers.forEach((handler) => handler(1));
+    nearPlayer.port.pauseVideo.mockClear();
+    farPlayer.port.pauseVideo.mockClear();
+
+    const controls = [
+      ...container.querySelectorAll<HTMLElement>('.youtube-transport-controls'),
+    ];
+    const toggles = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    for (let index = 0; index < controls.length; index += 1) {
+      mockOffsetBox(controls[index], {
+        left: 0,
+        top: 0,
+        width: 240,
+        height: 60,
+      });
+      mockOffsetBox(toggles[index], {
+        left: 80,
+        top: 8,
+        width: 80,
+        height: 44,
+      });
+      mockClientRect(toggles[index], {
+        left: 360,
+        top: 106,
+        width: 80,
+        height: 44,
+      });
+    }
+    const camera = new PerspectiveCamera(60, 4 / 3, 0.1, 100);
+    manager.update(camera);
+
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 35,
+      clientX: 400,
+      clientY: 128,
+      timeStamp: 500,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 35,
+      clientX: 400,
+      clientY: 128,
+      timeStamp: 510,
+    });
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 400,
+      clientY: 128,
+      timeStamp: 520,
+    });
+
+    expect(nearPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(farPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
   it('contains renderer-layer pointer and touch gestures that start on the transport bar', async () => {
     const container = document.createElement('div');
     const rendererElement = document.createElement('div');
@@ -1204,6 +1525,100 @@ describe('YouTubePlayerManager', () => {
     expect(container.querySelector('[data-youtube-player-object="video-1"]')).toBeNull();
     manager.dispose();
   });
+
+  it('disposes a player that resolves after its pending activation loses the marker', async () => {
+    const creation = createDeferred<YouTubePlayerPort>();
+    const player = createPlayerDouble();
+    const container = document.createElement('div');
+    const cssScene = new Scene();
+    const surface = createSurface();
+    const manager = createManager({
+      createPlayer: () => creation.promise,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      scene: cssScene,
+    }, container);
+    manager.register('marker-1', surface);
+    manager.setMarkerVisible('marker-1', true);
+
+    const activation = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+    expect(container.querySelector('.youtube-css3d-controls-frame')).not.toBeNull();
+
+    manager.setMarkerVisible('marker-1', false);
+    expect(container.querySelector('.youtube-css3d-controls-frame')).toBeNull();
+    expect(cssScene.children).toHaveLength(0);
+
+    creation.resolve(player.port);
+
+    expect(await activation).toBe('missed');
+    expect(player.port.playVideo).not.toHaveBeenCalled();
+    expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(player.port.destroy).toHaveBeenCalledOnce();
+    expect(container.querySelector('.youtube-css3d-player')).toBeNull();
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
+    manager.dispose();
+  });
+
+  it('keeps only the reacquired pending generation when players resolve out of order', async () => {
+    const creations = [
+      createDeferred<YouTubePlayerPort>(),
+      createDeferred<YouTubePlayerPort>(),
+    ];
+    const firstPlayer = createPlayerDouble();
+    const secondPlayer = createPlayerDouble();
+    const container = document.createElement('div');
+    const surface = createSurface();
+    let creationIndex = 0;
+    const manager = createManager({
+      createPlayer: () => {
+        const creation = creations[creationIndex];
+        creationIndex += 1;
+        return creation.promise;
+      },
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', surface);
+    manager.setMarkerVisible('marker-1', true);
+
+    const firstActivation = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+    manager.setMarkerVisible('marker-1', false);
+    manager.setMarkerVisible('marker-1', true);
+    const secondActivation = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+    const duplicateWhilePending = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+
+    expect(await duplicateWhilePending).toBe('missed');
+    expect(creationIndex).toBe(2);
+
+    creations[1].resolve(secondPlayer.port);
+    expect(await secondActivation).toBe('activated');
+    creations[0].resolve(firstPlayer.port);
+    expect(await firstActivation).toBe('missed');
+
+    expect(firstPlayer.port.playVideo).not.toHaveBeenCalled();
+    expect(firstPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(firstPlayer.port.destroy).toHaveBeenCalledOnce();
+    expect(secondPlayer.port.playVideo).toHaveBeenCalledOnce();
+    expect(secondPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(secondPlayer.port.destroy).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('.youtube-css3d-player')).toHaveLength(1);
+    expect(container.querySelectorAll('.youtube-css3d-controls-frame')).toHaveLength(1);
+
+    manager.setMarkerVisible('marker-1', false);
+    expect(secondPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(secondPlayer.port.destroy).toHaveBeenCalledOnce();
+    manager.dispose();
+  });
 });
 
 function createDeferred<T>() {
@@ -1254,6 +1669,9 @@ async function createLayerRoutingHarness() {
   const toggle = container.querySelector<HTMLButtonElement>(
     '[data-youtube-action="toggle"]',
   )!;
+  const controls = container.querySelector<HTMLElement>(
+    '.youtube-transport-controls',
+  )!;
   const forward = container.querySelector<HTMLButtonElement>(
     '[data-youtube-action="forward"]',
   )!;
@@ -1276,6 +1694,8 @@ async function createLayerRoutingHarness() {
     player,
     manager,
     toggle,
+    forward,
+    controls,
   };
 }
 
@@ -1302,6 +1722,41 @@ function createManager(
       getDuration() { return 120; },
       destroy() {},
     }),
+    transportHitTest: (point, candidates) => {
+      const sortedCandidates = [...candidates]
+        .sort((first, second) => second.stackOrder - first.stackOrder);
+      for (const candidate of sortedCandidates) {
+        const buttons = [
+          ...candidate.controls.querySelectorAll<HTMLButtonElement>('button'),
+        ].reverse();
+        for (const button of buttons) {
+          if (
+            !button.disabled
+            && clientRectContainsPoint(button.getBoundingClientRect(), point)
+          ) {
+            return {
+              ownerObjectId: candidate.ownerObjectId,
+              ownerGeneration: candidate.ownerGeneration,
+              target: button,
+              button,
+            };
+          }
+        }
+        if (
+          clientRectContainsPoint(
+            candidate.controls.getBoundingClientRect(),
+            point,
+          )
+        ) {
+          return {
+            ownerObjectId: candidate.ownerObjectId,
+            ownerGeneration: candidate.ownerGeneration,
+            target: candidate.controls,
+          };
+        }
+      }
+      return undefined;
+    },
     ...overrides,
   });
 }
@@ -1337,6 +1792,30 @@ function mockClientRect(
     height: rect.height,
     toJSON: () => ({}),
   }));
+}
+
+function mockOffsetBox(
+  element: HTMLElement,
+  box: { left: number; top: number; width: number; height: number },
+): void {
+  Object.defineProperties(element, {
+    offsetLeft: { configurable: true, value: box.left },
+    offsetTop: { configurable: true, value: box.top },
+    offsetWidth: { configurable: true, value: box.width },
+    offsetHeight: { configurable: true, value: box.height },
+  });
+}
+
+function clientRectContainsPoint(
+  rect: DOMRect,
+  point: { x: number; y: number },
+): boolean {
+  return rect.width > 0
+    && rect.height > 0
+    && point.x >= rect.left
+    && point.x <= rect.right
+    && point.y >= rect.top
+    && point.y <= rect.bottom;
 }
 
 function dispatchPointer(

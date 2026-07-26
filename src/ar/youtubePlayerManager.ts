@@ -16,6 +16,14 @@ import {
   type YouTubeTransportControls,
   type YouTubeTransportPlayer,
 } from './youtubeTransportControls';
+import {
+  createTransportProjectionSnapshot,
+  pointInProjectedQuad,
+  projectTransportRegion,
+  selectProjectedTransportRegion,
+  type ProjectedTransportRegion,
+  type TransportProjectionSnapshot,
+} from './youtubeTransportHitGeometry';
 
 export type YouTubePlayerPort = YouTubeTransportPlayer & {
   destroy(): void;
@@ -38,24 +46,49 @@ type RegisteredSurface = InteractiveYouTubeSurface & {
   markerVisible: boolean;
 };
 
-type ActivePlayer = {
+type PlayerActivationShell = {
   surface: RegisteredSurface;
-  player: YouTubePlayerPort;
   cssObject: CssObjectPort;
   controlsCssObject: CssObjectPort;
   wrapper: HTMLElement;
   controlsFrame: HTMLElement;
   controls: YouTubeTransportControls;
+  generation: number;
   stackOrder: number;
+  disposed: boolean;
+};
+
+type PendingActivation = PlayerActivationShell;
+
+type ActivePlayer = PlayerActivationShell & {
+  player: YouTubePlayerPort;
+  transportRegion?: ProjectedTransportRegion<number, HTMLButtonElement>;
 };
 
 type TransportHit = {
+  ownerObjectId: string;
+  ownerGeneration: number;
+  target: HTMLElement;
   button?: HTMLButtonElement;
+};
+
+type TransportGesture = {
+  contained: boolean;
+  origin?: TransportHit;
+};
+
+type TransportHitCandidate = {
+  ownerObjectId: string;
+  ownerGeneration: number;
+  controls: HTMLElement;
+  stackOrder: number;
 };
 
 type PendingLayerClick = {
   source: 'pointer' | 'mouse' | 'touch';
-  routed: boolean;
+  contained: boolean;
+  origin?: TransportHit;
+  releasedOnOrigin: boolean;
   id?: number;
   pointerType?: string;
   clientX: number;
@@ -91,6 +124,10 @@ type YouTubePlayerManagerDeps = {
     camera: Camera,
     surfaces: RegisteredSurface[],
   ) => RegisteredSurface | undefined;
+  transportHitTest?: (
+    point: { x: number; y: number },
+    candidates: TransportHitCandidate[],
+  ) => TransportHit | undefined;
   onPlaybackError?: (message: string) => void;
   scene?: Scene;
 };
@@ -106,15 +143,19 @@ export class YouTubePlayerManager {
     onStateChange: YouTubePlayerStateHandler,
   ) => Promise<YouTubePlayerPort>;
   private readonly hitTest: NonNullable<YouTubePlayerManagerDeps['hitTest']>;
+  private readonly transportHitTest?: YouTubePlayerManagerDeps['transportHitTest'];
   private readonly onPlaybackError?: (message: string) => void;
   private readonly surfaces: RegisteredSurface[] = [];
+  private readonly pendingActivations = new Map<string, PendingActivation>();
   private readonly activePlayers = new Map<string, ActivePlayer>();
   // Chrome can hit the renderer layer while omitting deeply scaled CSS3D descendants.
-  private readonly layerPointerGestures = new Map<number, boolean>();
-  private readonly layerTouchGestures = new Map<number, boolean>();
+  private readonly layerPointerGestures = new Map<number, TransportGesture>();
+  private readonly layerTouchGestures = new Map<number, TransportGesture>();
   private readonly pendingLayerClicks = new Map<string, PendingLayerClick>();
   private compatibilityLayerClick: PendingLayerClick | undefined;
-  private routedMouse: boolean | undefined;
+  private routedMouse: TransportGesture | undefined;
+  private transportProjectionSnapshot: TransportProjectionSnapshot | undefined;
+  private nextActivationGeneration = 1;
   private nextPlayerStackOrder = 0;
   private disposed = false;
 
@@ -128,6 +169,7 @@ export class YouTubePlayerManager {
     this.createCssObject = deps.createCssObject ?? ((element) => new CSS3DObject(element));
     this.createPlayer = deps.createPlayer ?? createYouTubePlayer;
     this.hitTest = deps.hitTest ?? raycastYouTubeSurface;
+    this.transportHitTest = deps.transportHitTest;
     this.onPlaybackError = deps.onPlaybackError;
     this.renderer.domElement.classList.add('youtube-css3d-layer');
     Object.assign(this.renderer.domElement.style, {
@@ -156,9 +198,13 @@ export class YouTubePlayerManager {
       }
       surface.markerVisible = visible;
       if (!visible) {
+        this.invalidatePendingActivation(surface.objectId);
         this.deactivate(surface.objectId, false);
         surface.mesh.visible = false;
-      } else if (!this.activePlayers.has(surface.objectId)) {
+      } else if (
+        !this.pendingActivations.has(surface.objectId)
+        && !this.activePlayers.has(surface.objectId)
+      ) {
         surface.mesh.visible = true;
       }
     }
@@ -174,6 +220,7 @@ export class YouTubePlayerManager {
     const eligible = this.surfaces.filter((surface) => (
       surface.markerVisible
       && surface.mesh.visible
+      && !this.pendingActivations.has(surface.objectId)
       && !this.activePlayers.has(surface.objectId)
     ));
     const surface = this.hitTest(pointer, camera, eligible);
@@ -201,6 +248,8 @@ export class YouTubePlayerManager {
     this.renderer.domElement.append(wrapper, controlsFrame);
     const cssObject = this.createCssObject(wrapper);
     const controlsCssObject = this.createCssObject(controlsFrame);
+    const generation = this.nextActivationGeneration;
+    this.nextActivationGeneration += 1;
     const stackOrder = this.nextPlayerStackOrder;
     this.nextPlayerStackOrder += 1;
     controlsCssObject.position.y = YOUTUBE_TRANSPORT_Y_OFFSET_PX;
@@ -208,45 +257,58 @@ export class YouTubePlayerManager {
     cssObject.add(controlsCssObject);
     this.scene.add(cssObject);
     surface.mesh.visible = false;
+    const pending: PendingActivation = {
+      surface,
+      cssObject,
+      controlsCssObject,
+      wrapper,
+      controlsFrame,
+      controls,
+      generation,
+      stackOrder,
+      disposed: false,
+    };
+    this.pendingActivations.set(surface.objectId, pending);
 
     try {
       const player = await this.createPlayer(host, surface.youtube, (state) => {
         const active = this.activePlayers.get(surface.objectId);
-        if (active?.controls === controls) {
+        if (active?.generation === generation) {
           controls.setPlayerState(state);
         }
       });
-      if (this.disposed || !surface.markerVisible) {
+      if (
+        this.disposed
+        || !surface.markerVisible
+        || this.pendingActivations.get(surface.objectId) !== pending
+      ) {
         player.pauseVideo();
         player.destroy();
-        controls.dispose();
-        cssObject.remove(controlsCssObject);
-        this.scene.remove(cssObject);
-        controlsFrame.remove();
-        wrapper.remove();
+        this.disposeActivationShell(pending);
         return 'missed';
       }
+      this.pendingActivations.delete(surface.objectId);
       this.activePlayers.set(surface.objectId, {
-        surface,
+        ...pending,
         player,
-        cssObject,
-        controlsCssObject,
-        wrapper,
-        controlsFrame,
-        controls,
-        stackOrder,
       });
       controls.bindPlayer(player);
       player.playVideo();
       delete this.container.dataset.youtubeError;
       return 'activated';
     } catch (error) {
-      controls.dispose();
-      cssObject.remove(controlsCssObject);
-      this.scene.remove(cssObject);
-      controlsFrame.remove();
-      wrapper.remove();
-      if (this.disposed || !surface.markerVisible) {
+      const ownsPendingActivation = (
+        this.pendingActivations.get(surface.objectId) === pending
+      );
+      if (ownsPendingActivation) {
+        this.pendingActivations.delete(surface.objectId);
+      }
+      this.disposeActivationShell(pending);
+      if (
+        this.disposed
+        || !surface.markerVisible
+        || !ownsPendingActivation
+      ) {
         return 'missed';
       }
       surface.mesh.visible = surface.markerVisible;
@@ -272,23 +334,30 @@ export class YouTubePlayerManager {
       );
       active.cssObject.scale.multiplyScalar(1 / YOUTUBE_CSS_PIXELS_PER_WORLD_UNIT);
     }
+    this.scene.updateMatrixWorld(true);
     this.renderer.render(this.scene, camera);
+    this.refreshTransportHitGeometry(camera);
   }
 
   resize(width: number, height: number): void {
     this.renderer.setSize(Math.max(1, width), Math.max(1, height));
+    this.clearTransportHitGeometry();
   }
 
   dispose(): void {
     if (this.disposed) {
       return;
     }
+    this.disposed = true;
     this.disconnectTransportInputRouter();
+    for (const objectId of [...this.pendingActivations.keys()]) {
+      this.invalidatePendingActivation(objectId);
+    }
     for (const objectId of [...this.activePlayers.keys()]) {
       this.deactivate(objectId, false);
     }
-    this.disposed = true;
     this.surfaces.length = 0;
+    this.clearTransportHitGeometry();
     this.renderer.domElement.remove();
     delete this.container.dataset.youtubeError;
   }
@@ -340,36 +409,43 @@ export class YouTubePlayerManager {
     ) {
       this.clearCompletedLayerClicks();
     }
-    const routed = this.transportHitAt(event.clientX, event.clientY) !== undefined;
-    this.layerPointerGestures.set(event.pointerId, routed);
-    if (!routed) {
+    const origin = this.transportHitAt(event.clientX, event.clientY);
+    const gesture = createTransportGesture(origin);
+    this.layerPointerGestures.set(event.pointerId, gesture);
+    if (!gesture.contained) {
       return;
     }
     event.stopPropagation();
   };
 
   private readonly onLayerPointerMove = (event: PointerEvent): void => {
-    if (this.layerPointerGestures.get(event.pointerId) === true) {
+    if (this.layerPointerGestures.get(event.pointerId)?.contained) {
       event.stopPropagation();
     }
   };
 
   private readonly onLayerPointerUp = (event: PointerEvent): void => {
-    if (!this.layerPointerGestures.has(event.pointerId)) {
+    const gesture = this.layerPointerGestures.get(event.pointerId);
+    if (!gesture) {
       return;
     }
-    const routed = this.layerPointerGestures.get(event.pointerId) === true;
     this.layerPointerGestures.delete(event.pointerId);
+    const releasedOnOrigin = this.releaseMatchesOrigin(
+      gesture,
+      event.clientX,
+      event.clientY,
+    );
     this.rememberCompletedLayerClick({
       source: 'pointer',
       id: event.pointerId,
       pointerType: event.pointerType,
-      routed,
+      ...gesture,
+      releasedOnOrigin,
       clientX: event.clientX,
       clientY: event.clientY,
       completedAt: event.timeStamp,
     });
-    if (routed) {
+    if (gesture.contained) {
       event.stopPropagation();
     }
   };
@@ -378,10 +454,10 @@ export class YouTubePlayerManager {
     if (!this.layerPointerGestures.has(event.pointerId)) {
       return;
     }
-    const routed = this.layerPointerGestures.get(event.pointerId) === true;
+    const gesture = this.layerPointerGestures.get(event.pointerId);
     this.layerPointerGestures.delete(event.pointerId);
     this.forgetCompletedLayerClick('pointer', event.pointerId);
-    if (routed) {
+    if (gesture?.contained) {
       event.stopPropagation();
     }
   };
@@ -393,16 +469,17 @@ export class YouTubePlayerManager {
     if (isNativeTransportTarget(event.target)) {
       return;
     }
-    const routed = this.transportHitAt(event.clientX, event.clientY) !== undefined;
-    this.routedMouse = routed;
-    if (routed) {
+    this.routedMouse = createTransportGesture(
+      this.transportHitAt(event.clientX, event.clientY),
+    );
+    if (this.routedMouse.contained) {
       event.stopPropagation();
     }
   };
 
   private readonly onLayerMouseMove = (event: MouseEvent): void => {
     if (this.routedMouse !== undefined) {
-      if (this.routedMouse) {
+      if (this.routedMouse.contained) {
         event.stopPropagation();
       }
       return;
@@ -412,16 +489,21 @@ export class YouTubePlayerManager {
 
   private readonly onLayerMouseUp = (event: MouseEvent): void => {
     if (this.routedMouse !== undefined) {
-      const routed = this.routedMouse;
+      const gesture = this.routedMouse;
       this.routedMouse = undefined;
       this.rememberCompletedLayerClick({
         source: 'mouse',
-        routed,
+        ...gesture,
+        releasedOnOrigin: this.releaseMatchesOrigin(
+          gesture,
+          event.clientX,
+          event.clientY,
+        ),
         clientX: event.clientX,
         clientY: event.clientY,
         completedAt: event.timeStamp,
       });
-      if (routed) {
+      if (gesture.contained) {
         event.stopPropagation();
       }
       return;
@@ -440,15 +522,17 @@ export class YouTubePlayerManager {
     ) {
       this.clearCompletedLayerClicks();
     }
-    let routed = false;
+    let contained = false;
     forEachTouch(event.changedTouches, (touch) => {
-      const touchRouted = this.transportHitAt(touch.clientX, touch.clientY) !== undefined;
-      this.layerTouchGestures.set(touch.identifier, touchRouted);
-      if (touchRouted) {
-        routed = true;
+      const gesture = createTransportGesture(
+        this.transportHitAt(touch.clientX, touch.clientY),
+      );
+      this.layerTouchGestures.set(touch.identifier, gesture);
+      if (gesture.contained) {
+        contained = true;
       }
     });
-    if (routed) {
+    if (contained) {
       event.stopPropagation();
     }
   };
@@ -460,44 +544,49 @@ export class YouTubePlayerManager {
   };
 
   private readonly onLayerTouchEnd = (event: TouchEvent): void => {
-    let routed = false;
+    let contained = false;
     forEachTouch(event.changedTouches, (touch) => {
-      if (!this.layerTouchGestures.has(touch.identifier)) {
+      const gesture = this.layerTouchGestures.get(touch.identifier);
+      if (!gesture) {
         return;
       }
-      const touchRouted = this.layerTouchGestures.get(touch.identifier) === true;
       this.layerTouchGestures.delete(touch.identifier);
       this.rememberCompletedLayerClick({
         source: 'touch',
         id: touch.identifier,
-        routed: touchRouted,
+        ...gesture,
+        releasedOnOrigin: this.releaseMatchesOrigin(
+          gesture,
+          touch.clientX,
+          touch.clientY,
+        ),
         clientX: touch.clientX,
         clientY: touch.clientY,
         completedAt: event.timeStamp,
       });
-      if (touchRouted) {
-        routed = true;
+      if (gesture.contained) {
+        contained = true;
       }
     });
-    if (routed) {
+    if (contained) {
       event.stopPropagation();
     }
   };
 
   private readonly onLayerTouchCancel = (event: TouchEvent): void => {
-    let routed = false;
+    let contained = false;
     forEachTouch(event.changedTouches, (touch) => {
-      if (!this.layerTouchGestures.has(touch.identifier)) {
+      const gesture = this.layerTouchGestures.get(touch.identifier);
+      if (!gesture) {
         return;
       }
-      const touchRouted = this.layerTouchGestures.get(touch.identifier) === true;
       this.layerTouchGestures.delete(touch.identifier);
       this.forgetCompletedLayerClick('touch', touch.identifier);
-      if (touchRouted) {
-        routed = true;
+      if (gesture.contained) {
+        contained = true;
       }
     });
-    if (routed) {
+    if (contained) {
       event.stopPropagation();
     }
   };
@@ -518,16 +607,19 @@ export class YouTubePlayerManager {
     if (!pendingClick && !this.hasActivePointerOrTouchGesture()) {
       this.clearCompletedLayerClicks();
     }
-    if (!pendingClick?.routed) {
+    if (!pendingClick?.contained) {
       return;
     }
-    const hit = this.transportHitAt(event.clientX, event.clientY);
     event.stopPropagation();
-    if (!hit?.button) {
+    if (
+      !pendingClick.releasedOnOrigin
+      || !pendingClick.origin?.button
+      || !this.isActiveTransportOrigin(pendingClick.origin)
+    ) {
       return;
     }
-    hit.button.focus({ preventScroll: true });
-    hit.button.click();
+    pendingClick.origin.button.focus({ preventScroll: true });
+    pendingClick.origin.button.click();
   };
 
   private rememberCompletedLayerClick(pendingClick: PendingLayerClick): void {
@@ -591,7 +683,7 @@ export class YouTubePlayerManager {
   private handleCompatibilityMouseEvent(event: MouseEvent): boolean {
     const compatibilityClick = this.matchingCompletedLayerClick(event);
     if (compatibilityClick) {
-      if (compatibilityClick.routed) {
+      if (compatibilityClick.contained) {
         event.stopPropagation();
       }
       return true;
@@ -617,34 +709,130 @@ export class YouTubePlayerManager {
   }
 
   private hasRoutedPointerOrTouchGesture(): boolean {
-    return [...this.layerPointerGestures.values()].some(Boolean)
-      || [...this.layerTouchGestures.values()].some(Boolean);
+    return [...this.layerPointerGestures.values()].some((gesture) => gesture.contained)
+      || [...this.layerTouchGestures.values()].some((gesture) => gesture.contained);
+  }
+
+  private releaseMatchesOrigin(
+    gesture: TransportGesture,
+    clientX: number,
+    clientY: number,
+  ): boolean {
+    return gesture.origin !== undefined
+      && sameTransportTarget(
+        gesture.origin,
+        this.transportHitAt(clientX, clientY),
+      );
+  }
+
+  private isActiveTransportOrigin(origin: TransportHit): boolean {
+    const active = this.activePlayers.get(origin.ownerObjectId);
+    return active?.generation === origin.ownerGeneration
+      && (
+        origin.target === active.controls.element
+        || active.controls.element.contains(origin.target)
+      )
+      && (!origin.button || !origin.button.disabled);
+  }
+
+  private refreshTransportHitGeometry(camera: Camera): void {
+    const viewportRect = this.renderer.domElement.getBoundingClientRect();
+    if (viewportRect.width <= 0 || viewportRect.height <= 0) {
+      this.clearTransportHitGeometry();
+      return;
+    }
+    const snapshot = createTransportProjectionSnapshot(camera, {
+      left: viewportRect.left,
+      top: viewportRect.top,
+      width: viewportRect.width,
+      height: viewportRect.height,
+    });
+    this.transportProjectionSnapshot = snapshot;
+    for (const active of this.activePlayers.values()) {
+      if (active.controls.element.hidden) {
+        active.transportRegion = undefined;
+        continue;
+      }
+      const layout = measureTransportLayout(active.controls.element);
+      active.transportRegion = layout
+        ? projectTransportRegion({
+            key: active.generation,
+            matrixWorld: active.controlsCssObject.matrixWorld,
+            snapshot,
+            layout,
+            paintOrder: active.stackOrder,
+            cssPixelsPerWorldUnit: YOUTUBE_CSS_PIXELS_PER_WORLD_UNIT,
+          })
+        : undefined;
+    }
+  }
+
+  private clearTransportHitGeometry(): void {
+    this.transportProjectionSnapshot = undefined;
+    for (const active of this.activePlayers.values()) {
+      active.transportRegion = undefined;
+    }
   }
 
   private transportHitAt(clientX: number, clientY: number): TransportHit | undefined {
-    const players = [...this.activePlayers.values()]
-      .sort((first, second) => second.stackOrder - first.stackOrder);
-    for (const active of players) {
-      if (active.controls.element.hidden) {
-        continue;
-      }
-      const buttons = [
-        ...active.controls.element.querySelectorAll<HTMLButtonElement>('button'),
-      ].reverse();
-      for (const button of buttons) {
-        if (!button.disabled && rectContainsPoint(button.getBoundingClientRect(), clientX, clientY)) {
-          return { button };
-        }
-      }
-      if (rectContainsPoint(
-        active.controls.element.getBoundingClientRect(),
-        clientX,
-        clientY,
-      )) {
-        return {};
+    if (this.transportHitTest) {
+      return this.transportHitTest(
+        { x: clientX, y: clientY },
+        [...this.activePlayers.values()]
+          .filter((active) => !active.controls.element.hidden)
+          .map((active) => ({
+            ownerObjectId: active.surface.objectId,
+            ownerGeneration: active.generation,
+            controls: active.controls.element,
+            stackOrder: active.stackOrder,
+          })),
+      );
+    }
+    const snapshot = this.transportProjectionSnapshot;
+    if (!snapshot) {
+      return undefined;
+    }
+    const playersByGeneration = new Map<number, ActivePlayer>();
+    const regions: Array<ProjectedTransportRegion<number, HTMLButtonElement>> = [];
+    for (const active of this.activePlayers.values()) {
+      if (active.transportRegion && !active.controls.element.hidden) {
+        playersByGeneration.set(active.generation, active);
+        regions.push(active.transportRegion);
       }
     }
-    return undefined;
+    const region = selectProjectedTransportRegion(
+      { x: clientX, y: clientY },
+      regions,
+      snapshot,
+    );
+    if (!region) {
+      return undefined;
+    }
+    const active = playersByGeneration.get(region.key);
+    if (!active) {
+      return undefined;
+    }
+    for (const projectedButton of [...region.buttons].reverse()) {
+      if (
+        !projectedButton.button.disabled
+        && pointInProjectedQuad(
+          { x: clientX, y: clientY },
+          projectedButton.quad,
+        )
+      ) {
+        return {
+          ownerObjectId: active.surface.objectId,
+          ownerGeneration: active.generation,
+          target: projectedButton.button,
+          button: projectedButton.button,
+        };
+      }
+    }
+    return {
+      ownerObjectId: active.surface.objectId,
+      ownerGeneration: active.generation,
+      target: active.controls.element,
+    };
   }
 
   private deactivate(objectId: string, showThumbnail: boolean): void {
@@ -652,15 +840,63 @@ export class YouTubePlayerManager {
     if (!active) {
       return;
     }
+    this.purgeTransportOwner(active.generation);
     active.player.pauseVideo();
     active.player.destroy();
-    active.controls.dispose();
-    active.cssObject.remove(active.controlsCssObject);
-    this.scene.remove(active.cssObject);
-    active.controlsFrame.remove();
-    active.wrapper.remove();
+    this.disposeActivationShell(active);
     active.surface.mesh.visible = showThumbnail && active.surface.markerVisible;
     this.activePlayers.delete(objectId);
+  }
+
+  private purgeTransportOwner(ownerGeneration: number): void {
+    const purgeGesture = (gesture: TransportGesture): void => {
+      if (gesture.origin?.ownerGeneration === ownerGeneration) {
+        gesture.origin = undefined;
+      }
+    };
+    for (const gesture of this.layerPointerGestures.values()) {
+      purgeGesture(gesture);
+    }
+    for (const gesture of this.layerTouchGestures.values()) {
+      purgeGesture(gesture);
+    }
+    if (this.routedMouse) {
+      purgeGesture(this.routedMouse);
+    }
+    for (const pendingClick of this.pendingLayerClicks.values()) {
+      if (pendingClick.origin?.ownerGeneration === ownerGeneration) {
+        pendingClick.origin = undefined;
+        pendingClick.releasedOnOrigin = false;
+      }
+    }
+    if (
+      this.compatibilityLayerClick?.origin?.ownerGeneration
+      === ownerGeneration
+    ) {
+      this.compatibilityLayerClick.origin = undefined;
+      this.compatibilityLayerClick.releasedOnOrigin = false;
+    }
+  }
+
+  private invalidatePendingActivation(objectId: string): void {
+    const pending = this.pendingActivations.get(objectId);
+    if (!pending) {
+      return;
+    }
+    this.pendingActivations.delete(objectId);
+    this.disposeActivationShell(pending);
+  }
+
+  private disposeActivationShell(activation: PlayerActivationShell): void {
+    if (activation.disposed) {
+      return;
+    }
+    activation.disposed = true;
+    activation.controls.dispose();
+    activation.cssObject.remove(activation.controlsCssObject);
+    this.scene.remove(activation.cssObject);
+    activation.controlsFrame.remove();
+    activation.wrapper.remove();
   }
 }
 
@@ -740,17 +976,45 @@ function areDuplicatePointerTouchCompletions(
       <= COMPATIBILITY_MOUSE_COORDINATE_TOLERANCE_PX;
 }
 
-function rectContainsPoint(
-  rect: DOMRect,
-  clientX: number,
-  clientY: number,
+function createTransportGesture(
+  origin: TransportHit | undefined,
+): TransportGesture {
+  return {
+    contained: origin !== undefined,
+    origin,
+  };
+}
+
+function sameTransportTarget(
+  first: TransportHit,
+  second: TransportHit | undefined,
 ): boolean {
-  return rect.width > 0
-    && rect.height > 0
-    && clientX >= rect.left
-    && clientX <= rect.right
-    && clientY >= rect.top
-    && clientY <= rect.bottom;
+  return second !== undefined
+    && first.ownerGeneration === second.ownerGeneration
+    && first.target === second.target;
+}
+
+function measureTransportLayout(
+  controls: HTMLElement,
+) {
+  const widthPx = controls.offsetWidth;
+  const heightPx = controls.offsetHeight;
+  if (widthPx <= 0 || heightPx <= 0) {
+    return undefined;
+  }
+  return {
+    widthPx,
+    heightPx,
+    buttons: [
+      ...controls.querySelectorAll<HTMLButtonElement>('button'),
+    ].map((button) => ({
+      button,
+      leftPx: button.offsetLeft,
+      topPx: button.offsetTop,
+      widthPx: button.offsetWidth,
+      heightPx: button.offsetHeight,
+    })),
+  };
 }
 
 function forEachTouch(
@@ -764,10 +1028,10 @@ function forEachTouch(
 
 function touchListContainsRoutedTouch(
   touches: TouchList,
-  touchGestures: Map<number, boolean>,
+  touchGestures: Map<number, TransportGesture>,
 ): boolean {
   for (let index = 0; index < touches.length; index += 1) {
-    if (touchGestures.get(touches[index].identifier) === true) {
+    if (touchGestures.get(touches[index].identifier)?.contained) {
       return true;
     }
   }

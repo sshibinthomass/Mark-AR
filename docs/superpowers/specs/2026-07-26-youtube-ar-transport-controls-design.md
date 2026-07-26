@@ -33,15 +33,36 @@ the manager is disposed.
 
 ## 3D Layout
 
-The control bar is a child of the existing `.youtube-css3d-player` wrapper.
-It is positioned outside the video rectangle, centered above its top edge.
+The video and controls use two CSS3D objects in one Three.js hierarchy.
 
-Because the controls share the video's CSS3D object:
+- The video object owns the 480-by-270 `.youtube-css3d-player` wrapper and is
+  synchronized from the registered surface root each update. Its CSS-pixel
+  scale is `1 / 270`.
+- A separate `.youtube-css3d-controls-frame` object is parented to the video
+  object at local Y `179`: half the video height, the 14-pixel gap, and half
+  the 60-pixel control height.
+- The controls object has a local Three.js scale of `270`, counteracting the
+  video object's CSS-pixel scale. Its frame is therefore `240 / 270` by
+  `60 / 270` CSS pixels.
+- The native `.youtube-transport-controls` UI inside the frame remains 240 by
+  60 CSS pixels and applies the reciprocal CSS scale `1 / 270`.
 
-- they inherit the video object's world position, rotation, and scale;
-- they move when the floor object or complete floor experience moves;
-- they scale when the video object or complete experience scales;
-- no separate Three.js synchronization or selection metadata is required.
+The reciprocal object/CSS scales give Chrome a stable, pointer-addressable
+CSS3D frame while preserving the intended world-space size. Parenting the
+frame object to the video object makes the bar inherit the current video
+position, rotation, and scale, including floor-object and whole-experience
+transforms. The controls DOM is deliberately not an overflowing descendant
+of `.youtube-css3d-player`; Chrome does not reliably hit transformed content
+outside a CSS3D object's border box.
+
+During each manager update, the current control frame and button layout boxes
+are projected through the controls object's actual world matrix and the
+current camera/renderer viewport. Pointer fallback hit-testing uses the
+resulting quadrilaterals, not transformed axis-aligned bounding boxes.
+Geometry that is degenerate or crosses behind the camera is not routable.
+When projected regions overlap, a camera ray is intersected with each current
+control plane. The closest positive intersection wins; activation/paint order
+is used only for coplanar depth ties.
 
 The controls use a compact dark spatial surface, visible border, depth shadow,
 and raised button treatment so they read as 3D controls against the camera
@@ -101,14 +122,41 @@ send `NaN` or an infinite value to the player.
 
 ## Event Ownership
 
-The transport bar remains inside `.youtube-css3d-player`, which is already
-excluded from:
+There are two browser input paths with the same ownership invariant: a contact
+that starts on a transport target remains owned by that exact active control
+generation for its complete lifecycle.
 
-- `FloorGestureController` tap, long-press, drag, and pinch recognition;
-- image-target scene pointer interception in `mindarRuntime`.
+On the native path, the complete `.youtube-transport-controls` root owns
+pointer, touch, compatibility-mouse, and click propagation, including padding
+and flex gaps. Pointer capture keeps a contact contained when it moves outside
+the root after starting there. Native button click and keyboard activation
+still execute on the accessible HTML buttons. A capture-phase guard suppresses
+the browser's retargeted click when the physical pointer release, checked with
+`elementFromPoint()`, no longer matches the exact originating button. Ordinary
+same-button releases and clicks without a matching pointer completion
+(including keyboard and manager-routed programmatic activation) remain native.
 
-Buttons also stop propagation for their own click events. Pressing a transport
-button therefore cannot:
+Chrome can render the deeply scaled CSS3D buttons while returning the renderer
+layer from coordinate hit-testing. The manager therefore keeps a fallback
+layer router. Each pointer, touch, or mouse contact records:
+
+- its source and contact identifier;
+- the active player generation that owned the start;
+- the exact originating bar or button element;
+- whether release still hit that same owner and element.
+
+Only a same-target release on the same still-active button can invoke a
+command. A bar-background start can never become a button command. Player
+deactivation purges its command authorization from active and completed
+contacts while retaining lifecycle containment, so a stale contact cannot
+retarget a newly exposed player. Compatibility clicks remain bounded by
+identifier when available, four CSS pixels, and 750 milliseconds; paired
+pointer/touch completions for one physical touch are deduplicated.
+
+As defense in depth, `FloorGestureController` and `mindarRuntime` exclude the
+final `.youtube-css3d-player`, `.youtube-css3d-controls-frame`, and
+`.youtube-transport-controls` topology in addition to ordinary interactive
+elements. Transport input therefore cannot:
 
 - select the video as a floor transform target;
 - move, scale, or reposition the floor experience;
@@ -131,16 +179,25 @@ marker detection, floor selection scope, or image-target placement.
 
 ## Lifecycle and Errors
 
+- Each activation receives a monotonic generation before asynchronous player
+  creation begins. The manager stores that pending generation per surface and
+  excludes the surface from further activation.
 - The bar is created before player initialization but remains hidden until the
   player is ready.
+- Marker loss and manager disposal invalidate and remove pending shells
+  immediately. A player that resolves later is paused and destroyed and can
+  never replace a newer generation.
+- Marker reacquisition may create a new pending generation. Out-of-order
+  resolution commits only the generation that still owns the surface's
+  pending slot.
 - Player creation failure removes the wrapper and controls and restores the
   existing thumbnail/error behavior.
-- Target loss, session end, relaunch, stop, and disposal remove the complete
-  wrapper and its listeners with the active player.
+- Target loss, session end, relaunch, stop, and disposal remove the video
+  wrapper, controls frame, listeners, and active player together.
 - A late state-change event for a removed player is ignored by checking the
-  active-player map.
+  active-player generation.
 - Transport actions operate only on the active player associated with their
-  own wrapper.
+  originating control generation.
 - Existing playback error reporting is unchanged.
 
 No timers or polling loops are introduced. Player-state synchronization is
@@ -151,6 +208,11 @@ event-driven.
 ### Player manager unit tests
 
 - The bar appears only after player readiness.
+- Pending surfaces cannot activate twice.
+- Loss during player creation removes the pending frame; a later resolved
+  player is paused and destroyed.
+- Loss, reacquisition, and out-of-order player resolution leave only the new
+  generation active.
 - It contains three native buttons in rewind, play/pause, forward order.
 - Rewind seeks back exactly 10 seconds and clamps at zero.
 - Forward seeks ahead exactly 10 seconds and clamps to a known duration.
@@ -163,12 +225,21 @@ event-driven.
 - Invalid current-time and duration values never produce invalid seek values.
 - Each active video controls only its own player.
 - Creation failure and every cleanup path remove the controls.
+- Fallback contacts invoke only their exact originating button after a
+  same-target release; changed commands, moved scene geometry, bar origins,
+  and deactivated owners cannot retarget.
+- Rotated and perspective-projected blank corners are excluded by
+  point-in-quad testing.
+- Near/far overlaps select current visual depth; activation order resolves only
+  coplanar ties.
 
 ### Interaction regressions
 
-- Floor gestures ignore descendants of the player wrapper, including all
-  transport buttons.
-- Marker runtime pointer interception ignores the transport buttons.
+- The native transport root contains padding, gaps, and contacts that move
+  outside after starting inside.
+- Floor gestures ignore descendants of the video wrapper, controls frame, and
+  transport root.
+- Marker runtime pointer interception ignores the final controls topology.
 - Floor video activation still plays without moving the experience.
 - Image-target video activation remains unchanged.
 
@@ -194,7 +265,8 @@ event-driven.
 2. Rewind and forward move playback by 10 seconds with boundary clamping.
 3. The center button reliably pauses and resumes playback, and its label
    reflects the current player state.
-4. The control bar follows video movement, rotation, and scale.
+4. The separate counter-scaled control object follows video movement,
+   rotation, and scale.
 5. Control taps never move, select, scale, or reposition the floor object.
 6. The controls disappear and release player resources on every existing
    cleanup path.
