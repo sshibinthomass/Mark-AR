@@ -48,6 +48,10 @@ type ActivePlayer = {
   controls: YouTubeTransportControls;
 };
 
+type TransportHit = {
+  button?: HTMLButtonElement;
+};
+
 const YOUTUBE_PLAYER_WIDTH_PX = 480;
 const YOUTUBE_PLAYER_HEIGHT_PX = 270;
 const YOUTUBE_CSS_PIXELS_PER_WORLD_UNIT = YOUTUBE_PLAYER_HEIGHT_PX;
@@ -90,6 +94,9 @@ export class YouTubePlayerManager {
   private readonly onPlaybackError?: (message: string) => void;
   private readonly surfaces: RegisteredSurface[] = [];
   private readonly activePlayers = new Map<string, ActivePlayer>();
+  // Chrome can hit the renderer layer while omitting deeply scaled CSS3D descendants.
+  private readonly routedPointerIds = new Set<number>();
+  private readonly routedTouchIds = new Set<number>();
   private disposed = false;
 
   constructor(
@@ -111,6 +118,7 @@ export class YouTubePlayerManager {
       pointerEvents: 'auto',
     });
     this.container.append(this.renderer.domElement);
+    this.connectTransportInputRouter();
     this.resize(this.container.clientWidth, this.container.clientHeight);
   }
 
@@ -253,6 +261,7 @@ export class YouTubePlayerManager {
     if (this.disposed) {
       return;
     }
+    this.disconnectTransportInputRouter();
     for (const objectId of [...this.activePlayers.keys()]) {
       this.deactivate(objectId, false);
     }
@@ -260,6 +269,135 @@ export class YouTubePlayerManager {
     this.surfaces.length = 0;
     this.renderer.domElement.remove();
     delete this.container.dataset.youtubeError;
+  }
+
+  private connectTransportInputRouter(): void {
+    const layer = this.renderer.domElement;
+    layer.addEventListener('pointerdown', this.onLayerPointerDown);
+    layer.addEventListener('pointermove', this.onLayerPointerMove);
+    layer.addEventListener('pointerup', this.onLayerPointerEnd);
+    layer.addEventListener('pointercancel', this.onLayerPointerEnd);
+    layer.addEventListener('touchstart', this.onLayerTouchStart);
+    layer.addEventListener('touchmove', this.onLayerTouchMove);
+    layer.addEventListener('touchend', this.onLayerTouchEnd);
+    layer.addEventListener('touchcancel', this.onLayerTouchEnd);
+    layer.addEventListener('click', this.onLayerClick);
+  }
+
+  private disconnectTransportInputRouter(): void {
+    const layer = this.renderer.domElement;
+    layer.removeEventListener('pointerdown', this.onLayerPointerDown);
+    layer.removeEventListener('pointermove', this.onLayerPointerMove);
+    layer.removeEventListener('pointerup', this.onLayerPointerEnd);
+    layer.removeEventListener('pointercancel', this.onLayerPointerEnd);
+    layer.removeEventListener('touchstart', this.onLayerTouchStart);
+    layer.removeEventListener('touchmove', this.onLayerTouchMove);
+    layer.removeEventListener('touchend', this.onLayerTouchEnd);
+    layer.removeEventListener('touchcancel', this.onLayerTouchEnd);
+    layer.removeEventListener('click', this.onLayerClick);
+    this.routedPointerIds.clear();
+    this.routedTouchIds.clear();
+  }
+
+  private readonly onLayerPointerDown = (event: PointerEvent): void => {
+    if (
+      isNativeTransportTarget(event.target)
+      || !this.transportHitAt(event.clientX, event.clientY)
+    ) {
+      return;
+    }
+    this.routedPointerIds.add(event.pointerId);
+    event.stopPropagation();
+  };
+
+  private readonly onLayerPointerMove = (event: PointerEvent): void => {
+    if (!this.routedPointerIds.has(event.pointerId)) {
+      return;
+    }
+    event.stopPropagation();
+  };
+
+  private readonly onLayerPointerEnd = (event: PointerEvent): void => {
+    if (!this.routedPointerIds.delete(event.pointerId)) {
+      return;
+    }
+    event.stopPropagation();
+  };
+
+  private readonly onLayerTouchStart = (event: TouchEvent): void => {
+    if (isNativeTransportTarget(event.target)) {
+      return;
+    }
+    let routed = false;
+    forEachTouch(event.changedTouches, (touch) => {
+      if (!this.transportHitAt(touch.clientX, touch.clientY)) {
+        return;
+      }
+      this.routedTouchIds.add(touch.identifier);
+      routed = true;
+    });
+    if (routed) {
+      event.stopPropagation();
+    }
+  };
+
+  private readonly onLayerTouchMove = (event: TouchEvent): void => {
+    if (touchListContainsTrackedTouch(event.changedTouches, this.routedTouchIds)) {
+      event.stopPropagation();
+    }
+  };
+
+  private readonly onLayerTouchEnd = (event: TouchEvent): void => {
+    let routed = false;
+    forEachTouch(event.changedTouches, (touch) => {
+      if (this.routedTouchIds.delete(touch.identifier)) {
+        routed = true;
+      }
+    });
+    if (routed) {
+      event.stopPropagation();
+    }
+  };
+
+  private readonly onLayerClick = (event: MouseEvent): void => {
+    if (isNativeTransportTarget(event.target)) {
+      return;
+    }
+    const hit = this.transportHitAt(event.clientX, event.clientY);
+    if (!hit) {
+      return;
+    }
+    event.stopPropagation();
+    if (!hit.button) {
+      return;
+    }
+    hit.button.focus({ preventScroll: true });
+    hit.button.click();
+  };
+
+  private transportHitAt(clientX: number, clientY: number): TransportHit | undefined {
+    const players = [...this.activePlayers.values()].reverse();
+    for (const active of players) {
+      if (active.controls.element.hidden) {
+        continue;
+      }
+      const buttons = [
+        ...active.controls.element.querySelectorAll<HTMLButtonElement>('button'),
+      ].reverse();
+      for (const button of buttons) {
+        if (!button.disabled && rectContainsPoint(button.getBoundingClientRect(), clientX, clientY)) {
+          return { button };
+        }
+      }
+      if (rectContainsPoint(
+        active.controls.element.getBoundingClientRect(),
+        clientX,
+        clientY,
+      )) {
+        return {};
+      }
+    }
+    return undefined;
   }
 
   private deactivate(objectId: string, showThumbnail: boolean): void {
@@ -295,6 +433,45 @@ function raycastYouTubeSurface(
   );
   const hit = intersections[0]?.object;
   return surfaces.find((surface) => surface.mesh === hit);
+}
+
+function isNativeTransportTarget(target: EventTarget | null): boolean {
+  return target instanceof Element
+    && target.closest('.youtube-transport-controls') !== null;
+}
+
+function rectContainsPoint(
+  rect: DOMRect,
+  clientX: number,
+  clientY: number,
+): boolean {
+  return rect.width > 0
+    && rect.height > 0
+    && clientX >= rect.left
+    && clientX <= rect.right
+    && clientY >= rect.top
+    && clientY <= rect.bottom;
+}
+
+function forEachTouch(
+  touches: TouchList,
+  callback: (touch: Touch) => void,
+): void {
+  for (let index = 0; index < touches.length; index += 1) {
+    callback(touches[index]);
+  }
+}
+
+function touchListContainsTrackedTouch(
+  touches: TouchList,
+  trackedTouchIds: Set<number>,
+): boolean {
+  for (let index = 0; index < touches.length; index += 1) {
+    if (trackedTouchIds.has(touches[index].identifier)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 type YouTubeApi = {
