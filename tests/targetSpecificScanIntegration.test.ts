@@ -1045,10 +1045,23 @@ describe('target-specific scan route integration', () => {
 
     staleHooks?.onSessionEnd();
     staleHooks?.onStatus('Floor scene failed to load: stale error');
+    staleHooks?.onSelectionChange({
+      selectAll: false,
+      active: true,
+      label: 'Stale',
+    });
 
+    expect(required<HTMLElement>('[data-app-shell]').dataset.arMode).toBe('marker');
     expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Place on floor');
     expect(required('#floor-ar-message').textContent).toBe('Floor placement is ready.');
     expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-select-all').getAttribute('aria-pressed')).toBe('true');
+    expect(required<HTMLButtonElement>('#floor-ar-selection-done').hidden).toBe(true);
+    expect(required<HTMLElement>('#floor-ar-selection-hint')).toMatchObject({
+      hidden: true,
+      textContent: 'Long press an object to move or scale it.',
+    });
+    expect(required('#floor-ar-status').textContent).toBe('');
   });
 
   it('ignores late floor hooks after the focused route token changes', async () => {
@@ -1060,10 +1073,22 @@ describe('target-specific scan route integration', () => {
     await waitFor(() => required('[data-app-shell]').getAttribute('data-active-page') === 'home');
     staleHooks?.onSessionEnd();
     staleHooks?.onStatus('Floor scene failed to load: stale error');
+    staleHooks?.onSelectionChange({
+      selectAll: false,
+      active: true,
+      label: 'Stale',
+    });
 
+    expect(required<HTMLElement>('[data-app-shell]').dataset.arMode).toBe('marker');
     expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
     expect(required('#floor-ar-message').textContent).toBe('');
     expect(required('#floor-ar-status').textContent).toBe('');
+    expect(required<HTMLButtonElement>('#floor-ar-select-all').getAttribute('aria-pressed')).toBe('true');
+    expect(required<HTMLButtonElement>('#floor-ar-selection-done').hidden).toBe(true);
+    expect(required<HTMLElement>('#floor-ar-selection-hint')).toMatchObject({
+      hidden: true,
+      textContent: 'Long press an object to move or scale it.',
+    });
   });
 
   it('leaves a manual Start camera retry when automatic startup is blocked', async () => {

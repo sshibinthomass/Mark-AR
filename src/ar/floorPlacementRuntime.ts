@@ -295,6 +295,11 @@ class FloorPlacementRuntime implements FloorPlacementController {
       return false;
     }
 
+    for (const selectable of this.targetScene?.selectableObjects ?? []) {
+      selectable.interactionRoot.position.set(0, 0, 0);
+      selectable.interactionRoot.quaternion.identity();
+      selectable.interactionRoot.scale.set(1, 1, 1);
+    }
     this.transform.resetAt(matrix);
     return true;
   }

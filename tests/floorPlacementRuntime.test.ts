@@ -273,6 +273,53 @@ describe('prepareFloorPlacement', () => {
     });
   });
 
+  it('resets every interaction root without changing authored content transforms', async () => {
+    const selectableScene = createSelectableTargetScene([
+      { objectId: 'selected-object', z: -2 },
+      { objectId: 'sibling-object', x: 1.5, z: -2 },
+    ]);
+    const selected = selectableScene.entries[0];
+    const sibling = selectableScene.entries[1];
+    selected.contentRoot.position.set(0, 0, 0.25);
+    selected.contentRoot.rotation.z = 0.2;
+    selected.contentRoot.scale.setScalar(1.25);
+    sibling.contentRoot.position.set(0.1, 0.2, 0.3);
+    sibling.contentRoot.rotation.y = 0.3;
+    sibling.contentRoot.scale.setScalar(0.8);
+    const authoredTransforms = selectableScene.entries.map(({ contentRoot }) => ({
+      position: contentRoot.position.clone(),
+      quaternion: contentRoot.quaternion.clone(),
+      scale: contentRoot.scale.clone(),
+    }));
+    const harness = createHarness({ targetScenes: [selectableScene.targetScene] });
+    aimXRCameraAtFloorContent(harness);
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+    await launchAndPlace(harness, controller);
+    controller.setSelectAll(false);
+    harness.gesture.handlers.onLongPress({ x: 100, y: 50 });
+    harness.gesture.handlers.onDrag({
+      previous: { x: 100, y: 50 },
+      current: { x: 120, y: 50 },
+    });
+    harness.gesture.handlers.onPinch(2);
+    expect(selected.interactionRoot.position.x).not.toBeCloseTo(0);
+    expect(selected.interactionRoot.scale.toArray()).toEqual([2, 2, 2]);
+
+    expect(controller.reset()).toBe(true);
+
+    for (const [index, entry] of selectableScene.entries.entries()) {
+      expect(entry.interactionRoot.position.toArray()).toEqual([0, 0, 0]);
+      expect(entry.interactionRoot.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+      expect(entry.interactionRoot.scale.toArray()).toEqual([1, 1, 1]);
+      expect(entry.contentRoot.position).toEqual(authoredTransforms[index].position);
+      expect(entry.contentRoot.quaternion.toArray()).toEqual(
+        authoredTransforms[index].quaternion.toArray(),
+      );
+      expect(entry.contentRoot.scale).toEqual(authoredTransforms[index].scale);
+    }
+  });
+
   it('selects only the closest authored object when Select All is off', async () => {
     const selectableScene = createSelectableTargetScene([
       { objectId: 'far-object', z: -3 },
