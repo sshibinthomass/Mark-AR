@@ -15,7 +15,7 @@ export type YouTubeTransportControls = {
 
 const PLAYING = 1;
 const BUFFERING = 3;
-const INTERACTION_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchmove', 'touchend'];
+const INTERACTION_EVENTS = ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend'];
 
 export function createYouTubeTransportControls(): YouTubeTransportControls {
   const element = document.createElement('div');

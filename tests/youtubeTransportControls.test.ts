@@ -122,14 +122,14 @@ describe('YouTube transport controls', () => {
       const ancestor = document.createElement('div');
       const receivedEvents: string[] = [];
       ancestor.append(controls.element);
-      for (const eventName of ['pointerdown', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
+      for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
         ancestor.addEventListener(eventName, () => receivedEvents.push(eventName));
       }
 
       const button = controls.element.querySelector<HTMLButtonElement>(
         `[data-youtube-action="${action}"]`,
       )!;
-      for (const eventName of ['pointerdown', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
+      for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
         button.dispatchEvent(new Event(eventName, { bubbles: true }));
       }
 
