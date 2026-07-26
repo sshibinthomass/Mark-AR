@@ -52,6 +52,12 @@ type TransportHit = {
   button?: HTMLButtonElement;
 };
 
+type LayerClickGesture = {
+  source: 'pointer' | 'mouse' | 'touch';
+  routed: boolean;
+  completed: boolean;
+};
+
 const YOUTUBE_PLAYER_WIDTH_PX = 480;
 const YOUTUBE_PLAYER_HEIGHT_PX = 270;
 const YOUTUBE_CSS_PIXELS_PER_WORLD_UNIT = YOUTUBE_PLAYER_HEIGHT_PX;
@@ -97,6 +103,7 @@ export class YouTubePlayerManager {
   // Chrome can hit the renderer layer while omitting deeply scaled CSS3D descendants.
   private readonly routedPointerIds = new Set<number>();
   private readonly routedTouchIds = new Set<number>();
+  private layerClickGesture: LayerClickGesture | undefined;
   private disposed = false;
 
   constructor(
@@ -275,12 +282,15 @@ export class YouTubePlayerManager {
     const layer = this.renderer.domElement;
     layer.addEventListener('pointerdown', this.onLayerPointerDown);
     layer.addEventListener('pointermove', this.onLayerPointerMove);
-    layer.addEventListener('pointerup', this.onLayerPointerEnd);
-    layer.addEventListener('pointercancel', this.onLayerPointerEnd);
+    layer.addEventListener('pointerup', this.onLayerPointerUp);
+    layer.addEventListener('pointercancel', this.onLayerPointerCancel);
+    layer.addEventListener('mousedown', this.onLayerMouseDown);
+    layer.addEventListener('mousemove', this.onLayerMouseMove);
+    layer.addEventListener('mouseup', this.onLayerMouseUp);
     layer.addEventListener('touchstart', this.onLayerTouchStart);
     layer.addEventListener('touchmove', this.onLayerTouchMove);
     layer.addEventListener('touchend', this.onLayerTouchEnd);
-    layer.addEventListener('touchcancel', this.onLayerTouchEnd);
+    layer.addEventListener('touchcancel', this.onLayerTouchCancel);
     layer.addEventListener('click', this.onLayerClick);
   }
 
@@ -288,22 +298,28 @@ export class YouTubePlayerManager {
     const layer = this.renderer.domElement;
     layer.removeEventListener('pointerdown', this.onLayerPointerDown);
     layer.removeEventListener('pointermove', this.onLayerPointerMove);
-    layer.removeEventListener('pointerup', this.onLayerPointerEnd);
-    layer.removeEventListener('pointercancel', this.onLayerPointerEnd);
+    layer.removeEventListener('pointerup', this.onLayerPointerUp);
+    layer.removeEventListener('pointercancel', this.onLayerPointerCancel);
+    layer.removeEventListener('mousedown', this.onLayerMouseDown);
+    layer.removeEventListener('mousemove', this.onLayerMouseMove);
+    layer.removeEventListener('mouseup', this.onLayerMouseUp);
     layer.removeEventListener('touchstart', this.onLayerTouchStart);
     layer.removeEventListener('touchmove', this.onLayerTouchMove);
     layer.removeEventListener('touchend', this.onLayerTouchEnd);
-    layer.removeEventListener('touchcancel', this.onLayerTouchEnd);
+    layer.removeEventListener('touchcancel', this.onLayerTouchCancel);
     layer.removeEventListener('click', this.onLayerClick);
     this.routedPointerIds.clear();
     this.routedTouchIds.clear();
+    this.layerClickGesture = undefined;
   }
 
   private readonly onLayerPointerDown = (event: PointerEvent): void => {
-    if (
-      isNativeTransportTarget(event.target)
-      || !this.transportHitAt(event.clientX, event.clientY)
-    ) {
+    if (isNativeTransportTarget(event.target)) {
+      return;
+    }
+    const routed = this.transportHitAt(event.clientX, event.clientY) !== undefined;
+    this.layerClickGesture = { source: 'pointer', routed, completed: false };
+    if (!routed) {
       return;
     }
     this.routedPointerIds.add(event.pointerId);
@@ -317,11 +333,63 @@ export class YouTubePlayerManager {
     event.stopPropagation();
   };
 
-  private readonly onLayerPointerEnd = (event: PointerEvent): void => {
+  private readonly onLayerPointerUp = (event: PointerEvent): void => {
+    if (this.layerClickGesture?.source === 'pointer') {
+      this.layerClickGesture.completed = true;
+    }
     if (!this.routedPointerIds.delete(event.pointerId)) {
       return;
     }
     event.stopPropagation();
+  };
+
+  private readonly onLayerPointerCancel = (event: PointerEvent): void => {
+    if (this.layerClickGesture?.source === 'pointer') {
+      this.layerClickGesture.routed = false;
+      this.layerClickGesture.completed = true;
+    }
+    if (!this.routedPointerIds.delete(event.pointerId)) {
+      return;
+    }
+    event.stopPropagation();
+  };
+
+  private readonly onLayerMouseDown = (event: MouseEvent): void => {
+    if (
+      this.layerClickGesture?.source === 'pointer'
+      || this.layerClickGesture?.source === 'touch'
+    ) {
+      if (this.layerClickGesture.routed) {
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (isNativeTransportTarget(event.target)) {
+      return;
+    }
+    const routed = this.transportHitAt(event.clientX, event.clientY) !== undefined;
+    this.layerClickGesture = { source: 'mouse', routed, completed: false };
+    if (routed) {
+      event.stopPropagation();
+    }
+  };
+
+  private readonly onLayerMouseMove = (event: MouseEvent): void => {
+    if (this.layerClickGesture?.routed) {
+      event.stopPropagation();
+    }
+  };
+
+  private readonly onLayerMouseUp = (event: MouseEvent): void => {
+    if (!this.layerClickGesture) {
+      return;
+    }
+    if (this.layerClickGesture.source === 'mouse') {
+      this.layerClickGesture.completed = true;
+    }
+    if (this.layerClickGesture.routed) {
+      event.stopPropagation();
+    }
   };
 
   private readonly onLayerTouchStart = (event: TouchEvent): void => {
@@ -336,6 +404,7 @@ export class YouTubePlayerManager {
       this.routedTouchIds.add(touch.identifier);
       routed = true;
     });
+    this.layerClickGesture = { source: 'touch', routed, completed: false };
     if (routed) {
       event.stopPropagation();
     }
@@ -348,6 +417,25 @@ export class YouTubePlayerManager {
   };
 
   private readonly onLayerTouchEnd = (event: TouchEvent): void => {
+    if (this.layerClickGesture?.source === 'touch') {
+      this.layerClickGesture.completed = true;
+    }
+    let routed = false;
+    forEachTouch(event.changedTouches, (touch) => {
+      if (this.routedTouchIds.delete(touch.identifier)) {
+        routed = true;
+      }
+    });
+    if (routed) {
+      event.stopPropagation();
+    }
+  };
+
+  private readonly onLayerTouchCancel = (event: TouchEvent): void => {
+    if (this.layerClickGesture?.source === 'touch') {
+      this.layerClickGesture.routed = false;
+      this.layerClickGesture.completed = true;
+    }
     let routed = false;
     forEachTouch(event.changedTouches, (touch) => {
       if (this.routedTouchIds.delete(touch.identifier)) {
@@ -363,12 +451,14 @@ export class YouTubePlayerManager {
     if (isNativeTransportTarget(event.target)) {
       return;
     }
-    const hit = this.transportHitAt(event.clientX, event.clientY);
-    if (!hit) {
+    const gesture = this.layerClickGesture;
+    this.layerClickGesture = undefined;
+    if (!gesture?.routed || !gesture.completed) {
       return;
     }
+    const hit = this.transportHitAt(event.clientX, event.clientY);
     event.stopPropagation();
-    if (!hit.button) {
+    if (!hit?.button) {
       return;
     }
     hit.button.focus({ preventScroll: true });

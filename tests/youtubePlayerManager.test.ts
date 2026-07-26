@@ -191,6 +191,16 @@ describe('YouTubePlayerManager', () => {
       height: 44,
     });
 
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 5,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 5,
+      clientX: 122,
+      clientY: 62,
+    });
     rendererElement.dispatchEvent(new MouseEvent('click', {
       bubbles: true,
       cancelable: true,
@@ -205,18 +215,267 @@ describe('YouTubePlayerManager', () => {
     rendererElement.dispatchEvent(new MouseEvent('click', {
       bubbles: true,
       cancelable: true,
-      clientX: 200,
-      clientY: 120,
+      clientX: 122,
+      clientY: 62,
     }));
 
     expect(player.port.pauseVideo).toHaveBeenCalledOnce();
     expect(bubbledClicks).toHaveBeenCalledOnce();
 
+    rendererElement.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 200,
+      clientY: 120,
+    }));
+
+    expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(bubbledClicks).toHaveBeenCalledTimes(2);
+
     toggle.click();
     expect(player.port.pauseVideo).toHaveBeenCalledTimes(2);
-    expect(bubbledClicks).toHaveBeenCalledOnce();
+    expect(bubbledClicks).toHaveBeenCalledTimes(2);
     manager.dispose();
     container.remove();
+  });
+
+  it.each(['pointer', 'mouse', 'touch'] as const)(
+    'does not route an outside-start %s sequence that ends over a transport button',
+    async (inputType) => {
+      const container = document.createElement('div');
+      const rendererElement = document.createElement('div');
+      const player = createPlayerDouble();
+      let onStateChange: ((state: number) => void) | undefined;
+      const receivedEvents: string[] = [];
+      const eventNames = inputType === 'pointer'
+        ? [
+            'pointerdown',
+            'pointermove',
+            'pointerup',
+            'mousemove',
+            'mousedown',
+            'mouseup',
+            'click',
+          ]
+        : inputType === 'mouse'
+          ? ['mousedown', 'mousemove', 'mouseup', 'click']
+          : [
+              'touchstart',
+              'touchmove',
+              'touchend',
+              'mousemove',
+              'mousedown',
+              'mouseup',
+              'click',
+            ];
+      for (const eventName of eventNames) {
+        container.addEventListener(eventName, () => receivedEvents.push(eventName));
+      }
+      const manager = createManager({
+        createCssRenderer: () => ({
+          domElement: rendererElement,
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createPlayer: async (_host, _youtube, stateHandler) => {
+          onStateChange = stateHandler;
+          return player.port;
+        },
+        hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      }, container);
+      manager.register('marker-1', createSurface());
+      manager.setMarkerVisible('marker-1', true);
+      await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+      onStateChange?.(1);
+
+      const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      )!;
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: 9,
+          pointerType: 'touch',
+          clientX: 20,
+          clientY: 20,
+        });
+        dispatchPointer(rendererElement, 'pointermove', {
+          pointerId: 9,
+          pointerType: 'touch',
+          clientX: 122,
+          clientY: 62,
+        });
+        dispatchPointer(rendererElement, 'pointerup', {
+          pointerId: 9,
+          pointerType: 'touch',
+          clientX: 122,
+          clientY: 62,
+        });
+        rendererElement.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      } else if (inputType === 'mouse') {
+        rendererElement.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 20,
+          clientY: 20,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      } else {
+        dispatchTouch(rendererElement, 'touchstart', [{
+          identifier: 13,
+          clientX: 20,
+          clientY: 20,
+        }]);
+        dispatchTouch(rendererElement, 'touchmove', [{
+          identifier: 13,
+          clientX: 122,
+          clientY: 62,
+        }]);
+        dispatchTouch(rendererElement, 'touchend', [], [{
+          identifier: 13,
+          clientX: 122,
+          clientY: 62,
+        }]);
+        rendererElement.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      }
+      rendererElement.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 122,
+        clientY: 62,
+      }));
+
+      expect(player.port.pauseVideo).not.toHaveBeenCalled();
+      expect(receivedEvents).toEqual(eventNames);
+      manager.dispose();
+    },
+  );
+
+  it('routes overlapping transport bounds to the last inserted CSS3D player', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const firstPlayer = createPlayerDouble();
+    const secondPlayer = createPlayerDouble();
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const player = playerIndex === 0 ? firstPlayer.port : secondPlayer.port;
+        playerIndex += 1;
+        return player;
+      },
+      hitTest: (pointer, _camera, surfaces) => (
+        surfaces.find((surface) => (
+          surface.objectId === (pointer.x < 0 ? 'video-1' : 'video-2')
+        ))
+      ),
+    }, container);
+    manager.register('marker-1', createSurface('video-1'));
+    manager.register('marker-2', createSurface('video-2'));
+    manager.setMarkerVisible('marker-1', true);
+    manager.setMarkerVisible('marker-2', true);
+    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
+    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    stateHandlers.forEach((handler) => handler(1));
+
+    const toggles = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    expect(toggles).toHaveLength(2);
+    for (const toggle of toggles) {
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+    }
+    const frames = [
+      ...rendererElement.querySelectorAll<HTMLElement>(
+        '.youtube-css3d-controls-frame',
+      ),
+    ];
+    expect(frames[1].contains(toggles[1])).toBe(true);
+
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 15,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 15,
+      clientX: 122,
+      clientY: 62,
+    });
+    rendererElement.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 122,
+      clientY: 62,
+    }));
+
+    expect(firstPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(secondPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    manager.dispose();
   });
 
   it('contains renderer-layer pointer and touch gestures that start on the transport bar', async () => {
@@ -294,6 +553,60 @@ describe('YouTubePlayerManager', () => {
 
     expect(receivedEvents).toEqual([]);
     manager.dispose();
+  });
+
+  it('removes layer gesture listeners and state when disposed mid-gesture', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const player = createPlayerDouble();
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async () => player.port,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+    await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="toggle"]',
+    )!;
+    mockClientRect(toggle, {
+      left: 100,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 19,
+      clientX: 122,
+      clientY: 62,
+    });
+
+    manager.dispose();
+    player.port.pauseVideo.mockClear();
+    container.append(rendererElement);
+    const receivedEvents: string[] = [];
+    container.addEventListener('pointerup', () => receivedEvents.push('pointerup'));
+    container.addEventListener('click', () => receivedEvents.push('click'));
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 19,
+      clientX: 122,
+      clientY: 62,
+    });
+    rendererElement.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 122,
+      clientY: 62,
+    }));
+
+    expect(receivedEvents).toEqual(['pointerup', 'click']);
+    expect(player.port.pauseVideo).not.toHaveBeenCalled();
   });
 
   it('removes the complete transport bar when the marker is lost', async () => {
@@ -503,12 +816,12 @@ function createManager(
   });
 }
 
-function createSurface() {
+function createSurface(objectId = 'video-1') {
   const root = new Group();
   const mesh = new Mesh(new PlaneGeometry(16 / 9, 1), new MeshBasicMaterial());
   root.add(mesh);
   return {
-    objectId: 'video-1',
+    objectId,
     root,
     mesh,
     youtube: {
@@ -539,7 +852,12 @@ function mockClientRect(
 function dispatchPointer(
   target: HTMLElement,
   type: string,
-  values: { pointerId: number; clientX: number; clientY: number },
+  values: {
+    pointerId: number;
+    pointerType?: string;
+    clientX: number;
+    clientY: number;
+  },
 ): void {
   const event = new Event(type, {
     bubbles: true,
