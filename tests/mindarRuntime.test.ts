@@ -318,9 +318,10 @@ describe('startMarkerAR', () => {
     const session = await startMarkerAR(container, {
       targets: [createCloudflareRuntimeTarget(true)],
     });
-    const control = document.createElement('button');
-    control.className = 'youtube-css3d-player';
-    container.append(control);
+    const player = document.createElement('div');
+    player.className = 'youtube-css3d-player';
+    const control = player.appendChild(document.createElement('button'));
+    container.append(player);
 
     control.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
 
