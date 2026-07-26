@@ -114,4 +114,26 @@ describe('YouTube transport controls', () => {
     expect(firstPlayer.seekTo).toHaveBeenCalledWith(30, true);
     expect(secondPlayer.seekTo).not.toHaveBeenCalled();
   });
+
+  it.each(['rewind', 'toggle', 'forward'])(
+    'keeps transport pointer and touch events from bubbling from the %s button',
+    (action) => {
+      const controls = createYouTubeTransportControls();
+      const ancestor = document.createElement('div');
+      const receivedEvents: string[] = [];
+      ancestor.append(controls.element);
+      for (const eventName of ['pointerdown', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
+        ancestor.addEventListener(eventName, () => receivedEvents.push(eventName));
+      }
+
+      const button = controls.element.querySelector<HTMLButtonElement>(
+        `[data-youtube-action="${action}"]`,
+      )!;
+      for (const eventName of ['pointerdown', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
+        button.dispatchEvent(new Event(eventName, { bubbles: true }));
+      }
+
+      expect(receivedEvents).toEqual([]);
+    },
+  );
 });

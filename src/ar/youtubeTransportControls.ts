@@ -15,6 +15,7 @@ export type YouTubeTransportControls = {
 
 const PLAYING = 1;
 const BUFFERING = 3;
+const INTERACTION_EVENTS = ['pointerdown', 'pointerup', 'touchstart', 'touchmove', 'touchend'];
 
 export function createYouTubeTransportControls(): YouTubeTransportControls {
   const element = document.createElement('div');
@@ -55,9 +56,16 @@ export function createYouTubeTransportControls(): YouTubeTransportControls {
     player.seekTo(target, true);
   };
 
+  const stopInteractionPropagation = (event: Event) => event.stopPropagation();
+
   rewind.addEventListener('click', onRewind);
   toggle.addEventListener('click', onToggle);
   forward.addEventListener('click', onForward);
+  for (const button of [rewind, toggle, forward]) {
+    for (const eventName of INTERACTION_EVENTS) {
+      button.addEventListener(eventName, stopInteractionPropagation);
+    }
+  }
 
   return {
     element,
@@ -75,6 +83,11 @@ export function createYouTubeTransportControls(): YouTubeTransportControls {
       rewind.removeEventListener('click', onRewind);
       toggle.removeEventListener('click', onToggle);
       forward.removeEventListener('click', onForward);
+      for (const button of [rewind, toggle, forward]) {
+        for (const eventName of INTERACTION_EVENTS) {
+          button.removeEventListener(eventName, stopInteractionPropagation);
+        }
+      }
       player = undefined;
       element.remove();
     },
