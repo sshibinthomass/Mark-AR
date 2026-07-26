@@ -530,6 +530,9 @@ describe('prepareFloorPlacement', () => {
     const player: YouTubePlayerPort = {
       playVideo: vi.fn(),
       pauseVideo: vi.fn(),
+      seekTo: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      getDuration: vi.fn(() => 120),
       destroy: vi.fn(),
     };
     harness.dependencies.createYouTubePlayerManager = vi.fn((container, onPlaybackError) => (
@@ -642,6 +645,9 @@ describe('prepareFloorPlacement', () => {
     const player: YouTubePlayerPort = {
       playVideo: vi.fn(),
       pauseVideo: vi.fn(),
+      seekTo: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      getDuration: vi.fn(() => 120),
       destroy: vi.fn(),
     };
     const hitTest = vi.fn((_pointer, _camera, surfaces) => surfaces[0]);

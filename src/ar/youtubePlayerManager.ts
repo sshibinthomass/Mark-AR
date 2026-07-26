@@ -11,14 +11,19 @@ import {
 } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import type { TargetYouTubeContent } from '../app/targetMedia';
 import type { InteractiveYouTubeSurface } from './targetSceneObject';
+import {
+  createYouTubeTransportControls,
+  type YouTubeTransportControls,
+  type YouTubeTransportPlayer,
+} from './youtubeTransportControls';
 
-export type YouTubePlayerPort = {
-  playVideo(): void;
-  pauseVideo(): void;
+export type YouTubePlayerPort = YouTubeTransportPlayer & {
   destroy(): void;
 };
 
 export type YouTubeActivationResult = 'activated' | 'missed' | 'failed';
+
+type YouTubePlayerStateHandler = (state: number) => void;
 
 type CssRendererPort = {
   domElement: HTMLElement;
@@ -38,6 +43,7 @@ type ActivePlayer = {
   player: YouTubePlayerPort;
   cssObject: CssObjectPort;
   wrapper: HTMLElement;
+  controls: YouTubeTransportControls;
 };
 
 type YouTubePlayerManagerDeps = {
@@ -46,6 +52,7 @@ type YouTubePlayerManagerDeps = {
   createPlayer?: (
     element: HTMLElement,
     youtube: TargetYouTubeContent,
+    onStateChange: YouTubePlayerStateHandler,
   ) => Promise<YouTubePlayerPort>;
   hitTest?: (
     pointer: { x: number; y: number },
@@ -64,6 +71,7 @@ export class YouTubePlayerManager {
   private readonly createPlayer: (
     element: HTMLElement,
     youtube: TargetYouTubeContent,
+    onStateChange: YouTubePlayerStateHandler,
   ) => Promise<YouTubePlayerPort>;
   private readonly hitTest: NonNullable<YouTubePlayerManagerDeps['hitTest']>;
   private readonly onPlaybackError?: (message: string) => void;
@@ -145,17 +153,24 @@ export class YouTubePlayerManager {
     const host = document.createElement('div');
     host.style.width = '100%';
     host.style.height = '100%';
-    wrapper.append(host);
+    const controls = createYouTubeTransportControls();
+    wrapper.append(controls.element, host);
     this.renderer.domElement.append(wrapper);
     const cssObject = this.createCssObject(wrapper);
     this.scene.add(cssObject);
     surface.mesh.visible = false;
 
     try {
-      const player = await this.createPlayer(host, surface.youtube);
+      const player = await this.createPlayer(host, surface.youtube, (state) => {
+        const active = this.activePlayers.get(surface.objectId);
+        if (active?.controls === controls) {
+          controls.setPlayerState(state);
+        }
+      });
       if (this.disposed || !surface.markerVisible) {
         player.pauseVideo();
         player.destroy();
+        controls.dispose();
         this.scene.remove(cssObject);
         wrapper.remove();
         return 'missed';
@@ -165,11 +180,14 @@ export class YouTubePlayerManager {
         player,
         cssObject,
         wrapper,
+        controls,
       });
+      controls.bindPlayer(player);
       player.playVideo();
       delete this.container.dataset.youtubeError;
       return 'activated';
     } catch (error) {
+      controls.dispose();
       this.scene.remove(cssObject);
       wrapper.remove();
       if (this.disposed || !surface.markerVisible) {
@@ -225,6 +243,7 @@ export class YouTubePlayerManager {
     }
     active.player.pauseVideo();
     active.player.destroy();
+    active.controls.dispose();
     this.scene.remove(active.cssObject);
     active.wrapper.remove();
     active.surface.mesh.visible = showThumbnail && active.surface.markerVisible;
@@ -258,6 +277,7 @@ type YouTubeApi = {
       playerVars: Record<string, string | number>;
       events: {
         onReady(event: { target: YouTubePlayerPort }): void;
+        onStateChange(event: { data: number }): void;
         onError(event: { data: number }): void;
       };
     },
@@ -276,6 +296,7 @@ let youtubeApiPromise: Promise<YouTubeApi> | undefined;
 async function createYouTubePlayer(
   element: HTMLElement,
   youtube: TargetYouTubeContent,
+  onStateChange: YouTubePlayerStateHandler,
 ): Promise<YouTubePlayerPort> {
   const api = await loadYouTubeApi();
   return new Promise<YouTubePlayerPort>((resolve, reject) => {
@@ -289,6 +310,7 @@ async function createYouTubePlayer(
       },
       events: {
         onReady: (event) => resolve(event.target),
+        onStateChange: (event) => onStateChange(event.data),
         onError: (event) => reject(new Error(youtubeErrorMessage(event.data))),
       },
     });

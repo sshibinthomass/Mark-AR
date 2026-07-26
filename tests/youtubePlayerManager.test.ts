@@ -20,6 +20,9 @@ describe('YouTubePlayerManager', () => {
     const player: YouTubePlayerPort = {
       playVideo: () => { playerState.played += 1; },
       pauseVideo: () => { playerState.paused += 1; },
+      seekTo() {},
+      getCurrentTime() { return 0; },
+      getDuration() { return 120; },
       destroy: () => { playerState.destroyed += 1; },
     };
     const cssScene = new Scene();
@@ -58,6 +61,52 @@ describe('YouTubePlayerManager', () => {
     manager.dispose();
   });
 
+  it('shows transport controls after readiness and syncs native player state', async () => {
+    const container = document.createElement('div');
+    const player = createPlayerDouble();
+    let onStateChange: ((state: number) => void) | undefined;
+    const manager = createManager({
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        onStateChange = stateHandler;
+        return player.port;
+      },
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+
+    const activation = manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+    const controls = container.querySelector<HTMLElement>('.youtube-transport-controls');
+    expect(controls).not.toBeNull();
+    expect(controls?.hidden).toBe(true);
+
+    expect(await activation).toBe('activated');
+    expect(controls?.hidden).toBe(false);
+    onStateChange?.(1);
+    expect(controls?.querySelector('[data-youtube-action="toggle"]')?.textContent)
+      .toBe('Pause');
+    onStateChange?.(2);
+    expect(controls?.querySelector('[data-youtube-action="toggle"]')?.textContent)
+      .toBe('Play');
+    manager.dispose();
+  });
+
+  it('removes the complete transport bar when the marker is lost', async () => {
+    const container = document.createElement('div');
+    const manager = createManager({
+      createPlayer: async () => createPlayerDouble().port,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+    await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+
+    manager.setMarkerVisible('marker-1', false);
+
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
+    manager.dispose();
+  });
+
   it('ignores hidden surfaces and duplicate activation', async () => {
     const surface = createSurface();
     let createdPlayers = 0;
@@ -74,7 +123,14 @@ describe('YouTubePlayerManager', () => {
       },
       createPlayer: async () => {
         createdPlayers += 1;
-        return { playVideo() {}, pauseVideo() {}, destroy() {} };
+        return {
+          playVideo() {},
+          pauseVideo() {},
+          seekTo() {},
+          getCurrentTime() { return 0; },
+          getDuration() { return 120; },
+          destroy() {},
+        };
       },
       hitTest: (_pointer, _camera, surfaces) => surfaces[0],
     });
@@ -113,6 +169,7 @@ describe('YouTubePlayerManager', () => {
     expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe('failed');
     expect(surface.mesh.visible).toBe(true);
     expect(container.dataset.youtubeError).toBe('Embedding disabled');
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
 
     manager.dispose();
     manager.dispose();
@@ -201,6 +258,19 @@ function createDeferred<T>() {
   return { promise, reject };
 }
 
+function createPlayerDouble() {
+  return {
+    port: {
+      playVideo: vi.fn(),
+      pauseVideo: vi.fn(),
+      seekTo: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      getDuration: vi.fn(() => 120),
+      destroy: vi.fn(),
+    } satisfies YouTubePlayerPort,
+  };
+}
+
 function createManager(
   overrides: ConstructorParameters<typeof YouTubePlayerManager>[1] = {},
   container = document.createElement('div'),
@@ -219,6 +289,9 @@ function createManager(
     createPlayer: async () => ({
       playVideo() {},
       pauseVideo() {},
+      seekTo() {},
+      getCurrentTime() { return 0; },
+      getDuration() { return 120; },
       destroy() {},
     }),
     ...overrides,
