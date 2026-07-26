@@ -515,6 +515,70 @@ h1 {
   position: relative;
 }
 
+.youtube-css3d-player {
+  position: relative;
+  overflow: visible;
+}
+
+.youtube-css3d-controls-frame {
+  position: absolute;
+  width: 0.8888888888888888px; /* 240 / 270 */
+  height: 0.2222222222222222px; /* 60 / 270 */
+  pointer-events: auto;
+}
+
+.youtube-transport-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 240px;
+  height: 60px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid rgb(90 224 208 / 80%);
+  border-radius: 14px;
+  background: rgb(5 25 28 / 92%);
+  box-shadow: 0 12px 24px rgb(0 0 0 / 45%);
+  transform: scale(0.003703703703703704); /* 1 / 270 */
+  transform-origin: 0 0;
+  pointer-events: auto;
+}
+
+.youtube-transport-controls[hidden] {
+  display: none;
+}
+
+.youtube-transport-controls button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid rgb(154 255 239 / 85%);
+  border-radius: 10px;
+  color: #f4fffd;
+  background: linear-gradient(180deg, #174b4d 0%, #0b3033 100%);
+  box-shadow:
+    0 5px 0 #041b1d,
+    0 9px 16px rgb(0 0 0 / 42%);
+  font: 700 16px/1 system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.youtube-transport-controls button:active {
+  box-shadow:
+    0 2px 0 #041b1d,
+    0 5px 10px rgb(0 0 0 / 38%);
+  transform: translateY(3px);
+}
+
+.youtube-transport-controls button:focus-visible {
+  outline: 3px solid #ffe08a;
+  outline-offset: 3px;
+}
+
 .floor-ar-overlay {
   position: absolute;
   inset: 0;

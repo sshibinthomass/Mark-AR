@@ -318,11 +318,31 @@ describe('startMarkerAR', () => {
     const session = await startMarkerAR(container, {
       targets: [createCloudflareRuntimeTarget(true)],
     });
-    const control = document.createElement('button');
-    control.className = 'youtube-css3d-player';
-    container.append(control);
+    const player = document.createElement('div');
+    player.className = 'youtube-css3d-player';
+    const control = player.appendChild(document.createElement('button'));
+    container.append(player);
 
     control.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+
+    expect(runtimeMocks.managerActivate).not.toHaveBeenCalled();
+    session.stop();
+  });
+
+  it('does not reprocess marker taps from separate transport-bar padding', async () => {
+    const container = document.createElement('div');
+    runtimeMocks.youtubeSurfaces.push({ objectId: 'video-1' });
+    runtimeMocks.compileMarkerTargets.mockResolvedValue(createCompiledTargets());
+    const session = await startMarkerAR(container, {
+      targets: [createCloudflareRuntimeTarget(true)],
+    });
+    const frame = document.createElement('div');
+    frame.className = 'youtube-css3d-controls-frame';
+    const controls = frame.appendChild(document.createElement('div'));
+    controls.className = 'youtube-transport-controls';
+    container.append(frame);
+
+    controls.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
 
     expect(runtimeMocks.managerActivate).not.toHaveBeenCalled();
     session.stop();

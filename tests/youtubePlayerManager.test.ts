@@ -13,6 +13,25 @@ import {
 } from '../src/ar/youtubePlayerManager';
 
 describe('YouTubePlayerManager', () => {
+  it('keeps the CSS3D renderer layer pointer-interactive for player controls', () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const viewElement = rendererElement.appendChild(document.createElement('div'));
+    viewElement.style.pointerEvents = 'none';
+    const manager = new YouTubePlayerManager(container, {
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+    });
+
+    expect(rendererElement.style.pointerEvents).toBe('auto');
+    expect(viewElement.style.pointerEvents).toBe('none');
+
+    manager.dispose();
+  });
+
   it('activates a visible hit inline and restores the thumbnail after target loss', async () => {
     const container = document.createElement('div');
     const surface = createSurface();
@@ -20,6 +39,9 @@ describe('YouTubePlayerManager', () => {
     const player: YouTubePlayerPort = {
       playVideo: () => { playerState.played += 1; },
       pauseVideo: () => { playerState.paused += 1; },
+      seekTo() {},
+      getCurrentTime() { return 0; },
+      getDuration() { return 120; },
       destroy: () => { playerState.destroyed += 1; },
     };
     const cssScene = new Scene();
@@ -58,6 +80,1717 @@ describe('YouTubePlayerManager', () => {
     manager.dispose();
   });
 
+  it('shows transport controls after readiness and syncs native player state', async () => {
+    const container = document.createElement('div');
+    const player = createPlayerDouble();
+    let onStateChange: ((state: number) => void) | undefined;
+    const manager = createManager({
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        onStateChange = stateHandler;
+        return player.port;
+      },
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+
+    const activation = manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+    const controls = container.querySelector<HTMLElement>('.youtube-transport-controls');
+    expect(controls).not.toBeNull();
+    expect(controls?.hidden).toBe(true);
+
+    expect(await activation).toBe('activated');
+    expect(controls?.hidden).toBe(false);
+    onStateChange?.(1);
+    expect(controls?.querySelector('[data-youtube-action="toggle"]')?.textContent)
+      .toBe('Pause');
+    onStateChange?.(2);
+    expect(controls?.querySelector('[data-youtube-action="toggle"]')?.textContent)
+      .toBe('Play');
+    manager.dispose();
+  });
+
+  it('counter-scales a separate controls frame above the video object', async () => {
+    const container = document.createElement('div');
+    const cssObjects: Array<Group & { element: HTMLElement }> = [];
+    const manager = createManager({
+      createCssObject: (element) => {
+        const object = new Group() as Group & { element: HTMLElement };
+        object.element = element;
+        cssObjects.push(object);
+        return object;
+      },
+      createPlayer: async () => createPlayerDouble().port,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+
+    expect(await manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    )).toBe('activated');
+
+    expect(cssObjects).toHaveLength(2);
+    const videoObject = cssObjects.find((object) => (
+      object.element.classList.contains('youtube-css3d-player')
+    ));
+    const controlsObject = cssObjects.find((object) => (
+      object.element.classList.contains('youtube-css3d-controls-frame')
+    ));
+    const controls = controlsObject?.element.querySelector<HTMLElement>(
+      '.youtube-transport-controls',
+    );
+    expect(videoObject).toBeDefined();
+    expect(controlsObject).toBeDefined();
+    expect(controls).not.toBeNull();
+    expect(controlsObject?.parent).toBe(videoObject);
+    expect(controlsObject?.position.y).toBe(179);
+    expect(controlsObject?.position.y).toBeGreaterThan(0);
+    expect(controlsObject?.scale.toArray()).toEqual([270, 270, 270]);
+    expect(videoObject?.element.contains(controls!)).toBe(false);
+
+    manager.dispose();
+    expect(container.querySelector('.youtube-css3d-player')).toBeNull();
+    expect(container.querySelector('.youtube-css3d-controls-frame')).toBeNull();
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
+  });
+
+  it('routes a coordinate- and time-matching compatibility click exactly once', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const rendererElement = document.createElement('div');
+    const player = createPlayerDouble();
+    let onStateChange: ((state: number) => void) | undefined;
+    const bubbledClicks = vi.fn();
+    const bubbledMouseMoves = vi.fn();
+    container.addEventListener('click', bubbledClicks);
+    container.addEventListener('mousemove', bubbledMouseMoves);
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        onStateChange = stateHandler;
+        return player.port;
+      },
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+    await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+    onStateChange?.(1);
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="toggle"]',
+    )!;
+    mockClientRect(toggle, {
+      left: 100,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 5,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 100,
+    });
+    dispatchMouse(rendererElement, 'mousedown', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 101,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 5,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 102,
+    });
+    dispatchMouse(rendererElement, 'mouseup', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 103,
+    });
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 104,
+    });
+
+    expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(bubbledClicks).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(toggle);
+
+    dispatchMouse(rendererElement, 'mousemove', {
+      clientX: 200,
+      clientY: 120,
+      timeStamp: 105,
+    });
+    expect(bubbledMouseMoves).toHaveBeenCalledOnce();
+
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 106,
+    });
+
+    expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(bubbledClicks).toHaveBeenCalledOnce();
+
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 200,
+      clientY: 120,
+      timeStamp: 107,
+    });
+
+    expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(bubbledClicks).toHaveBeenCalledTimes(2);
+
+    toggle.click();
+    expect(player.port.pauseVideo).toHaveBeenCalledTimes(2);
+    expect(bubbledClicks).toHaveBeenCalledTimes(2);
+    manager.dispose();
+    container.remove();
+  });
+
+  it('does not promote a same-owner contact from one command to another', async () => {
+    const harness = await createLayerRoutingHarness();
+
+    dispatchPointer(harness.rendererElement, 'pointerdown', {
+      pointerId: 31,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 100,
+    });
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 31,
+      clientX: 182,
+      clientY: 62,
+      timeStamp: 110,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 182,
+      clientY: 62,
+      timeStamp: 120,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(harness.player.port.seekTo).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('never promotes a transport-bar background origin into a command', async () => {
+    const harness = await createLayerRoutingHarness();
+    mockClientRect(harness.controls, {
+      left: 80,
+      top: 30,
+      width: 240,
+      height: 60,
+    });
+
+    dispatchPointer(harness.rendererElement, 'pointerdown', {
+      pointerId: 32,
+      clientX: 90,
+      clientY: 50,
+      timeStamp: 200,
+    });
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 32,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 210,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 220,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(harness.player.port.seekTo).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('does not retarget an authorized contact after scene motion moves another player beneath it', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const firstPlayer = createPlayerDouble();
+    const secondPlayer = createPlayerDouble();
+    const players = [firstPlayer, secondPlayer];
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const player = players[playerIndex];
+        playerIndex += 1;
+        return player.port;
+      },
+      hitTest: (pointer, _camera, surfaces) => surfaces.find((surface) => (
+        surface.objectId === (pointer.x < 0 ? 'video-1' : 'video-2')
+      )),
+    }, container);
+    manager.register('marker-1', createSurface('video-1'));
+    manager.register('marker-2', createSurface('video-2'));
+    manager.setMarkerVisible('marker-1', true);
+    manager.setMarkerVisible('marker-2', true);
+    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
+    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    stateHandlers.forEach((handler) => handler(1));
+    firstPlayer.port.pauseVideo.mockClear();
+    secondPlayer.port.pauseVideo.mockClear();
+
+    const [firstToggle, secondToggle] = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    mockClientRect(firstToggle, {
+      left: 100,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    mockClientRect(secondToggle, {
+      left: 300,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 33,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 300,
+    });
+
+    mockClientRect(firstToggle, {
+      left: 300,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    mockClientRect(secondToggle, {
+      left: 100,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 33,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 310,
+    });
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 320,
+    });
+
+    expect(firstPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(secondPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
+  it('purges command authorization when its owner deactivates before click', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const lowerPlayer = createPlayerDouble();
+    const upperPlayer = createPlayerDouble();
+    const players = [lowerPlayer, upperPlayer];
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const player = players[playerIndex];
+        playerIndex += 1;
+        return player.port;
+      },
+      hitTest: (pointer, _camera, surfaces) => surfaces.find((surface) => (
+        surface.objectId === (pointer.x < 0 ? 'video-lower' : 'video-upper')
+      )),
+    }, container);
+    manager.register('marker-lower', createSurface('video-lower'));
+    manager.register('marker-upper', createSurface('video-upper'));
+    manager.setMarkerVisible('marker-lower', true);
+    manager.setMarkerVisible('marker-upper', true);
+    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
+    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    stateHandlers.forEach((handler) => handler(1));
+
+    const toggles = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    for (const toggle of toggles) {
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+    }
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 34,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 400,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 34,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 410,
+    });
+    manager.setMarkerVisible('marker-upper', false);
+    lowerPlayer.port.pauseVideo.mockClear();
+    upperPlayer.port.pauseVideo.mockClear();
+
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 420,
+    });
+
+    expect(lowerPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(upperPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
+  it.each(['pointer', 'touch'] as const)(
+    'treats the next unrelated mouse gesture as fresh after a completed %s contact',
+    async (inputType) => {
+      const harness = await createLayerRoutingHarness();
+      const receivedEvents: string[] = [];
+      for (const eventName of ['mousedown', 'mouseup', 'click']) {
+        harness.container.addEventListener(eventName, () => receivedEvents.push(eventName));
+      }
+
+      completeLayerContact(harness.rendererElement, inputType, {
+        id: 21,
+        clientX: 122,
+        clientY: 62,
+        startTime: 100,
+        endTime: 110,
+      });
+      dispatchMouse(harness.rendererElement, 'mousedown', {
+        clientX: 20,
+        clientY: 20,
+        timeStamp: 120,
+      });
+      dispatchMouse(harness.rendererElement, 'mouseup', {
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 130,
+      });
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 140,
+      });
+
+      expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+      expect(receivedEvents).toEqual(['mousedown', 'mouseup', 'click']);
+      harness.manager.dispose();
+    },
+  );
+
+  it('discards completed eligibility when a compatibility click misses its coordinates', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledClicks = vi.fn();
+    harness.container.addEventListener('click', bubbledClicks);
+    completeLayerContact(harness.rendererElement, 'pointer', {
+      id: 22,
+      clientX: 122,
+      clientY: 62,
+      startTime: 200,
+      endTime: 210,
+    });
+
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 20,
+      clientY: 20,
+      timeStamp: 220,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 230,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(bubbledClicks).toHaveBeenCalledTimes(2);
+    harness.manager.dispose();
+  });
+
+  it('does not cross-authorize a different pointer identity at matching coordinates', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledClicks = vi.fn();
+    harness.container.addEventListener('click', bubbledClicks);
+    completeLayerContact(harness.rendererElement, 'pointer', {
+      id: 22,
+      clientX: 122,
+      clientY: 62,
+      startTime: 240,
+      endTime: 250,
+    });
+
+    dispatchMouse(harness.rendererElement, 'click', {
+      pointerId: 99,
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 260,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(bubbledClicks).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it.each([
+    { pointerType: 'touch', expectedRoutes: 1 },
+    { pointerType: 'pen', expectedRoutes: 2 },
+  ] as const)(
+    'keeps nearby $pointerType pointer and touch completions correctly independent',
+    async ({ pointerType, expectedRoutes }) => {
+      const harness = await createLayerRoutingHarness();
+      const bubbledClicks = vi.fn();
+      harness.container.addEventListener('click', bubbledClicks);
+      dispatchPointer(harness.rendererElement, 'pointerdown', {
+        pointerId: 41,
+        pointerType,
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 270,
+      });
+      dispatchTouch(harness.rendererElement, 'touchstart', [{
+        identifier: 7,
+        clientX: 122,
+        clientY: 62,
+      }], undefined, 271);
+      dispatchPointer(harness.rendererElement, 'pointerup', {
+        pointerId: 41,
+        pointerType,
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 280,
+      });
+      dispatchTouch(harness.rendererElement, 'touchend', [], [{
+        identifier: 7,
+        clientX: 122,
+        clientY: 62,
+      }], 281);
+
+      dispatchMouse(harness.rendererElement, 'click', {
+        pointerId: 41,
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 290,
+      });
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: 122,
+        clientY: 62,
+        timeStamp: 300,
+      });
+
+      expect(harness.player.port.pauseVideo).toHaveBeenCalledTimes(expectedRoutes);
+      expect(bubbledClicks).toHaveBeenCalledTimes(2 - expectedRoutes);
+      harness.manager.dispose();
+    },
+  );
+
+  it('expires completed eligibility before a later same-coordinate mouse gesture', async () => {
+    const harness = await createLayerRoutingHarness();
+    const receivedEvents: string[] = [];
+    for (const eventName of ['mousedown', 'mouseup', 'click']) {
+      harness.container.addEventListener(eventName, () => receivedEvents.push(eventName));
+    }
+    completeLayerContact(harness.rendererElement, 'touch', {
+      id: 23,
+      clientX: 122,
+      clientY: 62,
+      startTime: 300,
+      endTime: 310,
+    });
+    harness.toggle.disabled = true;
+
+    dispatchMouse(harness.rendererElement, 'mousedown', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 5_000,
+    });
+    dispatchMouse(harness.rendererElement, 'mouseup', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 5_010,
+    });
+    dispatchMouse(harness.rendererElement, 'click', {
+      clientX: 122,
+      clientY: 62,
+      timeStamp: 5_020,
+    });
+
+    expect(harness.player.port.pauseVideo).not.toHaveBeenCalled();
+    expect(receivedEvents).toEqual(['mousedown', 'mouseup', 'click']);
+    harness.manager.dispose();
+  });
+
+  it.each(['pointer', 'touch'] as const)(
+    'retains interleaved completed %s contacts for their matching clicks',
+    async (inputType) => {
+      const harness = await createLayerRoutingHarness();
+      const firstContact = {
+        id: 24,
+        clientX: 122,
+        clientY: 62,
+      };
+      const secondContact = {
+        id: 25,
+        clientX: 182,
+        clientY: 62,
+      };
+
+      startLayerContact(
+        harness.rendererElement,
+        inputType,
+        firstContact,
+        400,
+      );
+      startLayerContact(
+        harness.rendererElement,
+        inputType,
+        secondContact,
+        401,
+        [firstContact],
+      );
+      endLayerContact(
+        harness.rendererElement,
+        inputType,
+        firstContact,
+        410,
+        [secondContact],
+      );
+      endLayerContact(
+        harness.rendererElement,
+        inputType,
+        secondContact,
+        411,
+      );
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: firstContact.clientX,
+        clientY: firstContact.clientY,
+        timeStamp: 420,
+      });
+      dispatchMouse(harness.rendererElement, 'click', {
+        clientX: secondContact.clientX,
+        clientY: secondContact.clientY,
+        timeStamp: 421,
+      });
+
+      expect(harness.player.port.pauseVideo).toHaveBeenCalledOnce();
+      expect(harness.player.port.seekTo).toHaveBeenCalledOnce();
+      expect(harness.player.port.seekTo).toHaveBeenCalledWith(10, true);
+      harness.manager.dispose();
+    },
+  );
+
+  it.each(['pointer', 'mouse', 'touch'] as const)(
+    'does not route an outside-start %s sequence that ends over a transport button',
+    async (inputType) => {
+      const container = document.createElement('div');
+      const rendererElement = document.createElement('div');
+      const player = createPlayerDouble();
+      let onStateChange: ((state: number) => void) | undefined;
+      const receivedEvents: string[] = [];
+      const eventNames = inputType === 'pointer'
+        ? [
+            'pointerdown',
+            'pointermove',
+            'pointerup',
+            'mousemove',
+            'mousedown',
+            'mouseup',
+            'click',
+          ]
+        : inputType === 'mouse'
+          ? ['mousedown', 'mousemove', 'mouseup', 'click']
+          : [
+              'touchstart',
+              'touchmove',
+              'touchend',
+              'mousemove',
+              'mousedown',
+              'mouseup',
+              'click',
+            ];
+      for (const eventName of eventNames) {
+        container.addEventListener(eventName, () => receivedEvents.push(eventName));
+      }
+      const manager = createManager({
+        createCssRenderer: () => ({
+          domElement: rendererElement,
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createPlayer: async (_host, _youtube, stateHandler) => {
+          onStateChange = stateHandler;
+          return player.port;
+        },
+        hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      }, container);
+      manager.register('marker-1', createSurface());
+      manager.setMarkerVisible('marker-1', true);
+      await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+      onStateChange?.(1);
+
+      const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      )!;
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: 9,
+          pointerType: 'touch',
+          clientX: 20,
+          clientY: 20,
+        });
+        dispatchPointer(rendererElement, 'pointermove', {
+          pointerId: 9,
+          pointerType: 'touch',
+          clientX: 122,
+          clientY: 62,
+        });
+        dispatchPointer(rendererElement, 'pointerup', {
+          pointerId: 9,
+          pointerType: 'touch',
+          clientX: 122,
+          clientY: 62,
+        });
+        rendererElement.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      } else if (inputType === 'mouse') {
+        rendererElement.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 20,
+          clientY: 20,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      } else {
+        dispatchTouch(rendererElement, 'touchstart', [{
+          identifier: 13,
+          clientX: 20,
+          clientY: 20,
+        }]);
+        dispatchTouch(rendererElement, 'touchmove', [{
+          identifier: 13,
+          clientX: 122,
+          clientY: 62,
+        }]);
+        dispatchTouch(rendererElement, 'touchend', [], [{
+          identifier: 13,
+          clientX: 122,
+          clientY: 62,
+        }]);
+        rendererElement.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+        rendererElement.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      }
+      rendererElement.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 122,
+        clientY: 62,
+      }));
+
+      expect(player.port.pauseVideo).not.toHaveBeenCalled();
+      expect(receivedEvents).toEqual(eventNames);
+      manager.dispose();
+    },
+  );
+
+  it.each(['pointer', 'touch'] as const)(
+    'clears a canceled %s gesture before a fallback-mouse click',
+    async (inputType) => {
+      const container = document.createElement('div');
+      const rendererElement = document.createElement('div');
+      const player = createPlayerDouble();
+      let onStateChange: ((state: number) => void) | undefined;
+      const manager = createManager({
+        createCssRenderer: () => ({
+          domElement: rendererElement,
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createPlayer: async (_host, _youtube, stateHandler) => {
+          onStateChange = stateHandler;
+          return player.port;
+        },
+        hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      }, container);
+      manager.register('marker-1', createSurface());
+      manager.setMarkerVisible('marker-1', true);
+      await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+      onStateChange?.(1);
+
+      const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      )!;
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: 14,
+          clientX: 122,
+          clientY: 62,
+        });
+        dispatchPointer(rendererElement, 'pointercancel', {
+          pointerId: 14,
+          clientX: 122,
+          clientY: 62,
+        });
+      } else {
+        dispatchTouch(rendererElement, 'touchstart', [{
+          identifier: 14,
+          clientX: 122,
+          clientY: 62,
+        }]);
+        dispatchTouch(rendererElement, 'touchcancel', [], [{
+          identifier: 14,
+          clientX: 122,
+          clientY: 62,
+        }]);
+      }
+      for (const eventName of ['mousedown', 'mouseup', 'click']) {
+        rendererElement.dispatchEvent(new MouseEvent(eventName, {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      }
+
+      expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+      manager.dispose();
+    },
+  );
+
+  it.each(['pointer', 'touch'] as const)(
+    'does not let one %s contact complete another contact gesture',
+    async (inputType) => {
+      const container = document.createElement('div');
+      const rendererElement = document.createElement('div');
+      const player = createPlayerDouble();
+      let onStateChange: ((state: number) => void) | undefined;
+      const bubbledClicks = vi.fn();
+      container.addEventListener('click', bubbledClicks);
+      const manager = createManager({
+        createCssRenderer: () => ({
+          domElement: rendererElement,
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createPlayer: async (_host, _youtube, stateHandler) => {
+          onStateChange = stateHandler;
+          return player.port;
+        },
+        hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      }, container);
+      manager.register('marker-1', createSurface());
+      manager.setMarkerVisible('marker-1', true);
+      await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+      onStateChange?.(1);
+
+      const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      )!;
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+
+      const outsideContact = {
+        identifier: 15,
+        clientX: 20,
+        clientY: 20,
+      };
+      const insideContact = {
+        identifier: 16,
+        clientX: 122,
+        clientY: 62,
+      };
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: outsideContact.identifier,
+          clientX: outsideContact.clientX,
+          clientY: outsideContact.clientY,
+        });
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: insideContact.identifier,
+          clientX: insideContact.clientX,
+          clientY: insideContact.clientY,
+        });
+        dispatchPointer(rendererElement, 'pointerup', {
+          pointerId: outsideContact.identifier,
+          clientX: 122,
+          clientY: 62,
+        });
+      } else {
+        dispatchTouch(rendererElement, 'touchstart', [outsideContact]);
+        dispatchTouch(
+          rendererElement,
+          'touchstart',
+          [outsideContact, insideContact],
+          [insideContact],
+        );
+        dispatchTouch(rendererElement, 'touchend', [insideContact], [{
+          ...outsideContact,
+          clientX: 122,
+          clientY: 62,
+        }]);
+      }
+      rendererElement.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 122,
+        clientY: 62,
+      }));
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointercancel', {
+          pointerId: insideContact.identifier,
+          clientX: insideContact.clientX,
+          clientY: insideContact.clientY,
+        });
+      } else {
+        dispatchTouch(rendererElement, 'touchcancel', [], [insideContact]);
+      }
+
+      expect(player.port.pauseVideo).not.toHaveBeenCalled();
+      expect(bubbledClicks).toHaveBeenCalledOnce();
+      manager.dispose();
+    },
+  );
+
+  it('routes overlapping bounds by activation order when readiness resolves out of order', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const firstPlayer = createPlayerDouble();
+    const secondPlayer = createPlayerDouble();
+    const creations = [
+      createDeferred<YouTubePlayerPort>(),
+      createDeferred<YouTubePlayerPort>(),
+    ];
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const creation = creations[playerIndex];
+        playerIndex += 1;
+        return creation.promise;
+      },
+      hitTest: (pointer, _camera, surfaces) => (
+        surfaces.find((surface) => (
+          surface.objectId === (pointer.x < 0 ? 'video-1' : 'video-2')
+        ))
+      ),
+    }, container);
+    manager.register('marker-1', createSurface('video-1'));
+    manager.register('marker-2', createSurface('video-2'));
+    manager.setMarkerVisible('marker-1', true);
+    manager.setMarkerVisible('marker-2', true);
+    const firstActivation = manager.activateFromPointer(
+      { x: -1, y: 0 },
+      new PerspectiveCamera(),
+    );
+    const secondActivation = manager.activateFromPointer(
+      { x: 1, y: 0 },
+      new PerspectiveCamera(),
+    );
+    creations[1].resolve(secondPlayer.port);
+    expect(await secondActivation).toBe('activated');
+    creations[0].resolve(firstPlayer.port);
+    expect(await firstActivation).toBe('activated');
+    stateHandlers.forEach((handler) => handler(1));
+
+    const toggles = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    expect(toggles).toHaveLength(2);
+    for (const toggle of toggles) {
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+    }
+    const frames = [
+      ...rendererElement.querySelectorAll<HTMLElement>(
+        '.youtube-css3d-controls-frame',
+      ),
+    ];
+    expect(frames[1].contains(toggles[1])).toBe(true);
+
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 15,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 15,
+      clientX: 122,
+      clientY: 62,
+    });
+    rendererElement.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 122,
+      clientY: 62,
+    }));
+
+    expect(firstPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(secondPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    manager.dispose();
+  });
+
+  it('routes overlapping projected controls to the currently nearer player', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    mockClientRect(rendererElement, {
+      left: 0,
+      top: 0,
+      width: 800,
+      height: 600,
+    });
+    const nearPlayer = createPlayerDouble();
+    const farPlayer = createPlayerDouble();
+    const players = [nearPlayer, farPlayer];
+    const stateHandlers: Array<(state: number) => void> = [];
+    let playerIndex = 0;
+    const nearSurface = createSurface('video-near');
+    nearSurface.root.position.z = -2;
+    const farSurface = createSurface('video-far');
+    farSurface.root.position.z = -4;
+    farSurface.root.scale.setScalar(2);
+    const manager = new YouTubePlayerManager(container, {
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createCssObject: (element) => {
+        const object = new Group() as Group & { element: HTMLElement };
+        object.element = element;
+        return object;
+      },
+      createPlayer: async (_host, _youtube, stateHandler) => {
+        stateHandlers.push(stateHandler);
+        const player = players[playerIndex];
+        playerIndex += 1;
+        return player.port;
+      },
+      hitTest: (pointer, _camera, surfaces) => surfaces.find((surface) => (
+        surface.objectId === (pointer.x < 0 ? 'video-near' : 'video-far')
+      )),
+    });
+    manager.register('marker-near', nearSurface);
+    manager.register('marker-far', farSurface);
+    manager.setMarkerVisible('marker-near', true);
+    manager.setMarkerVisible('marker-far', true);
+    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
+    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    stateHandlers.forEach((handler) => handler(1));
+    nearPlayer.port.pauseVideo.mockClear();
+    farPlayer.port.pauseVideo.mockClear();
+
+    const controls = [
+      ...container.querySelectorAll<HTMLElement>('.youtube-transport-controls'),
+    ];
+    const toggles = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      ),
+    ];
+    for (let index = 0; index < controls.length; index += 1) {
+      mockOffsetBox(controls[index], {
+        left: 0,
+        top: 0,
+        width: 240,
+        height: 60,
+      });
+      mockOffsetBox(toggles[index], {
+        left: 80,
+        top: 8,
+        width: 80,
+        height: 44,
+      });
+      mockClientRect(toggles[index], {
+        left: 360,
+        top: 106,
+        width: 80,
+        height: 44,
+      });
+    }
+    const camera = new PerspectiveCamera(60, 4 / 3, 0.1, 100);
+    manager.update(camera);
+
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 35,
+      clientX: 400,
+      clientY: 128,
+      timeStamp: 500,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 35,
+      clientX: 400,
+      clientY: 128,
+      timeStamp: 510,
+    });
+    dispatchMouse(rendererElement, 'click', {
+      clientX: 400,
+      clientY: 128,
+      timeStamp: 520,
+    });
+
+    expect(nearPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(farPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
+  it('contains renderer-layer pointer and touch gestures that start on the transport bar', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const receivedEvents: string[] = [];
+    for (const eventName of [
+      'pointerdown',
+      'pointermove',
+      'pointerup',
+      'touchstart',
+      'touchmove',
+      'touchend',
+      'click',
+    ]) {
+      container.addEventListener(eventName, () => receivedEvents.push(eventName));
+    }
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async () => createPlayerDouble().port,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+    await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+
+    const controls = container.querySelector<HTMLElement>('.youtube-transport-controls')!;
+    mockClientRect(controls, {
+      left: 80,
+      top: 30,
+      width: 240,
+      height: 60,
+    });
+
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 7,
+      clientX: 90,
+      clientY: 50,
+    });
+    dispatchPointer(rendererElement, 'pointermove', {
+      pointerId: 7,
+      clientX: 400,
+      clientY: 200,
+    });
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 7,
+      clientX: 400,
+      clientY: 200,
+    });
+    dispatchTouch(rendererElement, 'touchstart', [{
+      identifier: 11,
+      clientX: 90,
+      clientY: 50,
+    }]);
+    dispatchTouch(rendererElement, 'touchmove', [{
+      identifier: 11,
+      clientX: 400,
+      clientY: 200,
+    }]);
+    dispatchTouch(rendererElement, 'touchend', [], [{
+      identifier: 11,
+      clientX: 400,
+      clientY: 200,
+    }]);
+    rendererElement.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 400,
+      clientY: 200,
+    }));
+
+    expect(receivedEvents).toEqual([]);
+    manager.dispose();
+  });
+
+  it.each(['renderer', 'another marker'] as const)(
+    'contains an in-flight native pointerup retargeted to the %s after marker loss',
+    async (destination) => {
+      const harness = await createLayerRoutingHarness();
+      const markerActivation = vi.fn();
+      const containerActivation = vi.fn();
+      const releaseTarget = destination === 'renderer'
+        ? harness.rendererElement
+        : harness.rendererElement.appendChild(document.createElement('div'));
+      releaseTarget.addEventListener('pointerup', markerActivation);
+      harness.container.addEventListener('pointerup', containerActivation);
+
+      dispatchPointer(harness.toggle, 'pointerdown', {
+        pointerId: 51,
+        clientX: 122,
+        clientY: 62,
+      });
+      harness.manager.setMarkerVisible('marker-1', false);
+      dispatchPointer(releaseTarget, 'pointerup', {
+        pointerId: 51,
+        clientX: 122,
+        clientY: 62,
+      });
+
+      expect(markerActivation).not.toHaveBeenCalled();
+      expect(containerActivation).not.toHaveBeenCalled();
+      harness.manager.dispose();
+    },
+  );
+
+  it('contains an in-flight native pointerup retargeted to the floor container after deactivation', async () => {
+    const harness = await createLayerRoutingHarness();
+    const floorGesture = vi.fn();
+    harness.container.addEventListener('pointerup', floorGesture);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 52,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(harness.container, 'pointerup', {
+      pointerId: 52,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(floorGesture).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('preserves a normal same-owner native pointer release and button command', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerUp = vi.fn();
+    harness.container.addEventListener('pointerup', bubbledPointerUp);
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(harness.toggle);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 53,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.toggle, 'pointerup', {
+      pointerId: 53,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.toggle, 'click', {
+      pointerId: 53,
+      clientX: 122,
+      clientY: 62,
+    });
+
+    expect(bubbledPointerUp).not.toHaveBeenCalled();
+    expect(harness.player.port.pauseVideo).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it('clears orphaned native pointer IDs independently and exactly once', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerUp = vi.fn();
+    const bubbledPointerCancel = vi.fn();
+    harness.container.addEventListener('pointerup', bubbledPointerUp);
+    harness.container.addEventListener('pointercancel', bubbledPointerCancel);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 54,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.forward, 'pointerdown', {
+      pointerId: 55,
+      clientX: 182,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 54,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerUp).not.toHaveBeenCalled();
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 54,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerUp).toHaveBeenCalledOnce();
+
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 55,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerCancel).not.toHaveBeenCalled();
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 55,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerCancel).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it('hands native containment to the manager before disposal releases pointer capture', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerCancel = vi.fn();
+    harness.container.addEventListener('pointercancel', bubbledPointerCancel);
+    Object.assign(harness.toggle, {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: (pointerId: number) => {
+        dispatchPointer(harness.toggle, 'pointercancel', {
+          pointerId,
+          clientX: 122,
+          clientY: 62,
+        });
+      },
+    });
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 59,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+
+    expect(bubbledPointerCancel).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('contains exactly one orphan pointerup outside the container when capture transfer throws', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+      hasPointerCapture: vi.fn(() => false),
+    });
+    const outsideRelease = vi.fn();
+    outside.addEventListener('pointerup', outsideRelease);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 60,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(outside, 'pointerup', {
+      pointerId: 60,
+      clientX: 900,
+      clientY: 700,
+    });
+    dispatchPointer(outside, 'pointerup', {
+      pointerId: 60,
+      clientX: 900,
+      clientY: 700,
+    });
+
+    const outsideReleaseCount = outsideRelease.mock.calls.length;
+    outside.remove();
+    harness.manager.dispose();
+    expect(outsideReleaseCount).toBe(1);
+  });
+
+  it('contains exactly one orphan pointercancel outside the container after silent capture failure', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => false),
+    });
+    const outsideCancel = vi.fn();
+    outside.addEventListener('pointercancel', outsideCancel);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 62,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(outside, 'pointercancel', {
+      pointerId: 62,
+      clientX: 900,
+      clientY: 700,
+    });
+    dispatchPointer(outside, 'pointercancel', {
+      pointerId: 62,
+      clientX: 900,
+      clientY: 700,
+    });
+
+    const outsideCancelCount = outsideCancel.mock.calls.length;
+    outside.remove();
+    harness.manager.dispose();
+    expect(outsideCancelCount).toBe(1);
+  });
+
+  it('does not swallow an inside pointerup after the orphan ID is reused outside', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+    });
+    const outsideStart = vi.fn();
+    const floorGesture = vi.fn();
+    outside.addEventListener('pointerdown', outsideStart);
+    harness.container.addEventListener('pointerup', floorGesture);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 63,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(outside, 'pointerdown', {
+      pointerId: 63,
+      clientX: 900,
+      clientY: 700,
+    });
+    dispatchPointer(harness.container, 'pointerup', {
+      pointerId: 63,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    const outsideStartCount = outsideStart.mock.calls.length;
+    const floorGestureCount = floorGesture.mock.calls.length;
+    outside.remove();
+    harness.manager.dispose();
+    expect(outsideStartCount).toBe(1);
+    expect(floorGestureCount).toBe(1);
+  });
+
+  it('leaves unrelated pointer IDs untouched while an orphan is pending', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+    });
+    const unrelatedEvents: string[] = [];
+    outside.addEventListener('pointerdown', () => unrelatedEvents.push('pointerdown'));
+    outside.addEventListener('pointerup', () => unrelatedEvents.push('pointerup'));
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 64,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(outside, 'pointerdown', {
+      pointerId: 640,
+      clientX: 900,
+      clientY: 700,
+    });
+    dispatchPointer(outside, 'pointerup', {
+      pointerId: 640,
+      clientX: 900,
+      clientY: 700,
+    });
+
+    const receivedEvents = [...unrelatedEvents];
+    outside.remove();
+    harness.manager.dispose();
+    expect(receivedEvents).toEqual(['pointerdown', 'pointerup']);
+  });
+
+  it('removes window containment listeners and orphan state on manager disposal', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    Object.assign(harness.container, {
+      setPointerCapture: vi.fn(() => {
+        throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+      }),
+    });
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 65,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    harness.manager.dispose();
+    const outsideRelease = vi.fn();
+    outside.addEventListener('pointerup', outsideRelease);
+    dispatchPointer(outside, 'pointerup', {
+      pointerId: 65,
+      clientX: 900,
+      clientY: 700,
+    });
+
+    const outsideReleaseCount = outsideRelease.mock.calls.length;
+    outside.remove();
+    expect(outsideReleaseCount).toBe(1);
+  });
+
+  it('unregisters every Window capture listener when disposed with an orphan', async () => {
+    const harness = await createLayerRoutingHarness();
+    const inputWindow = harness.container.ownerDocument.defaultView!;
+    const addEventListener = vi.spyOn(inputWindow, 'addEventListener');
+    const removeEventListener = vi.spyOn(inputWindow, 'removeEventListener');
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 66,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    harness.manager.dispose();
+
+    for (const eventName of ['pointerdown', 'pointerup', 'pointercancel']) {
+      const registration = addEventListener.mock.calls.find((call) => (
+        call[0] === eventName
+        && call[2] === true
+      ));
+      expect(registration).toBeDefined();
+      expect(removeEventListener).toHaveBeenCalledWith(
+        eventName,
+        registration![1],
+        true,
+      );
+    }
+  });
+
+  it('forgets a normally canceled native contact before later owner deactivation', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerCancel = vi.fn();
+    harness.container.addEventListener('pointercancel', bubbledPointerCancel);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 56,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.toggle, 'pointercancel', {
+      pointerId: 56,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 56,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(bubbledPointerCancel).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it('removes native completion containment state and listeners when disposed mid-contact', async () => {
+    const harness = await createLayerRoutingHarness();
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 57,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.forward, 'pointerdown', {
+      pointerId: 58,
+      clientX: 182,
+      clientY: 62,
+    });
+
+    harness.manager.dispose();
+    harness.container.append(harness.rendererElement);
+    const receivedEvents: string[] = [];
+    harness.container.addEventListener('pointerup', () => receivedEvents.push('pointerup'));
+    harness.container.addEventListener('pointercancel', () => receivedEvents.push('pointercancel'));
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 57,
+      clientX: 300,
+      clientY: 200,
+    });
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 58,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(receivedEvents).toEqual(['pointerup', 'pointercancel']);
+  });
+
+  it('removes layer gesture listeners and state when disposed mid-gesture', async () => {
+    const container = document.createElement('div');
+    const rendererElement = document.createElement('div');
+    const player = createPlayerDouble();
+    const manager = createManager({
+      createCssRenderer: () => ({
+        domElement: rendererElement,
+        setSize: vi.fn(),
+        render: vi.fn(),
+      }),
+      createPlayer: async () => player.port,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+    await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="toggle"]',
+    )!;
+    mockClientRect(toggle, {
+      left: 100,
+      top: 40,
+      width: 44,
+      height: 44,
+    });
+    dispatchPointer(rendererElement, 'pointerdown', {
+      pointerId: 19,
+      clientX: 122,
+      clientY: 62,
+    });
+
+    manager.dispose();
+    player.port.pauseVideo.mockClear();
+    container.append(rendererElement);
+    const receivedEvents: string[] = [];
+    container.addEventListener('pointerup', () => receivedEvents.push('pointerup'));
+    container.addEventListener('click', () => receivedEvents.push('click'));
+    dispatchPointer(rendererElement, 'pointerup', {
+      pointerId: 19,
+      clientX: 122,
+      clientY: 62,
+    });
+    rendererElement.dispatchEvent(new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 122,
+      clientY: 62,
+    }));
+
+    expect(receivedEvents).toEqual(['pointerup', 'click']);
+    expect(player.port.pauseVideo).not.toHaveBeenCalled();
+  });
+
+  it('removes the complete transport bar when the marker is lost', async () => {
+    const container = document.createElement('div');
+    const manager = createManager({
+      createPlayer: async () => createPlayerDouble().port,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', createSurface());
+    manager.setMarkerVisible('marker-1', true);
+    await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+
+    manager.setMarkerVisible('marker-1', false);
+
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
+    manager.dispose();
+  });
+
   it('ignores hidden surfaces and duplicate activation', async () => {
     const surface = createSurface();
     let createdPlayers = 0;
@@ -74,7 +1807,14 @@ describe('YouTubePlayerManager', () => {
       },
       createPlayer: async () => {
         createdPlayers += 1;
-        return { playVideo() {}, pauseVideo() {}, destroy() {} };
+        return {
+          playVideo() {},
+          pauseVideo() {},
+          seekTo() {},
+          getCurrentTime() { return 0; },
+          getDuration() { return 120; },
+          destroy() {},
+        };
       },
       hitTest: (_pointer, _camera, surfaces) => surfaces[0],
     });
@@ -113,6 +1853,7 @@ describe('YouTubePlayerManager', () => {
     expect(await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera())).toBe('failed');
     expect(surface.mesh.visible).toBe(true);
     expect(container.dataset.youtubeError).toBe('Embedding disabled');
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
 
     manager.dispose();
     manager.dispose();
@@ -191,14 +1932,178 @@ describe('YouTubePlayerManager', () => {
     expect(container.querySelector('[data-youtube-player-object="video-1"]')).toBeNull();
     manager.dispose();
   });
+
+  it('disposes a player that resolves after its pending activation loses the marker', async () => {
+    const creation = createDeferred<YouTubePlayerPort>();
+    const player = createPlayerDouble();
+    const container = document.createElement('div');
+    const cssScene = new Scene();
+    const surface = createSurface();
+    const manager = createManager({
+      createPlayer: () => creation.promise,
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      scene: cssScene,
+    }, container);
+    manager.register('marker-1', surface);
+    manager.setMarkerVisible('marker-1', true);
+
+    const activation = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+    expect(container.querySelector('.youtube-css3d-controls-frame')).not.toBeNull();
+
+    manager.setMarkerVisible('marker-1', false);
+    expect(container.querySelector('.youtube-css3d-controls-frame')).toBeNull();
+    expect(cssScene.children).toHaveLength(0);
+
+    creation.resolve(player.port);
+
+    expect(await activation).toBe('missed');
+    expect(player.port.playVideo).not.toHaveBeenCalled();
+    expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(player.port.destroy).toHaveBeenCalledOnce();
+    expect(container.querySelector('.youtube-css3d-player')).toBeNull();
+    expect(container.querySelector('.youtube-transport-controls')).toBeNull();
+    manager.dispose();
+  });
+
+  it('keeps only the reacquired pending generation when players resolve out of order', async () => {
+    const creations = [
+      createDeferred<YouTubePlayerPort>(),
+      createDeferred<YouTubePlayerPort>(),
+    ];
+    const firstPlayer = createPlayerDouble();
+    const secondPlayer = createPlayerDouble();
+    const container = document.createElement('div');
+    const surface = createSurface();
+    let creationIndex = 0;
+    const manager = createManager({
+      createPlayer: () => {
+        const creation = creations[creationIndex];
+        creationIndex += 1;
+        return creation.promise;
+      },
+      hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+    }, container);
+    manager.register('marker-1', surface);
+    manager.setMarkerVisible('marker-1', true);
+
+    const firstActivation = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+    manager.setMarkerVisible('marker-1', false);
+    manager.setMarkerVisible('marker-1', true);
+    const secondActivation = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+    const duplicateWhilePending = manager.activateFromPointer(
+      { x: 0, y: 0 },
+      new PerspectiveCamera(),
+    );
+
+    expect(await duplicateWhilePending).toBe('missed');
+    expect(creationIndex).toBe(2);
+
+    creations[1].resolve(secondPlayer.port);
+    expect(await secondActivation).toBe('activated');
+    creations[0].resolve(firstPlayer.port);
+    expect(await firstActivation).toBe('missed');
+
+    expect(firstPlayer.port.playVideo).not.toHaveBeenCalled();
+    expect(firstPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(firstPlayer.port.destroy).toHaveBeenCalledOnce();
+    expect(secondPlayer.port.playVideo).toHaveBeenCalledOnce();
+    expect(secondPlayer.port.pauseVideo).not.toHaveBeenCalled();
+    expect(secondPlayer.port.destroy).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('.youtube-css3d-player')).toHaveLength(1);
+    expect(container.querySelectorAll('.youtube-css3d-controls-frame')).toHaveLength(1);
+
+    manager.setMarkerVisible('marker-1', false);
+    expect(secondPlayer.port.pauseVideo).toHaveBeenCalledOnce();
+    expect(secondPlayer.port.destroy).toHaveBeenCalledOnce();
+    manager.dispose();
+  });
 });
 
 function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((_resolve, rejectPromise) => {
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
     reject = rejectPromise;
   });
-  return { promise, reject };
+  return { promise, resolve, reject };
+}
+
+function createPlayerDouble() {
+  return {
+    port: {
+      playVideo: vi.fn(),
+      pauseVideo: vi.fn(),
+      seekTo: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      getDuration: vi.fn(() => 120),
+      destroy: vi.fn(),
+    } satisfies YouTubePlayerPort,
+  };
+}
+
+async function createLayerRoutingHarness() {
+  const container = document.createElement('div');
+  const rendererElement = document.createElement('div');
+  const player = createPlayerDouble();
+  let onStateChange: ((state: number) => void) | undefined;
+  const manager = createManager({
+    createCssRenderer: () => ({
+      domElement: rendererElement,
+      setSize: vi.fn(),
+      render: vi.fn(),
+    }),
+    createPlayer: async (_host, _youtube, stateHandler) => {
+      onStateChange = stateHandler;
+      return player.port;
+    },
+    hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+  }, container);
+  manager.register('marker-1', createSurface());
+  manager.setMarkerVisible('marker-1', true);
+  await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+  onStateChange?.(1);
+
+  const toggle = container.querySelector<HTMLButtonElement>(
+    '[data-youtube-action="toggle"]',
+  )!;
+  const controls = container.querySelector<HTMLElement>(
+    '.youtube-transport-controls',
+  )!;
+  const forward = container.querySelector<HTMLButtonElement>(
+    '[data-youtube-action="forward"]',
+  )!;
+  mockClientRect(toggle, {
+    left: 100,
+    top: 40,
+    width: 44,
+    height: 44,
+  });
+  mockClientRect(forward, {
+    left: 160,
+    top: 40,
+    width: 44,
+    height: 44,
+  });
+
+  return {
+    container,
+    rendererElement,
+    player,
+    manager,
+    toggle,
+    forward,
+    controls,
+  };
 }
 
 function createManager(
@@ -219,18 +2124,56 @@ function createManager(
     createPlayer: async () => ({
       playVideo() {},
       pauseVideo() {},
+      seekTo() {},
+      getCurrentTime() { return 0; },
+      getDuration() { return 120; },
       destroy() {},
     }),
+    transportHitTest: (point, candidates) => {
+      const sortedCandidates = [...candidates]
+        .sort((first, second) => second.stackOrder - first.stackOrder);
+      for (const candidate of sortedCandidates) {
+        const buttons = [
+          ...candidate.controls.querySelectorAll<HTMLButtonElement>('button'),
+        ].reverse();
+        for (const button of buttons) {
+          if (
+            !button.disabled
+            && clientRectContainsPoint(button.getBoundingClientRect(), point)
+          ) {
+            return {
+              ownerObjectId: candidate.ownerObjectId,
+              ownerGeneration: candidate.ownerGeneration,
+              target: button,
+              button,
+            };
+          }
+        }
+        if (
+          clientRectContainsPoint(
+            candidate.controls.getBoundingClientRect(),
+            point,
+          )
+        ) {
+          return {
+            ownerObjectId: candidate.ownerObjectId,
+            ownerGeneration: candidate.ownerGeneration,
+            target: candidate.controls,
+          };
+        }
+      }
+      return undefined;
+    },
     ...overrides,
   });
 }
 
-function createSurface() {
+function createSurface(objectId = 'video-1') {
   const root = new Group();
   const mesh = new Mesh(new PlaneGeometry(16 / 9, 1), new MeshBasicMaterial());
   root.add(mesh);
   return {
-    objectId: 'video-1',
+    objectId,
     root,
     mesh,
     youtube: {
@@ -239,4 +2182,193 @@ function createSurface() {
       thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
     },
   };
+}
+
+function mockClientRect(
+  element: HTMLElement,
+  rect: { left: number; top: number; width: number; height: number },
+): void {
+  element.getBoundingClientRect = vi.fn(() => ({
+    x: rect.left,
+    y: rect.top,
+    left: rect.left,
+    top: rect.top,
+    right: rect.left + rect.width,
+    bottom: rect.top + rect.height,
+    width: rect.width,
+    height: rect.height,
+    toJSON: () => ({}),
+  }));
+}
+
+function mockOffsetBox(
+  element: HTMLElement,
+  box: { left: number; top: number; width: number; height: number },
+): void {
+  Object.defineProperties(element, {
+    offsetLeft: { configurable: true, value: box.left },
+    offsetTop: { configurable: true, value: box.top },
+    offsetWidth: { configurable: true, value: box.width },
+    offsetHeight: { configurable: true, value: box.height },
+  });
+}
+
+function clientRectContainsPoint(
+  rect: DOMRect,
+  point: { x: number; y: number },
+): boolean {
+  return rect.width > 0
+    && rect.height > 0
+    && point.x >= rect.left
+    && point.x <= rect.right
+    && point.y >= rect.top
+    && point.y <= rect.bottom;
+}
+
+function dispatchPointer(
+  target: HTMLElement,
+  type: string,
+  values: {
+    pointerId: number;
+    pointerType?: string;
+    clientX: number;
+    clientY: number;
+    timeStamp?: number;
+  },
+): void {
+  const event = new Event(type, {
+    bubbles: true,
+    cancelable: true,
+  }) as Event & Omit<typeof values, 'timeStamp'>;
+  const { timeStamp, ...pointerValues } = values;
+  Object.assign(event, pointerValues);
+  setEventTimeStamp(event, timeStamp);
+  target.dispatchEvent(event);
+}
+
+type TouchPoint = {
+  identifier: number;
+  clientX: number;
+  clientY: number;
+};
+
+function dispatchTouch(
+  target: HTMLElement,
+  type: string,
+  touches: TouchPoint[],
+  changedTouches: TouchPoint[] = touches,
+  timeStamp?: number,
+): void {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'touches', { value: touches });
+  Object.defineProperty(event, 'changedTouches', { value: changedTouches });
+  setEventTimeStamp(event, timeStamp);
+  target.dispatchEvent(event);
+}
+
+function dispatchMouse(
+  target: HTMLElement,
+  type: string,
+  values: {
+    clientX: number;
+    clientY: number;
+    pointerId?: number;
+    timeStamp?: number;
+  },
+): void {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    clientX: values.clientX,
+    clientY: values.clientY,
+  });
+  if (values.pointerId !== undefined) {
+    Object.defineProperty(event, 'pointerId', { value: values.pointerId });
+  }
+  setEventTimeStamp(event, values.timeStamp);
+  target.dispatchEvent(event);
+}
+
+type LayerContact = {
+  id: number;
+  clientX: number;
+  clientY: number;
+};
+
+function completeLayerContact(
+  target: HTMLElement,
+  inputType: 'pointer' | 'touch',
+  contact: LayerContact & {
+    startTime: number;
+    endTime: number;
+  },
+): void {
+  startLayerContact(target, inputType, contact, contact.startTime);
+  endLayerContact(target, inputType, contact, contact.endTime);
+}
+
+function startLayerContact(
+  target: HTMLElement,
+  inputType: 'pointer' | 'touch',
+  contact: LayerContact,
+  timeStamp: number,
+  otherActiveContacts: LayerContact[] = [],
+): void {
+  if (inputType === 'pointer') {
+    dispatchPointer(target, 'pointerdown', {
+      pointerId: contact.id,
+      clientX: contact.clientX,
+      clientY: contact.clientY,
+      timeStamp,
+    });
+    return;
+  }
+  const touch = toTouchPoint(contact);
+  dispatchTouch(
+    target,
+    'touchstart',
+    [...otherActiveContacts.map(toTouchPoint), touch],
+    [touch],
+    timeStamp,
+  );
+}
+
+function endLayerContact(
+  target: HTMLElement,
+  inputType: 'pointer' | 'touch',
+  contact: LayerContact,
+  timeStamp: number,
+  remainingContacts: LayerContact[] = [],
+): void {
+  if (inputType === 'pointer') {
+    dispatchPointer(target, 'pointerup', {
+      pointerId: contact.id,
+      clientX: contact.clientX,
+      clientY: contact.clientY,
+      timeStamp,
+    });
+    return;
+  }
+  dispatchTouch(
+    target,
+    'touchend',
+    remainingContacts.map(toTouchPoint),
+    [toTouchPoint(contact)],
+    timeStamp,
+  );
+}
+
+function toTouchPoint(contact: LayerContact): TouchPoint {
+  return {
+    identifier: contact.id,
+    clientX: contact.clientX,
+    clientY: contact.clientY,
+  };
+}
+
+function setEventTimeStamp(event: Event, timeStamp: number | undefined): void {
+  if (timeStamp === undefined) {
+    return;
+  }
+  Object.defineProperty(event, 'timeStamp', { value: timeStamp });
 }

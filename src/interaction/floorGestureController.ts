@@ -18,7 +18,17 @@ export type FloorGestureHandlers = {
 
 const MOVEMENT_THRESHOLD_PX = 12;
 const LONG_PRESS_DELAY_MS = 450;
-const INTERACTIVE_TARGET_SELECTOR = 'button, a, input, select, textarea, [role="button"], .youtube-css3d-player';
+const INTERACTIVE_TARGET_SELECTOR = [
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  '[role="button"]',
+  '.youtube-css3d-player',
+  '.youtube-css3d-controls-frame',
+  '.youtube-transport-controls',
+].join(', ');
 
 export class FloorGestureController {
   private readonly target: HTMLElement;

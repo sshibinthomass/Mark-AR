@@ -200,7 +200,17 @@ export async function startMarkerAR(
       if (
         event.target instanceof Element
         && event.target.closest(
-          '.youtube-css3d-player, button, a, input, select, textarea, [role="button"]',
+          [
+            '.youtube-css3d-player',
+            '.youtube-css3d-controls-frame',
+            '.youtube-transport-controls',
+            'button',
+            'a',
+            'input',
+            'select',
+            'textarea',
+            '[role="button"]',
+          ].join(', '),
         )
       ) {
         return;

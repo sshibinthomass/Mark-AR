@@ -488,6 +488,23 @@ describe('prepareFloorPlacement', () => {
     expect(harness.youtube.dispose).toHaveBeenCalledOnce();
   });
 
+  it('mounts the floor YouTube manager on the gesture surface', async () => {
+    const harness = createHarness({
+      targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
+    });
+    const result = await prepareWithHarness(harness);
+    const controller = supportedController(result);
+
+    await controller.launch();
+
+    expect(harness.dependencies.createYouTubePlayerManager).toHaveBeenCalledWith(
+      harness.options.gestureSurface,
+      expect.any(Function),
+    );
+
+    controller.dispose();
+  });
+
   it('plays a tapped floor video without replacing the placed transform', async () => {
     const harness = createHarness({
       targetScenes: [fakeTargetScene(Promise.resolve(), [createSurface()])],
@@ -530,6 +547,9 @@ describe('prepareFloorPlacement', () => {
     const player: YouTubePlayerPort = {
       playVideo: vi.fn(),
       pauseVideo: vi.fn(),
+      seekTo: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      getDuration: vi.fn(() => 120),
       destroy: vi.fn(),
     };
     harness.dependencies.createYouTubePlayerManager = vi.fn((container, onPlaybackError) => (
@@ -642,6 +662,9 @@ describe('prepareFloorPlacement', () => {
     const player: YouTubePlayerPort = {
       playVideo: vi.fn(),
       pauseVideo: vi.fn(),
+      seekTo: vi.fn(),
+      getCurrentTime: vi.fn(() => 0),
+      getDuration: vi.fn(() => 120),
       destroy: vi.fn(),
     };
     const hitTest = vi.fn((_pointer, _camera, surfaces) => surfaces[0]);

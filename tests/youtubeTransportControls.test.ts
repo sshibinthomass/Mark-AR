@@ -1,0 +1,276 @@
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createYouTubeTransportControls,
+  type YouTubeTransportPlayer,
+} from '../src/ar/youtubeTransportControls';
+
+function createPlayer(
+  input: { currentTime?: number; duration?: number } = {},
+): YouTubeTransportPlayer {
+  return {
+    playVideo: vi.fn(),
+    pauseVideo: vi.fn(),
+    seekTo: vi.fn(),
+    getCurrentTime: vi.fn(() => input.currentTime ?? 0),
+    getDuration: vi.fn(() => input.duration ?? 120),
+  };
+}
+
+describe('YouTube transport controls', () => {
+  it('renders rewind, play, and forward buttons in accessible order', () => {
+    const controls = createYouTubeTransportControls();
+    const buttons = [...controls.element.querySelectorAll('button')];
+
+    expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Rewind 10 seconds',
+      'Play video',
+      'Forward 10 seconds',
+    ]);
+    expect(controls.element.hidden).toBe(true);
+  });
+
+  it('plays from a paused state and pauses from a playing state', () => {
+    const controls = createYouTubeTransportControls();
+    const player = createPlayer();
+    controls.bindPlayer(player);
+    const toggle = controls.element.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="toggle"]',
+    )!;
+
+    toggle.click();
+    expect(player.playVideo).toHaveBeenCalledOnce();
+
+    controls.setPlayerState(1);
+    expect(toggle.textContent).toBe('Pause');
+    expect(toggle.getAttribute('aria-label')).toBe('Pause video');
+    toggle.click();
+    expect(player.pauseVideo).toHaveBeenCalledOnce();
+
+    controls.setPlayerState(2);
+    expect(toggle.textContent).toBe('Play');
+    expect(toggle.getAttribute('aria-label')).toBe('Play video');
+  });
+
+  it('retains the stable toggle label while buffering', () => {
+    const controls = createYouTubeTransportControls();
+    controls.bindPlayer(createPlayer());
+    controls.setPlayerState(1);
+    controls.setPlayerState(3);
+    expect(controls.element.querySelector('[data-youtube-action="toggle"]')?.textContent)
+      .toBe('Pause');
+  });
+
+  it.each([
+    { currentTime: 42, duration: 120, action: 'rewind', expected: 32 },
+    { currentTime: 4, duration: 120, action: 'rewind', expected: 0 },
+    { currentTime: 42, duration: 120, action: 'forward', expected: 52 },
+    { currentTime: 116, duration: 120, action: 'forward', expected: 120 },
+    { currentTime: Number.NaN, duration: 120, action: 'forward', expected: 10 },
+    { currentTime: 42, duration: Number.NaN, action: 'forward', expected: 52 },
+  ])(
+    'seeks $action safely from $currentTime with duration $duration',
+    ({ currentTime, duration, action, expected }) => {
+      const controls = createYouTubeTransportControls();
+      const player = createPlayer({ currentTime, duration });
+      controls.bindPlayer(player);
+
+      controls.element.querySelector<HTMLButtonElement>(
+        `[data-youtube-action="${action}"]`,
+      )!.click();
+
+      expect(player.seekTo).toHaveBeenCalledWith(expected, true);
+    },
+  );
+
+  it('removes its DOM and disables commands when disposed', () => {
+    const controls = createYouTubeTransportControls();
+    const player = createPlayer();
+    const parent = document.createElement('div');
+    parent.append(controls.element);
+    const playButton = controls.element.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="toggle"]',
+    )!;
+    controls.bindPlayer(player);
+
+    controls.dispose();
+    playButton.click();
+
+    expect(parent.children).toHaveLength(0);
+    expect(player.playVideo).not.toHaveBeenCalled();
+  });
+
+  it('keeps two active control bars bound to their own players', () => {
+    const first = createYouTubeTransportControls();
+    const second = createYouTubeTransportControls();
+    const firstPlayer = createPlayer({ currentTime: 40 });
+    const secondPlayer = createPlayer({ currentTime: 80 });
+    first.bindPlayer(firstPlayer);
+    second.bindPlayer(secondPlayer);
+
+    first.element.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="rewind"]',
+    )!.click();
+
+    expect(firstPlayer.seekTo).toHaveBeenCalledWith(30, true);
+    expect(secondPlayer.seekTo).not.toHaveBeenCalled();
+  });
+
+  it.each(['rewind', 'toggle', 'forward'])(
+    'keeps transport pointer and touch events from bubbling from the %s button',
+    (action) => {
+      const controls = createYouTubeTransportControls();
+      const ancestor = document.createElement('div');
+      const receivedEvents: string[] = [];
+      ancestor.append(controls.element);
+      for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
+        ancestor.addEventListener(eventName, () => receivedEvents.push(eventName));
+      }
+
+      const button = controls.element.querySelector<HTMLButtonElement>(
+        `[data-youtube-action="${action}"]`,
+      )!;
+      for (const eventName of ['pointerdown', 'pointermove', 'pointerup', 'touchstart', 'touchmove', 'touchend']) {
+        button.dispatchEvent(new Event(eventName, { bubbles: true }));
+      }
+
+      expect(receivedEvents).toEqual([]);
+    },
+  );
+
+  it('contains bar-padding input through a pointer move outside the captured root', () => {
+    const controls = createYouTubeTransportControls();
+    const ancestor = document.createElement('div');
+    const receivedEvents: string[] = [];
+    const eventNames = [
+      'pointerdown',
+      'pointermove',
+      'pointerup',
+      'pointercancel',
+      'touchstart',
+      'touchmove',
+      'touchend',
+      'touchcancel',
+      'click',
+    ];
+    for (const eventName of eventNames) {
+      ancestor.addEventListener(eventName, () => receivedEvents.push(eventName));
+    }
+    ancestor.append(controls.element);
+    const setPointerCapture = vi.fn();
+    const releasePointerCapture = vi.fn();
+    Object.assign(controls.element, {
+      setPointerCapture,
+      releasePointerCapture,
+    });
+
+    dispatchPointer(controls.element, 'pointerdown', {
+      pointerId: 17,
+      clientX: 4,
+      clientY: 4,
+    });
+    dispatchPointer(controls.element, 'pointermove', {
+      pointerId: 17,
+      clientX: 500,
+      clientY: 500,
+    });
+    dispatchPointer(controls.element, 'pointerup', {
+      pointerId: 17,
+      clientX: 500,
+      clientY: 500,
+    });
+    for (const eventName of ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'click']) {
+      controls.element.dispatchEvent(new Event(eventName, {
+        bubbles: true,
+        cancelable: true,
+      }));
+    }
+
+    expect(setPointerCapture).toHaveBeenCalledWith(17);
+    expect(releasePointerCapture).toHaveBeenCalledWith(17);
+    expect(receivedEvents).toEqual([]);
+  });
+
+  it('suppresses a captured button click after release over a different target', () => {
+    const controls = createYouTubeTransportControls();
+    const player = createPlayer({ currentTime: 40 });
+    controls.bindPlayer(player);
+    const rewind = controls.element.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="rewind"]',
+    )!;
+    const forward = controls.element.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="forward"]',
+    )!;
+    Object.assign(rewind, {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    });
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(forward);
+
+    dispatchPointer(rewind, 'pointerdown', {
+      pointerId: 18,
+      clientX: 20,
+      clientY: 20,
+    });
+    dispatchPointer(rewind, 'pointerup', {
+      pointerId: 18,
+      clientX: 180,
+      clientY: 20,
+    });
+    dispatchPointer(rewind, 'click', {
+      pointerId: 18,
+      clientX: 180,
+      clientY: 20,
+    });
+
+    expect(player.seekTo).not.toHaveBeenCalled();
+  });
+
+  it('preserves a captured native button click after same-target release', () => {
+    const controls = createYouTubeTransportControls();
+    const player = createPlayer({ currentTime: 40 });
+    controls.bindPlayer(player);
+    const rewind = controls.element.querySelector<HTMLButtonElement>(
+      '[data-youtube-action="rewind"]',
+    )!;
+    Object.assign(rewind, {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    });
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(rewind);
+
+    dispatchPointer(rewind, 'pointerdown', {
+      pointerId: 19,
+      clientX: 20,
+      clientY: 20,
+    });
+    dispatchPointer(rewind, 'pointerup', {
+      pointerId: 19,
+      clientX: 20,
+      clientY: 20,
+    });
+    dispatchPointer(rewind, 'click', {
+      pointerId: 19,
+      clientX: 20,
+      clientY: 20,
+    });
+
+    expect(player.seekTo).toHaveBeenCalledWith(30, true);
+  });
+});
+
+function dispatchPointer(
+  target: HTMLElement,
+  type: string,
+  values: {
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+  },
+): void {
+  const event = new Event(type, {
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.assign(event, values);
+  target.dispatchEvent(event);
+}

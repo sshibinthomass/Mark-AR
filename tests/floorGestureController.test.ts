@@ -196,6 +196,29 @@ describe('FloorGestureController', () => {
     expect(handlers.onDrag).not.toHaveBeenCalled();
     expect(handlers.onPinch).not.toHaveBeenCalled();
   });
+
+  it('ignores padding and gaps in the separate YouTube controls frame', () => {
+    const { target, handlers, controller } = setupController();
+    controller.connect();
+
+    const frame = document.createElement('div');
+    frame.className = 'youtube-css3d-controls-frame';
+    const controls = frame.appendChild(document.createElement('div'));
+    controls.className = 'youtube-transport-controls';
+    target.append(frame);
+
+    const start = dispatchTouch(controls, 'touchstart', [{ clientX: 1, clientY: 2 }]);
+    const move = dispatchTouch(controls, 'touchmove', [{ clientX: 40, clientY: 50 }]);
+    const end = dispatchTouch(controls, 'touchend', [], [{ clientX: 40, clientY: 50 }]);
+
+    expect(start.defaultPrevented).toBe(false);
+    expect(move.defaultPrevented).toBe(false);
+    expect(end.defaultPrevented).toBe(false);
+    expect(handlers.onTap).not.toHaveBeenCalled();
+    expect(handlers.onLongPress).not.toHaveBeenCalled();
+    expect(handlers.onDrag).not.toHaveBeenCalled();
+    expect(handlers.onPinch).not.toHaveBeenCalled();
+  });
 });
 
 function setupController(
