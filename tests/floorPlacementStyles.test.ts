@@ -9,11 +9,11 @@ function cssRule(selector: string, source = css): string {
   return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
 }
 
-function mediaSection(query: string): string {
-  const start = css.indexOf(`@media ${query}`);
+function mediaSection(query: string, source = css): string {
+  const start = source.indexOf(`@media ${query}`);
   if (start < 0) return '';
-  const nextMedia = css.indexOf('@media ', start + 1);
-  return css.slice(start, nextMedia < 0 ? css.length : nextMedia);
+  const nextMedia = source.indexOf('@media ', start + 1);
+  return source.slice(start, nextMedia < 0 ? source.length : nextMedia);
 }
 
 describe('floor placement styles', () => {
@@ -123,6 +123,18 @@ describe('floor placement styles', () => {
     expect(selectionControls).toContain('flex: 1 1 auto');
     expect(selectionButtons).toContain('flex: 0 1 auto');
     expect(selectionHint).toContain('flex-basis: 100%');
+  });
+
+  it('keeps the branded compact-button rule effective after the generic mobile button rule', () => {
+    const brandedMobile = mediaSection('(max-width: 767px)', brandedCss);
+    const genericButtonRule = brandedMobile.lastIndexOf('.floor-ar-controls button {');
+    const compactButtonRule = brandedMobile.lastIndexOf('.floor-ar-selection-controls button {');
+
+    expect(genericButtonRule).toBeGreaterThanOrEqual(0);
+    expect(compactButtonRule).toBeGreaterThan(genericButtonRule);
+    expect(cssRule('.floor-ar-selection-controls button', brandedMobile)).toContain(
+      'flex: 0 1 auto',
+    );
   });
 
   it('removes floor-control motion when reduced motion is requested', () => {

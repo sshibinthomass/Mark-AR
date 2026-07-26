@@ -2233,10 +2233,6 @@ button:disabled,
     flex: 1 1 auto;
   }
 
-  .floor-ar-selection-controls button {
-    flex: 0 1 auto;
-  }
-
   #floor-ar-selection-hint {
     flex-basis: 100%;
   }
@@ -2248,6 +2244,10 @@ button:disabled,
 
   .floor-ar-controls button {
     flex: 1 1 140px;
+  }
+
+  .floor-ar-selection-controls button {
+    flex: 0 1 auto;
   }
 
   .target-workspace {
