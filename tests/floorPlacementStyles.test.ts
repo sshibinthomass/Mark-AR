@@ -2,17 +2,18 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/style.css', 'utf8');
+const brandedCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
 
 function cssRule(selector: string, source = css): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
 }
 
-function mediaSection(query: string): string {
-  const start = css.indexOf(`@media ${query}`);
+function mediaSection(query: string, source = css): string {
+  const start = source.indexOf(`@media ${query}`);
   if (start < 0) return '';
-  const nextMedia = css.indexOf('@media ', start + 1);
-  return css.slice(start, nextMedia < 0 ? css.length : nextMedia);
+  const nextMedia = source.indexOf('@media ', start + 1);
+  return source.slice(start, nextMedia < 0 ? source.length : nextMedia);
 }
 
 describe('floor placement styles', () => {
@@ -93,6 +94,46 @@ describe('floor placement styles', () => {
     expect(rotation).toContain('min-height: 44px');
     expect(css).toMatch(
       /\.floor-ar-back:focus-visible,\s*\.floor-ar-controls button:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--gold\)/m,
+    );
+  });
+
+  it('styles the selection toggle as a compact pressed control beside Done', () => {
+    const selectionControls = cssRule('.floor-ar-selection-controls');
+    const selectAll = cssRule('#floor-ar-select-all');
+    const pressedSelectAll = cssRule('#floor-ar-select-all[aria-pressed="true"]');
+    const selectionHint = cssRule('#floor-ar-selection-hint');
+    const brandedSelectionHint = cssRule('#floor-ar-selection-hint', brandedCss);
+
+    expect(selectionControls).toContain('display: flex');
+    expect(selectionControls).toContain('gap: 8px');
+    expect(selectionControls).toContain('align-items: center');
+    expect(selectAll).toContain('min-height: 44px');
+    expect(selectAll).toContain('padding: 0 14px');
+    expect(pressedSelectAll).toContain('background: var(--teal)');
+    expect(selectionHint).toContain('font-size: 12px');
+    expect(brandedSelectionHint).toContain('color: var(--color-mist-slate)');
+  });
+
+  it('keeps selection controls compact at the existing mobile breakpoint', () => {
+    const mobile = mediaSection('(max-width: 620px)');
+    const selectionControls = cssRule('.floor-ar-selection-controls', mobile);
+    const selectionButtons = cssRule('.floor-ar-selection-controls button', mobile);
+    const selectionHint = cssRule('#floor-ar-selection-hint', mobile);
+
+    expect(selectionControls).toContain('flex: 1 1 auto');
+    expect(selectionButtons).toContain('flex: 0 1 auto');
+    expect(selectionHint).toContain('flex-basis: 100%');
+  });
+
+  it('keeps the branded compact-button rule effective after the generic mobile button rule', () => {
+    const brandedMobile = mediaSection('(max-width: 767px)', brandedCss);
+    const genericButtonRule = brandedMobile.lastIndexOf('.floor-ar-controls button {');
+    const compactButtonRule = brandedMobile.lastIndexOf('.floor-ar-selection-controls button {');
+
+    expect(genericButtonRule).toBeGreaterThanOrEqual(0);
+    expect(compactButtonRule).toBeGreaterThan(genericButtonRule);
+    expect(cssRule('.floor-ar-selection-controls button', brandedMobile)).toContain(
+      'flex: 0 1 auto',
     );
   });
 

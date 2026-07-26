@@ -9,6 +9,159 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTargetSceneObject } from '../src/ar/targetSceneObject';
 
 describe('createTargetSceneObject', () => {
+  it('exposes one identity interaction root for every authored object kind', async () => {
+    const loadedModel = new Group();
+    loadedModel.name = 'loaded-chair';
+    const textGroup = new Group();
+    textGroup.name = 'rendered-title';
+    const scene = createTargetSceneObject({
+      objects: [{
+        kind: 'image',
+        id: 'poster',
+        image: {
+          url: 'poster.webp',
+          label: 'Poster',
+          width: 1200,
+          height: 800,
+          aspectRatio: 1.5,
+        },
+        placement: {
+          scale: 1,
+          offsetX: 0,
+          offsetY: 0,
+          height: 0.2,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+        },
+      }, {
+        kind: 'youtube',
+        id: 'trailer',
+        youtube: {
+          videoId: 'M7lc1UVf-VE',
+          url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE',
+          thumbnailUrl: 'https://i.ytimg.com/vi/M7lc1UVf-VE/hqdefault.jpg',
+        },
+        placement: {
+          scale: 1,
+          offsetX: 0.2,
+          offsetY: 0,
+          height: 0.2,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+        },
+      }, {
+        kind: 'text',
+        id: 'title',
+        text: { value: 'Selectable', language: 'english', font: 'studio-sans' },
+        placement: {
+          scale: 1,
+          offsetX: -0.2,
+          offsetY: 0,
+          height: 0.2,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+        },
+      }, {
+        kind: 'model',
+        id: 'chair',
+        model: { id: 'chair-model', label: 'Chair', url: 'chair.glb' },
+        placement: {
+          scale: 1,
+          offsetX: 0,
+          offsetY: 0,
+          height: 0,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+        },
+      }],
+      loadTexture: async () => new Texture(),
+      createTextObject: () => textGroup,
+      loadModelGroup: async () => loadedModel,
+    }, { loadMode: 'strict' });
+
+    await scene.ready;
+
+    expect(scene.selectableObjects).toHaveLength(4);
+    expect(scene.selectableObjects.map(({ objectId, kind }) => ({ objectId, kind }))).toEqual([
+      { objectId: 'poster', kind: 'image' },
+      { objectId: 'trailer', kind: 'youtube' },
+      { objectId: 'title', kind: 'text' },
+      { objectId: 'chair', kind: 'model' },
+    ]);
+    for (const selectable of scene.selectableObjects) {
+      expect(selectable.interactionRoot.name).toBe(
+        `cloudflare-interaction-root-${selectable.objectId}`,
+      );
+      expect(selectable.contentRoot.parent).toBe(selectable.interactionRoot);
+      expect(selectable.interactionRoot.position.toArray()).toEqual([0, 0, 0]);
+      expect(selectable.interactionRoot.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+      expect(selectable.interactionRoot.scale.toArray()).toEqual([1, 1, 1]);
+    }
+    expect(scene.selectableObjects[3].contentRoot.children).toContain(loadedModel);
+  });
+
+  it('keeps session transforms on an interaction root when authored animation updates its child', () => {
+    const scene = createTargetSceneObject({
+      objects: [{
+        kind: 'text',
+        id: 'animated-title',
+        text: { value: 'Moving', language: 'english', font: 'studio-sans' },
+        placement: {
+          scale: 1,
+          offsetX: 0,
+          offsetY: 0,
+          height: 0.2,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+        },
+        animation: {
+          preset: 'custom',
+          tracks: [{
+            property: 'positionX',
+            motion: 'smooth',
+            amount: 0.25,
+            speed: 0.5,
+            phase: 0,
+          }],
+        },
+      }],
+      createTextObject: () => new Group(),
+    });
+    const selectable = scene.selectableObjects[0];
+    selectable.interactionRoot.position.set(2, 3, 4);
+    selectable.interactionRoot.rotation.y = 0.75;
+    selectable.interactionRoot.scale.setScalar(1.5);
+
+    scene.update(0.5);
+
+    expect(selectable.interactionRoot.position.toArray()).toEqual([2, 3, 4]);
+    expect(selectable.interactionRoot.rotation.y).toBeCloseTo(0.75);
+    expect(selectable.interactionRoot.scale.toArray()).toEqual([1.5, 1.5, 1.5]);
+    expect(selectable.contentRoot.position.x).toBeCloseTo(0.25);
+  });
+
+  it('exposes a legacy top-level model as a selectable model', async () => {
+    const loadedModel = new Group();
+    const scene = createTargetSceneObject({
+      model: { id: 'legacy-chair', label: 'Legacy chair', url: 'chair.glb' },
+      loadModelGroup: async () => loadedModel,
+    }, { loadMode: 'strict' });
+
+    await scene.ready;
+
+    expect(scene.selectableObjects).toHaveLength(1);
+    expect(scene.selectableObjects[0]).toEqual(expect.objectContaining({
+      objectId: 'legacy-chair',
+      kind: 'model',
+    }));
+    expect(scene.selectableObjects[0].contentRoot.children).toContain(loadedModel);
+  });
+
   it('renders image and YouTube objects as transformed media planes', async () => {
     const texture = new Texture();
     const scene = createTargetSceneObject({
@@ -55,6 +208,7 @@ describe('createTargetSceneObject', () => {
     await scene.ready;
 
     const posterRoot = scene.group.getObjectByName('cloudflare-model-root-poster') as Group;
+    const trailerRoot = scene.group.getObjectByName('cloudflare-model-root-trailer') as Group;
     const posterPlane = scene.group.getObjectByName('target-media-plane-poster') as Mesh;
     const trailerPlane = scene.group.getObjectByName('target-media-plane-trailer') as Mesh;
     expect(posterRoot.position.toArray()).toEqual([0.25, 0.3, -0.1]);
@@ -62,7 +216,11 @@ describe('createTargetSceneObject', () => {
     expect(posterPlane).toBeInstanceOf(Mesh);
     expect(trailerPlane).toBeInstanceOf(Mesh);
     expect(scene.youtubeSurfaces).toEqual([
-      expect.objectContaining({ objectId: 'trailer', mesh: trailerPlane }),
+      expect.objectContaining({
+        objectId: 'trailer',
+        root: trailerRoot,
+        mesh: trailerPlane,
+      }),
     ]);
   });
 
@@ -142,6 +300,12 @@ describe('createTargetSceneObject', () => {
     const groupRoot = scene.group.getObjectByName('cloudflare-group-root-room') as Group;
     const chairRoot = scene.group.getObjectByName('cloudflare-model-root-chair') as Group;
     const titleRoot = scene.group.getObjectByName('cloudflare-model-root-title') as Group;
+    const chairInteractionRoot = scene.group.getObjectByName(
+      'cloudflare-interaction-root-chair',
+    ) as Group;
+    const titleInteractionRoot = scene.group.getObjectByName(
+      'cloudflare-interaction-root-title',
+    ) as Group;
     expect(scene.group.name).toBe('cloudflare-target-scene');
     expect(scene.group.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
     expect(groupRoot.position.toArray()).toEqual([0.3, 0.4, -0.25]);
@@ -149,13 +313,15 @@ describe('createTargetSceneObject', () => {
     expect(groupRoot.rotation.x).toBeCloseTo(Math.PI / 18);
     expect(groupRoot.rotation.y).toBeCloseTo(Math.PI / 9);
     expect(groupRoot.rotation.z).toBeCloseTo(Math.PI / 6);
-    expect(chairRoot.parent).toBe(groupRoot);
+    expect(chairInteractionRoot.parent).toBe(groupRoot);
+    expect(chairRoot.parent).toBe(chairInteractionRoot);
     expect(chairRoot.position.toArray()).toEqual([-0.2, 0.1, 0.15]);
     expect(chairRoot.scale.toArray()).toEqual([0.8, 0.8, 0.8]);
     expect(chairRoot.rotation.x).toBeCloseTo(-Math.PI / 12);
     expect(chairRoot.rotation.y).toBeCloseTo(25 * Math.PI / 180);
     expect(chairRoot.rotation.z).toBeCloseTo(2 * Math.PI / 9);
-    expect(titleRoot.parent).toBe(scene.group);
+    expect(titleInteractionRoot.parent).toBe(scene.group);
+    expect(titleRoot.parent).toBe(titleInteractionRoot);
     expect(titleRoot.position.toArray()).toEqual([0.25, 0.22, -0.1]);
     expect(titleRoot.scale.toArray()).toEqual([1.1, 1.1, 1.1]);
     expect(titleRoot.children).toContain(textGroup);

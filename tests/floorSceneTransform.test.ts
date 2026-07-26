@@ -58,6 +58,26 @@ describe('FloorSceneTransform', () => {
     expect(root.scale.toArray()).toEqual([0.1, 0.1, 0.1]);
   });
 
+  it('moves by a horizontal world delta without changing floor height, rotation, or scale', () => {
+    const root = new Group();
+    const transform = new FloorSceneTransform(root);
+    const baseQuaternion = new Quaternion().setFromEuler(new Euler(0, Math.PI / 5, 0));
+    transform.placeAt(new Matrix4().compose(
+      new Vector3(1, 0.35, -2),
+      baseQuaternion,
+      new Vector3(1, 1, 1),
+    ));
+    transform.rotateTo(30);
+    transform.scaleBy(1.75);
+    const quaternionBeforeMove = root.quaternion.clone();
+
+    transform.moveByWorldDelta(new Vector3(0.8, 7, -1.2));
+
+    expect(root.position.toArray()).toEqual([1.8, 0.35, -3.2]);
+    expect(root.quaternion.angleTo(quaternionBeforeMove)).toBeCloseTo(0);
+    expect(root.scale.toArray()).toEqual([1.75, 1.75, 1.75]);
+  });
+
   it('resets scale, rotation, and floor position at a replacement pose', () => {
     const root = new Group();
     const transform = new FloorSceneTransform(root);

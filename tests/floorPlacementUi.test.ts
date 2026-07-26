@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyFloorPlacementUi,
+  DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
   type FloorPlacementUiState,
 } from '../src/ui/floorPlacementUi';
 
@@ -37,6 +38,10 @@ const states: Array<{
     message: 'Desk scene placed on the floor.',
   },
   {
+    state: { state: 'floor-playback-error', message: 'Embedding disabled' },
+    message: 'Embedding disabled',
+  },
+  {
     state: { state: 'floor-ended', message: 'Floor AR ended. Scan the image or place it again.' },
     message: 'Floor AR ended. Scan the image or place it again.',
   },
@@ -65,10 +70,10 @@ describe('applyFloorPlacementUi', () => {
     const floorStatus = required<HTMLElement>(root, '#floor-ar-status');
     const scannerControls = required<HTMLElement>(root, '.scanner-controls');
 
-    applyFloorPlacementUi(root, state);
+    applyFloorPlacementUi(root, state, DEFAULT_FLOOR_TRANSFORM_SELECTION_UI);
 
     const floorVisible = state.state.startsWith('floor-');
-    const placed = state.state === 'floor-placed';
+    const placed = state.state === 'floor-placed' || state.state === 'floor-playback-error';
     const placeEnabled = state.state === 'floor-ready' || placed;
     const restartVisible = state.state === 'floor-ended' || state.state === 'floor-error';
 
@@ -103,29 +108,135 @@ describe('applyFloorPlacementUi', () => {
     const floorMessage = required<HTMLElement>(root, '#floor-ar-message');
     const floorStatus = required<HTMLElement>(root, '#floor-ar-status');
 
-    applyFloorPlacementUi(root, {
-      state: 'floor-error',
-      message: 'Floor scene failed to load: model unavailable',
-    });
+    applyFloorPlacementUi(
+      root,
+      {
+        state: 'floor-error',
+        message: 'Floor scene failed to load: model unavailable',
+      },
+      DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
+    );
 
     expect(floorStatus.dataset.tone).toBe('error');
     expect(floorMessage.textContent).toBe('');
     expect(floorMessage.hasAttribute('data-tone')).toBe(false);
 
-    applyFloorPlacementUi(root, { state: 'floor-ready', message: 'Floor found. Tap Place.' });
+    applyFloorPlacementUi(
+      root,
+      { state: 'floor-ready', message: 'Floor found. Tap Place.' },
+      DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
+    );
 
     expect(floorStatus.textContent).toBe('Floor found. Tap Place.');
     expect(floorStatus.hasAttribute('data-tone')).toBe(false);
 
-    applyFloorPlacementUi(root, {
-      state: 'unsupported',
-      message: 'Floor placement needs WebXR. Image scanning is still available.',
-    });
+    applyFloorPlacementUi(
+      root,
+      {
+        state: 'unsupported',
+        message: 'Floor placement needs WebXR. Image scanning is still available.',
+      },
+      DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
+    );
 
     expect(floorStatus.textContent).toBe('');
     expect(floorStatus.hasAttribute('data-tone')).toBe(false);
     expect(floorMessage.textContent).toContain('Image scanning is still available.');
     expect(floorMessage.hasAttribute('data-tone')).toBe(false);
+  });
+
+  it('hides transform-selection controls until the floor experience is placed', () => {
+    const root = renderFloorUiFixture();
+    const selectAll = required<HTMLButtonElement>(root, '#floor-ar-select-all');
+    const done = required<HTMLButtonElement>(root, '#floor-ar-selection-done');
+    const hint = required<HTMLElement>(root, '#floor-ar-selection-hint');
+
+    applyFloorPlacementUi(
+      root,
+      { state: 'floor-ready', message: 'Floor found. Tap Place.' },
+      DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
+    );
+
+    expect(selectAll.hidden).toBe(true);
+    expect(done.hidden).toBe(true);
+    expect(hint.hidden).toBe(true);
+  });
+
+  it('shows Select all pressed by default after placement and keeps Done hidden without a selection', () => {
+    const root = renderFloorUiFixture();
+    const selectAll = required<HTMLButtonElement>(root, '#floor-ar-select-all');
+    const done = required<HTMLButtonElement>(root, '#floor-ar-selection-done');
+    const hint = required<HTMLElement>(root, '#floor-ar-selection-hint');
+
+    applyFloorPlacementUi(
+      root,
+      { state: 'floor-placed', message: 'Desk scene placed on the floor.' },
+      DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
+    );
+
+    expect(selectAll.hidden).toBe(false);
+    expect(selectAll.getAttribute('aria-pressed')).toBe('true');
+    expect(done.hidden).toBe(true);
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe('Long press an object to move or scale it.');
+  });
+
+  it('shows Done only for an active object selection and reflects object scope', () => {
+    const root = renderFloorUiFixture();
+    const selectAll = required<HTMLButtonElement>(root, '#floor-ar-select-all');
+    const done = required<HTMLButtonElement>(root, '#floor-ar-selection-done');
+    const hint = required<HTMLElement>(root, '#floor-ar-selection-hint');
+
+    applyFloorPlacementUi(
+      root,
+      { state: 'floor-placed', message: 'Desk scene placed on the floor.' },
+      { selectAll: false, active: true, label: 'Chair' },
+    );
+
+    expect(selectAll.hidden).toBe(false);
+    expect(selectAll.getAttribute('aria-pressed')).toBe('false');
+    expect(done.hidden).toBe(false);
+    expect(hint.textContent).toBe('Chair selected. Drag to move or pinch to scale.');
+
+    applyFloorPlacementUi(
+      root,
+      { state: 'floor-placed', message: 'Desk scene placed on the floor.' },
+      { selectAll: false, active: false },
+    );
+
+    expect(done.hidden).toBe(true);
+    expect(hint.textContent).toBe('Long press an object to move or scale it.');
+
+    applyFloorPlacementUi(
+      root,
+      { state: 'floor-placed', message: 'Desk scene placed on the floor.' },
+      { selectAll: false, active: true },
+    );
+
+    expect(hint.textContent).toBe('Selected object. Drag to move or pinch to scale.');
+  });
+
+  it('preserves active selection presentation alongside a playback-error status', () => {
+    const root = renderFloorUiFixture();
+    const floorStatus = required<HTMLElement>(root, '#floor-ar-status');
+    const selectAll = required<HTMLButtonElement>(root, '#floor-ar-select-all');
+    const done = required<HTMLButtonElement>(root, '#floor-ar-selection-done');
+    const hint = required<HTMLElement>(root, '#floor-ar-selection-hint');
+
+    applyFloorPlacementUi(
+      root,
+      { state: 'floor-playback-error', message: 'Embedding disabled' },
+      { selectAll: true, active: true, label: 'All objects' },
+    );
+
+    expect(floorStatus).toMatchObject({
+      textContent: 'Embedding disabled',
+      dataset: { tone: 'error' },
+    });
+    expect(selectAll.hidden).toBe(false);
+    expect(selectAll.getAttribute('aria-pressed')).toBe('true');
+    expect(done.hidden).toBe(false);
+    expect(hint.textContent).toBe('All objects selected. Drag to move or pinch to scale.');
   });
 });
 
@@ -145,6 +256,11 @@ function renderFloorUiFixture(): HTMLElement {
             <span>Rotate</span>
             <input id="floor-ar-rotation" type="range" min="-180" max="180" step="1" value="0">
           </label>
+          <div class="floor-ar-selection-controls">
+            <button id="floor-ar-select-all" type="button" aria-pressed="true">Select all</button>
+            <button id="floor-ar-selection-done" type="button" hidden>Done</button>
+          </div>
+          <p id="floor-ar-selection-hint">Long press an object to move or scale it.</p>
           <button id="floor-ar-reset" type="button">Reset</button>
           <button id="floor-ar-restart" type="button" hidden>Restart floor AR</button>
         </div>

@@ -173,6 +173,11 @@ export function renderAppShell(): string {
                   <span>Rotate</span>
                   <input id="floor-ar-rotation" type="range" min="-180" max="180" step="1" value="0">
                 </label>
+                <div class="floor-ar-selection-controls">
+                  <button id="floor-ar-select-all" type="button" aria-pressed="true">Select all</button>
+                  <button id="floor-ar-selection-done" type="button" hidden>Done</button>
+                </div>
+                <p id="floor-ar-selection-hint">Long press an object to move or scale it.</p>
                 <button id="floor-ar-reset" type="button">Reset</button>
                 <button id="floor-ar-restart" type="button" hidden>Restart floor AR</button>
               </div>

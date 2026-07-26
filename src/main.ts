@@ -160,7 +160,9 @@ import { createAnimationTrackEditor } from './ui/animationTrackEditor';
 import { setupHomeSectionNavigation } from './ui/homeSectionNavigation';
 import {
   applyFloorPlacementUi,
+  DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
   type FloorPlacementUiState,
+  type FloorTransformSelectionUiState,
 } from './ui/floorPlacementUi';
 import { renderTargetModelRail } from './ui/modelRail';
 import {
@@ -208,6 +210,8 @@ const floorToggle = queryRequired<HTMLButtonElement>('#floor-ar-toggle');
 const floorBack = queryRequired<HTMLButtonElement>('#floor-ar-back');
 const floorPlace = queryRequired<HTMLButtonElement>('#floor-ar-place');
 const floorRotation = queryRequired<HTMLInputElement>('#floor-ar-rotation');
+const floorSelectAll = queryRequired<HTMLButtonElement>('#floor-ar-select-all');
+const floorSelectionDone = queryRequired<HTMLButtonElement>('#floor-ar-selection-done');
 
 function setScannerStatus(message: string, tone?: 'error'): void {
   status.textContent = message;
@@ -299,6 +303,9 @@ let floorController: FloorPlacementController | undefined;
 let floorControllerRequestVersion = 0;
 let floorLaunchVersion = 0;
 let floorUiState: FloorPlacementUiState = { state: 'hidden' };
+let floorTransformSelectionUi: FloorTransformSelectionUiState = {
+  ...DEFAULT_FLOOR_TRANSFORM_SELECTION_UI,
+};
 let floorScenePlaced = false;
 let returningToMarker = false;
 let returnToMarkerVersion = 0;
@@ -546,6 +553,20 @@ floorRotation.addEventListener('input', () => {
   if (Number.isFinite(degrees)) {
     floorController.setRotation(degrees);
   }
+});
+
+floorSelectAll.addEventListener('click', () => {
+  if (returningToMarker || activeSharedLinkMode !== 'floor' || !floorController) {
+    return;
+  }
+  floorController.setSelectAll(!floorTransformSelectionUi.selectAll);
+});
+
+floorSelectionDone.addEventListener('click', () => {
+  if (returningToMarker || activeSharedLinkMode !== 'floor' || !floorController) {
+    return;
+  }
+  floorController.clearSelection();
 });
 
 floorReset.addEventListener('click', () => {
@@ -1209,6 +1230,16 @@ async function prepareFocusedFloorPlacement(
             message: `${target.label} placed on the floor.`,
           });
         },
+        onSelectionChange(selection) {
+          if (!isCurrentFloorHook()) {
+            return;
+          }
+          setFloorTransformSelectionUi({
+            selectAll: selection.selectAll,
+            active: selection.active,
+            label: selection.label,
+          });
+        },
       },
     });
 
@@ -1391,7 +1422,12 @@ function isAbortError(error: unknown): boolean {
 
 function setFloorPlacementUi(state: FloorPlacementUiState): void {
   floorUiState = state;
-  applyFloorPlacementUi(shell, state);
+  applyFloorPlacementUi(shell, state, floorTransformSelectionUi);
+}
+
+function setFloorTransformSelectionUi(selection: FloorTransformSelectionUiState): void {
+  floorTransformSelectionUi = selection;
+  applyFloorPlacementUi(shell, floorUiState, selection);
 }
 
 type ScanSessionState = 'idle' | 'starting' | 'active';

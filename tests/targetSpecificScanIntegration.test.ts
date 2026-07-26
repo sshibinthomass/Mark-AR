@@ -72,6 +72,8 @@ const floorRuntimeMocks = vi.hoisted(() => {
   const launch = vi.fn<() => Promise<void>>(() => Promise.resolve());
   const place = vi.fn<() => boolean>(() => true);
   const setRotation = vi.fn<(degrees: number) => void>();
+  const setSelectAll = vi.fn<(enabled: boolean) => void>();
+  const clearSelection = vi.fn<() => void>();
   const reset = vi.fn<() => boolean>(() => true);
   const stop = vi.fn<() => Promise<void>>(() => Promise.resolve());
   const dispose = vi.fn<() => void>();
@@ -81,10 +83,21 @@ const floorRuntimeMocks = vi.hoisted(() => {
     launch,
     place,
     setRotation,
+    setSelectAll,
+    clearSelection,
     reset,
     stop,
     dispose,
-    controller: { launch, place, setRotation, reset, stop, dispose },
+    controller: {
+      launch,
+      place,
+      setRotation,
+      setSelectAll,
+      clearSelection,
+      reset,
+      stop,
+      dispose,
+    },
     hooks: undefined as undefined | {
       onSessionStart(): void;
       onSessionEnd(): void;
@@ -93,6 +106,12 @@ const floorRuntimeMocks = vi.hoisted(() => {
       onYouTubeActivated?(): void;
       onPlacementReady(ready: boolean): void;
       onPlaced(): void;
+      onSelectionChange(state: {
+        selectAll: boolean;
+        active: boolean;
+        objectId?: string;
+        label?: string;
+      }): void;
     },
   };
 });
@@ -162,6 +181,8 @@ describe('target-specific scan route integration', () => {
     floorRuntimeMocks.place.mockReset();
     floorRuntimeMocks.place.mockReturnValue(true);
     floorRuntimeMocks.setRotation.mockReset();
+    floorRuntimeMocks.setSelectAll.mockReset();
+    floorRuntimeMocks.clearSelection.mockReset();
     floorRuntimeMocks.reset.mockReset();
     floorRuntimeMocks.reset.mockReturnValue(true);
     floorRuntimeMocks.stop.mockReset();
@@ -402,6 +423,12 @@ describe('target-specific scan route integration', () => {
 
     expect(floorRuntimeMocks.prepareFloorPlacement).not.toHaveBeenCalled();
     expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-select-all').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-selection-done').hidden).toBe(true);
+    expect(required<HTMLElement>('#floor-ar-selection-hint').hidden).toBe(true);
+    expect(required('#ar-stage').querySelector('#floor-ar-select-all')).toBeNull();
+    expect(required('#ar-stage').querySelector('#floor-ar-selection-done')).toBeNull();
+    expect(required('#ar-stage').querySelector('#floor-ar-selection-hint')).toBeNull();
   });
 
   it('auto-starts marker AR while floor preparation is still pending and prepares the exact focused scene once', async () => {
@@ -546,6 +573,83 @@ describe('target-specific scan route integration', () => {
     floorRuntimeMocks.hooks?.onStatus('Floor found. Tap Place.');
     expect(required('#floor-ar-status').textContent).toBe(
       'Only this marker placed on the floor.',
+    );
+  });
+
+  it('delegates Select all scope changes and Done to the authoritative floor controller', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onPlaced();
+    floorRuntimeMocks.hooks?.onSelectionChange({ selectAll: true, active: false });
+
+    const selectAll = required<HTMLButtonElement>('#floor-ar-select-all');
+    const done = required<HTMLButtonElement>('#floor-ar-selection-done');
+    expect(selectAll.getAttribute('aria-pressed')).toBe('true');
+
+    selectAll.click();
+    expect(floorRuntimeMocks.setSelectAll).toHaveBeenLastCalledWith(false);
+
+    floorRuntimeMocks.hooks?.onSelectionChange({ selectAll: false, active: false });
+    selectAll.click();
+    expect(floorRuntimeMocks.setSelectAll).toHaveBeenLastCalledWith(true);
+
+    floorRuntimeMocks.hooks?.onSelectionChange({
+      selectAll: false,
+      active: true,
+      objectId: 'object-one',
+      label: 'Chair',
+    });
+    expect(done.hidden).toBe(false);
+    done.click();
+    expect(floorRuntimeMocks.clearSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it('rerenders runtime selection callbacks without losing the current floor status', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onPlaced();
+    floorRuntimeMocks.hooks?.onYouTubeError?.('Embedding disabled');
+
+    floorRuntimeMocks.hooks?.onSelectionChange({
+      selectAll: false,
+      active: true,
+      objectId: 'object-one',
+      label: 'Chair',
+    });
+
+    expect(required('#floor-ar-status')).toMatchObject({
+      textContent: 'Embedding disabled',
+      dataset: { tone: 'error' },
+    });
+    expect(required<HTMLButtonElement>('#floor-ar-select-all').getAttribute('aria-pressed')).toBe('false');
+    expect(required<HTMLButtonElement>('#floor-ar-selection-done').hidden).toBe(false);
+    expect(required('#floor-ar-selection-hint').textContent).toBe(
+      'Chair selected. Drag to move or pinch to scale.',
+    );
+  });
+
+  it('clears active selection presentation when Reset emits runtime cleanup state', async () => {
+    await openFocusedScan();
+    required<HTMLButtonElement>('#floor-ar-toggle').click();
+    floorRuntimeMocks.hooks?.onPlaced();
+    floorRuntimeMocks.hooks?.onSelectionChange({
+      selectAll: false,
+      active: true,
+      objectId: 'object-one',
+      label: 'Chair',
+    });
+    floorRuntimeMocks.reset.mockImplementationOnce(() => {
+      floorRuntimeMocks.hooks?.onSelectionChange({ selectAll: false, active: false });
+      return true;
+    });
+
+    required<HTMLButtonElement>('#floor-ar-reset').click();
+
+    expect(floorRuntimeMocks.reset).toHaveBeenCalledTimes(1);
+    expect(required<HTMLButtonElement>('#floor-ar-select-all').getAttribute('aria-pressed')).toBe('false');
+    expect(required<HTMLButtonElement>('#floor-ar-selection-done').hidden).toBe(true);
+    expect(required('#floor-ar-selection-hint').textContent).toBe(
+      'Long press an object to move or scale it.',
     );
   });
 
@@ -941,10 +1045,23 @@ describe('target-specific scan route integration', () => {
 
     staleHooks?.onSessionEnd();
     staleHooks?.onStatus('Floor scene failed to load: stale error');
+    staleHooks?.onSelectionChange({
+      selectAll: false,
+      active: true,
+      label: 'Stale',
+    });
 
+    expect(required<HTMLElement>('[data-app-shell]').dataset.arMode).toBe('marker');
     expect(required<HTMLButtonElement>('#floor-ar-toggle').textContent).toBe('Place on floor');
     expect(required('#floor-ar-message').textContent).toBe('Floor placement is ready.');
     expect(required<HTMLButtonElement>('#floor-ar-restart').hidden).toBe(true);
+    expect(required<HTMLButtonElement>('#floor-ar-select-all').getAttribute('aria-pressed')).toBe('true');
+    expect(required<HTMLButtonElement>('#floor-ar-selection-done').hidden).toBe(true);
+    expect(required<HTMLElement>('#floor-ar-selection-hint')).toMatchObject({
+      hidden: true,
+      textContent: 'Long press an object to move or scale it.',
+    });
+    expect(required('#floor-ar-status').textContent).toBe('');
   });
 
   it('ignores late floor hooks after the focused route token changes', async () => {
@@ -956,10 +1073,22 @@ describe('target-specific scan route integration', () => {
     await waitFor(() => required('[data-app-shell]').getAttribute('data-active-page') === 'home');
     staleHooks?.onSessionEnd();
     staleHooks?.onStatus('Floor scene failed to load: stale error');
+    staleHooks?.onSelectionChange({
+      selectAll: false,
+      active: true,
+      label: 'Stale',
+    });
 
+    expect(required<HTMLElement>('[data-app-shell]').dataset.arMode).toBe('marker');
     expect(required<HTMLButtonElement>('#floor-ar-toggle').hidden).toBe(true);
     expect(required('#floor-ar-message').textContent).toBe('');
     expect(required('#floor-ar-status').textContent).toBe('');
+    expect(required<HTMLButtonElement>('#floor-ar-select-all').getAttribute('aria-pressed')).toBe('true');
+    expect(required<HTMLButtonElement>('#floor-ar-selection-done').hidden).toBe(true);
+    expect(required<HTMLElement>('#floor-ar-selection-hint')).toMatchObject({
+      hidden: true,
+      textContent: 'Long press an object to move or scale it.',
+    });
   });
 
   it('leaves a manual Start camera retry when automatic startup is blocked', async () => {

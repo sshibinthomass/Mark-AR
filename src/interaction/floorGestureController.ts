@@ -3,22 +3,34 @@ export type Point2 = {
   y: number;
 };
 
+export type FloorDragGesture = {
+  previous: Point2;
+  current: Point2;
+};
+
 export type FloorGestureHandlers = {
+  isTransformActive(): boolean;
   onTap(point: Point2): void;
-  onDrag(point: Point2): void;
+  onLongPress(point: Point2): void;
+  onDrag(gesture: FloorDragGesture): void;
   onPinch(multiplier: number): void;
 };
 
-const TAP_MOVEMENT_THRESHOLD = 12;
-const INTERACTIVE_TARGET_SELECTOR = 'button, a, input, select, textarea, [role="button"]';
+const MOVEMENT_THRESHOLD_PX = 12;
+const LONG_PRESS_DELAY_MS = 450;
+const INTERACTIVE_TARGET_SELECTOR = 'button, a, input, select, textarea, [role="button"], .youtube-css3d-player';
 
 export class FloorGestureController {
   private readonly target: HTMLElement;
   private readonly handlers: FloorGestureHandlers;
   private active = false;
-  private startPoint: Point2 | null = null;
-  private lastSinglePoint: Point2 | null = null;
-  private lastPinchDistance: number | null = null;
+  private longPressTimer: ReturnType<typeof setTimeout> | undefined;
+  private gestureStart: Point2 | undefined;
+  private previousPoint: Point2 | undefined;
+  private pendingPress = false;
+  private longPressFired = false;
+  private dragging = false;
+  private lastPinchDistance: number | undefined;
 
   constructor(target: HTMLElement, handlers: FloorGestureHandlers) {
     this.target = target;
@@ -50,16 +62,12 @@ export class FloorGestureController {
     this.active = true;
 
     if (event.touches.length === 1) {
-      const point = touchToPoint(event.touches[0]);
-      this.startPoint = point;
-      this.lastSinglePoint = point;
-      this.lastPinchDistance = null;
+      this.beginSingleTouch(touchToPoint(event.touches[0]));
       return;
     }
 
     if (event.touches.length >= 2) {
-      this.startPoint = null;
-      this.lastSinglePoint = null;
+      this.clearPressState();
       this.lastPinchDistance = distanceBetweenTouches(event.touches[0], event.touches[1]);
       return;
     }
@@ -75,17 +83,14 @@ export class FloorGestureController {
     event.preventDefault();
 
     if (event.touches.length === 1) {
-      const point = touchToPoint(event.touches[0]);
-      this.lastSinglePoint = point;
-      this.handlers.onDrag(point);
+      this.handleSingleTouchMove(touchToPoint(event.touches[0]));
       return;
     }
 
     if (event.touches.length >= 2) {
-      this.startPoint = null;
-      this.lastSinglePoint = null;
+      this.clearPressState();
       const distance = distanceBetweenTouches(event.touches[0], event.touches[1]);
-      if (this.lastPinchDistance !== null && this.lastPinchDistance > 0) {
+      if (this.lastPinchDistance !== undefined && this.lastPinchDistance > 0) {
         this.handlers.onPinch(distance / this.lastPinchDistance);
       }
       this.lastPinchDistance = distance;
@@ -107,12 +112,16 @@ export class FloorGestureController {
       return;
     }
 
-    if (this.startPoint && this.lastSinglePoint) {
-      const releasedTouch = event.changedTouches[0];
-      const endPoint = releasedTouch ? touchToPoint(releasedTouch) : this.lastSinglePoint;
-      if (distanceBetweenPoints(this.startPoint, endPoint) < TAP_MOVEMENT_THRESHOLD) {
-        this.handlers.onTap(endPoint);
-      }
+    const releasedTouch = event.changedTouches[0];
+    const endPoint = releasedTouch ? touchToPoint(releasedTouch) : this.previousPoint;
+    if (
+      this.pendingPress
+      && !this.longPressFired
+      && this.gestureStart
+      && endPoint
+      && distanceBetweenPoints(this.gestureStart, endPoint) < MOVEMENT_THRESHOLD_PX
+    ) {
+      this.handlers.onTap(endPoint);
     }
 
     this.reset();
@@ -127,11 +136,68 @@ export class FloorGestureController {
     this.reset();
   };
 
+  private beginSingleTouch(point: Point2): void {
+    this.clearPressState();
+    this.gestureStart = point;
+    this.previousPoint = point;
+    this.pendingPress = true;
+    this.dragging = this.handlers.isTransformActive();
+    this.lastPinchDistance = undefined;
+    this.longPressTimer = setTimeout(() => {
+      if (!this.pendingPress || !this.gestureStart || this.longPressFired) {
+        return;
+      }
+
+      this.pendingPress = false;
+      this.longPressFired = true;
+      this.longPressTimer = undefined;
+      this.handlers.onLongPress(this.gestureStart);
+      this.dragging = this.handlers.isTransformActive();
+    }, LONG_PRESS_DELAY_MS);
+  }
+
+  private handleSingleTouchMove(point: Point2): void {
+    if (!this.gestureStart || !this.previousPoint) {
+      return;
+    }
+
+    if (this.pendingPress) {
+      if (distanceBetweenPoints(this.gestureStart, point) < MOVEMENT_THRESHOLD_PX) {
+        return;
+      }
+
+      this.pendingPress = false;
+      this.clearLongPressTimer();
+    }
+
+    if (!this.dragging) {
+      return;
+    }
+
+    this.handlers.onDrag({ previous: this.previousPoint, current: point });
+    this.previousPoint = point;
+  }
+
+  private clearPressState(): void {
+    this.clearLongPressTimer();
+    this.gestureStart = undefined;
+    this.previousPoint = undefined;
+    this.pendingPress = false;
+    this.longPressFired = false;
+    this.dragging = false;
+  }
+
+  private clearLongPressTimer(): void {
+    if (this.longPressTimer !== undefined) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = undefined;
+    }
+  }
+
   private reset(): void {
     this.active = false;
-    this.startPoint = null;
-    this.lastSinglePoint = null;
-    this.lastPinchDistance = null;
+    this.clearPressState();
+    this.lastPinchDistance = undefined;
   }
 }
 
