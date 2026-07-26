@@ -49,7 +49,7 @@ import {
   DEFAULT_PREVIEW_CAMERA_VIEW,
   type PreviewCameraView,
 } from './previewCamera';
-import { createTextObject3D } from './textObject3d';
+import { prepareTextObject3D, type PreparedTextObject3D } from './textObject3d';
 import { applyLockedObjectTint } from './lockedObjectTint';
 import { createNormalizedTargetModelGroup } from './targetModelNormalization';
 import { applyTargetAnimation, applyTargetPlacement } from './targetObjectTransform';
@@ -66,6 +66,7 @@ type PointerPoint = {
 };
 
 type CameraDragMode = 'orbit' | 'pan' | 'zoom';
+type PreviewTextObject = Group | PreparedTextObject3D;
 export type PreviewTransformMode = 'translate' | 'rotate' | 'scale';
 const selectionTargetKey = '@selection';
 const groupTargetPrefix = '@group:';
@@ -86,7 +87,7 @@ type PreviewDeps = {
   cancelFrame?: (frameId: number) => void;
   loadTexture?: (url: string) => Promise<Texture | undefined>;
   loadModel?: (url: string) => Promise<Group | undefined>;
-  createTextObject?: (text: TargetTextContent) => Group;
+  createTextObject?: (text: TargetTextContent) => PreviewTextObject;
   onPlacementChange?: (change: PreviewPlacementChange) => void;
   onPlacementsChange?: (changes: PreviewPlacementChange[]) => void;
   onGroupPlacementChange?: (change: PreviewGroupPlacementChange) => void;
@@ -119,7 +120,7 @@ export class ImageTargetPreview {
   private readonly cancelFrame: (frameId: number) => void;
   private readonly loadTexture: (url: string) => Promise<Texture | undefined>;
   private readonly loadModel: (url: string) => Promise<Group | undefined>;
-  private readonly createTextObject: (text: TargetTextContent) => Group;
+  private readonly createTextObject: (text: TargetTextContent) => PreviewTextObject;
   private readonly onPlacementChange?: (change: PreviewPlacementChange) => void;
   private readonly onPlacementsChange?: (changes: PreviewPlacementChange[]) => void;
   private readonly onGroupPlacementChange?: (change: PreviewGroupPlacementChange) => void;
@@ -182,7 +183,7 @@ export class ImageTargetPreview {
     this.cancelFrame = deps.cancelFrame ?? window.cancelAnimationFrame.bind(window);
     this.loadTexture = deps.loadTexture ?? defaultLoadTexture;
     this.loadModel = deps.loadModel ?? defaultLoadModel;
-    this.createTextObject = deps.createTextObject ?? createTextObject3D;
+    this.createTextObject = deps.createTextObject ?? prepareTextObject3D;
     this.onPlacementChange = deps.onPlacementChange;
     this.onPlacementsChange = deps.onPlacementsChange;
     this.onGroupPlacementChange = deps.onGroupPlacementChange;
@@ -312,7 +313,17 @@ export class ImageTargetPreview {
         continue;
       }
       if (isTextTargetObject(object)) {
-        const textObject = this.createTextObject(object.text);
+        const preparedTextObject = this.createTextObject(object.text);
+        const textObject = preparedTextObject instanceof Group
+          ? preparedTextObject
+          : preparedTextObject.group;
+        if (!(preparedTextObject instanceof Group)) {
+          await preparedTextObject.ready;
+          if (this.disposed || updateToken !== this.updateToken) {
+            preparedTextObject.dispose();
+            return;
+          }
+        }
         textObject.name = `target-object-${object.id}`;
         if (this.lockedObjectIds.has(object.id)) {
           applyLockedObjectTint(textObject);

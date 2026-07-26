@@ -1,4 +1,4 @@
-import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Texture } from 'three';
+import { Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Texture, type Material } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ImageTargetPreview, type PreviewCameraView } from '../src/scene/ImageTargetPreview';
 
@@ -910,6 +910,41 @@ describe('ImageTargetPreview', () => {
     preview.dispose();
   });
 
+  it('waits for production text geometry before tinting a locked text object', async () => {
+    const container = document.createElement('div');
+    const renderer = {
+      domElement: document.createElement('canvas'),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const preview = new ImageTargetPreview(container, {
+      createRenderer: () => renderer,
+      requestFrame: () => 1,
+      cancelFrame: vi.fn(),
+      loadModel: vi.fn(async () => undefined),
+      loadTexture: vi.fn(async () => undefined),
+    });
+
+    await preview.update({
+      objects: [{
+        kind: 'text',
+        id: 'locked-text',
+        text: { value: 'Locked', language: 'english', font: 'studio-sans' },
+        placement: { scale: 1, offsetX: 0, offsetY: 0, height: 0.1 },
+      }],
+      lockedObjectIds: ['locked-text'],
+    });
+
+    const internals = preview as unknown as { loadedModels: Map<string, Group> };
+    const textMesh = internals.loadedModels.get('locked-text')?.children[0] as Mesh;
+    expect(textMesh).toBeInstanceOf(Mesh);
+    const materials = Array.isArray(textMesh.material) ? textMesh.material : [textMesh.material];
+    expect(materials.every((material) => material.transparent && material.opacity === 0.62)).toBe(true);
+    preview.dispose();
+  });
+
   it('positions the preview camera from camera controls', async () => {
     const container = document.createElement('div');
     const renderer = {
@@ -1172,15 +1207,19 @@ describe('ImageTargetPreview', () => {
     const lockedMaterial = new MeshBasicMaterial({ color: 0xffffff });
     const unlocked = new Group();
     const locked = new Group();
+    const unlockedAfterLock = new Group();
+    const unlockedAfterLockMaterial = new MeshBasicMaterial({ color: 0xffffff });
     unlocked.add(new Mesh(new PlaneGeometry(1, 1), unlockedMaterial));
     locked.add(new Mesh(new PlaneGeometry(1, 1), lockedMaterial));
+    unlockedAfterLock.add(new Mesh(new PlaneGeometry(1, 1), unlockedAfterLockMaterial));
     const preview = new ImageTargetPreview(container, {
       createRenderer: () => renderer,
       requestFrame: () => 1,
       cancelFrame: vi.fn(),
       loadModel: vi.fn()
         .mockResolvedValueOnce(unlocked)
-        .mockResolvedValueOnce(locked),
+        .mockResolvedValueOnce(locked)
+        .mockResolvedValueOnce(unlockedAfterLock),
       loadTexture: vi.fn(async () => undefined),
     });
 
@@ -1195,6 +1234,15 @@ describe('ImageTargetPreview', () => {
     expect((unlocked.children[0] as Mesh).material).toBe(unlockedMaterial);
     expect((locked.children[0] as Mesh).material).not.toBe(lockedMaterial);
     expect(((locked.children[0] as Mesh).material as Material).opacity).toBe(0.62);
+
+    await preview.update({
+      objects: [
+        { id: 'locked', model: { id: 'locked', label: 'Locked', url: 'locked.glb' }, placement: { scale: 1, offsetX: 0.2, offsetY: 0, height: 0.1 } },
+      ],
+      lockedObjectIds: [],
+    });
+
+    expect((unlockedAfterLock.children[0] as Mesh).material).toBe(unlockedAfterLockMaterial);
     preview.dispose();
   });
 
@@ -1221,6 +1269,7 @@ describe('ImageTargetPreview', () => {
       }],
       selection: { objectIds: ['chair'] },
       hiddenObjectIds: ['chair'],
+      lockedObjectIds: ['chair'],
       selectionLocked: true,
       animationPlaying: false,
     });
