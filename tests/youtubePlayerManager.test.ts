@@ -163,7 +163,9 @@ describe('YouTubePlayerManager', () => {
     const player = createPlayerDouble();
     let onStateChange: ((state: number) => void) | undefined;
     const bubbledClicks = vi.fn();
+    const bubbledMouseMoves = vi.fn();
     container.addEventListener('click', bubbledClicks);
+    container.addEventListener('mousemove', bubbledMouseMoves);
     const manager = createManager({
       createCssRenderer: () => ({
         domElement: rendererElement,
@@ -196,11 +198,23 @@ describe('YouTubePlayerManager', () => {
       clientX: 122,
       clientY: 62,
     });
+    rendererElement.dispatchEvent(new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 122,
+      clientY: 62,
+    }));
     dispatchPointer(rendererElement, 'pointerup', {
       pointerId: 5,
       clientX: 122,
       clientY: 62,
     });
+    rendererElement.dispatchEvent(new MouseEvent('mouseup', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 122,
+      clientY: 62,
+    }));
     rendererElement.dispatchEvent(new MouseEvent('click', {
       bubbles: true,
       cancelable: true,
@@ -211,6 +225,14 @@ describe('YouTubePlayerManager', () => {
     expect(player.port.pauseVideo).toHaveBeenCalledOnce();
     expect(bubbledClicks).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(toggle);
+
+    rendererElement.dispatchEvent(new MouseEvent('mousemove', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 200,
+      clientY: 120,
+    }));
+    expect(bubbledMouseMoves).toHaveBeenCalledOnce();
 
     rendererElement.dispatchEvent(new MouseEvent('click', {
       bubbles: true,
@@ -402,11 +424,184 @@ describe('YouTubePlayerManager', () => {
     },
   );
 
-  it('routes overlapping transport bounds to the last inserted CSS3D player', async () => {
+  it.each(['pointer', 'touch'] as const)(
+    'clears a canceled %s gesture before a fallback-mouse click',
+    async (inputType) => {
+      const container = document.createElement('div');
+      const rendererElement = document.createElement('div');
+      const player = createPlayerDouble();
+      let onStateChange: ((state: number) => void) | undefined;
+      const manager = createManager({
+        createCssRenderer: () => ({
+          domElement: rendererElement,
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createPlayer: async (_host, _youtube, stateHandler) => {
+          onStateChange = stateHandler;
+          return player.port;
+        },
+        hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      }, container);
+      manager.register('marker-1', createSurface());
+      manager.setMarkerVisible('marker-1', true);
+      await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+      onStateChange?.(1);
+
+      const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      )!;
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: 14,
+          clientX: 122,
+          clientY: 62,
+        });
+        dispatchPointer(rendererElement, 'pointercancel', {
+          pointerId: 14,
+          clientX: 122,
+          clientY: 62,
+        });
+      } else {
+        dispatchTouch(rendererElement, 'touchstart', [{
+          identifier: 14,
+          clientX: 122,
+          clientY: 62,
+        }]);
+        dispatchTouch(rendererElement, 'touchcancel', [], [{
+          identifier: 14,
+          clientX: 122,
+          clientY: 62,
+        }]);
+      }
+      for (const eventName of ['mousedown', 'mouseup', 'click']) {
+        rendererElement.dispatchEvent(new MouseEvent(eventName, {
+          bubbles: true,
+          cancelable: true,
+          clientX: 122,
+          clientY: 62,
+        }));
+      }
+
+      expect(player.port.pauseVideo).toHaveBeenCalledOnce();
+      manager.dispose();
+    },
+  );
+
+  it.each(['pointer', 'touch'] as const)(
+    'does not let one %s contact complete another contact gesture',
+    async (inputType) => {
+      const container = document.createElement('div');
+      const rendererElement = document.createElement('div');
+      const player = createPlayerDouble();
+      let onStateChange: ((state: number) => void) | undefined;
+      const bubbledClicks = vi.fn();
+      container.addEventListener('click', bubbledClicks);
+      const manager = createManager({
+        createCssRenderer: () => ({
+          domElement: rendererElement,
+          setSize: vi.fn(),
+          render: vi.fn(),
+        }),
+        createPlayer: async (_host, _youtube, stateHandler) => {
+          onStateChange = stateHandler;
+          return player.port;
+        },
+        hitTest: (_pointer, _camera, surfaces) => surfaces[0],
+      }, container);
+      manager.register('marker-1', createSurface());
+      manager.setMarkerVisible('marker-1', true);
+      await manager.activateFromPointer({ x: 0, y: 0 }, new PerspectiveCamera());
+      onStateChange?.(1);
+
+      const toggle = container.querySelector<HTMLButtonElement>(
+        '[data-youtube-action="toggle"]',
+      )!;
+      mockClientRect(toggle, {
+        left: 100,
+        top: 40,
+        width: 44,
+        height: 44,
+      });
+
+      const outsideContact = {
+        identifier: 15,
+        clientX: 20,
+        clientY: 20,
+      };
+      const insideContact = {
+        identifier: 16,
+        clientX: 122,
+        clientY: 62,
+      };
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: outsideContact.identifier,
+          clientX: outsideContact.clientX,
+          clientY: outsideContact.clientY,
+        });
+        dispatchPointer(rendererElement, 'pointerdown', {
+          pointerId: insideContact.identifier,
+          clientX: insideContact.clientX,
+          clientY: insideContact.clientY,
+        });
+        dispatchPointer(rendererElement, 'pointerup', {
+          pointerId: outsideContact.identifier,
+          clientX: 122,
+          clientY: 62,
+        });
+      } else {
+        dispatchTouch(rendererElement, 'touchstart', [outsideContact]);
+        dispatchTouch(
+          rendererElement,
+          'touchstart',
+          [outsideContact, insideContact],
+          [insideContact],
+        );
+        dispatchTouch(rendererElement, 'touchend', [insideContact], [{
+          ...outsideContact,
+          clientX: 122,
+          clientY: 62,
+        }]);
+      }
+      rendererElement.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 122,
+        clientY: 62,
+      }));
+      if (inputType === 'pointer') {
+        dispatchPointer(rendererElement, 'pointercancel', {
+          pointerId: insideContact.identifier,
+          clientX: insideContact.clientX,
+          clientY: insideContact.clientY,
+        });
+      } else {
+        dispatchTouch(rendererElement, 'touchcancel', [], [insideContact]);
+      }
+
+      expect(player.port.pauseVideo).not.toHaveBeenCalled();
+      expect(bubbledClicks).toHaveBeenCalledOnce();
+      manager.dispose();
+    },
+  );
+
+  it('routes overlapping bounds by activation order when readiness resolves out of order', async () => {
     const container = document.createElement('div');
     const rendererElement = document.createElement('div');
     const firstPlayer = createPlayerDouble();
     const secondPlayer = createPlayerDouble();
+    const creations = [
+      createDeferred<YouTubePlayerPort>(),
+      createDeferred<YouTubePlayerPort>(),
+    ];
     const stateHandlers: Array<(state: number) => void> = [];
     let playerIndex = 0;
     const manager = createManager({
@@ -415,11 +610,11 @@ describe('YouTubePlayerManager', () => {
         setSize: vi.fn(),
         render: vi.fn(),
       }),
-      createPlayer: async (_host, _youtube, stateHandler) => {
+      createPlayer: (_host, _youtube, stateHandler) => {
         stateHandlers.push(stateHandler);
-        const player = playerIndex === 0 ? firstPlayer.port : secondPlayer.port;
+        const creation = creations[playerIndex];
         playerIndex += 1;
-        return player;
+        return creation.promise;
       },
       hitTest: (pointer, _camera, surfaces) => (
         surfaces.find((surface) => (
@@ -431,8 +626,18 @@ describe('YouTubePlayerManager', () => {
     manager.register('marker-2', createSurface('video-2'));
     manager.setMarkerVisible('marker-1', true);
     manager.setMarkerVisible('marker-2', true);
-    await manager.activateFromPointer({ x: -1, y: 0 }, new PerspectiveCamera());
-    await manager.activateFromPointer({ x: 1, y: 0 }, new PerspectiveCamera());
+    const firstActivation = manager.activateFromPointer(
+      { x: -1, y: 0 },
+      new PerspectiveCamera(),
+    );
+    const secondActivation = manager.activateFromPointer(
+      { x: 1, y: 0 },
+      new PerspectiveCamera(),
+    );
+    creations[1].resolve(secondPlayer.port);
+    expect(await secondActivation).toBe('activated');
+    creations[0].resolve(firstPlayer.port);
+    expect(await firstActivation).toBe('activated');
     stateHandlers.forEach((handler) => handler(1));
 
     const toggles = [
@@ -769,11 +974,13 @@ describe('YouTubePlayerManager', () => {
 });
 
 function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((_resolve, rejectPromise) => {
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
     reject = rejectPromise;
   });
-  return { promise, reject };
+  return { promise, resolve, reject };
 }
 
 function createPlayerDouble() {
