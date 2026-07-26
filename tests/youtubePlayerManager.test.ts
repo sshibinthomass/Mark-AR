@@ -110,7 +110,7 @@ describe('YouTubePlayerManager', () => {
     manager.dispose();
   });
 
-  it('renders controls as a separate CSS3D object above the video object', async () => {
+  it('counter-scales a separate controls frame above the video object', async () => {
     const container = document.createElement('div');
     const cssObjects: Array<Group & { element: HTMLElement }> = [];
     const manager = createManager({
@@ -136,17 +136,23 @@ describe('YouTubePlayerManager', () => {
       object.element.classList.contains('youtube-css3d-player')
     ));
     const controlsObject = cssObjects.find((object) => (
-      object.element.classList.contains('youtube-transport-controls')
+      object.element.classList.contains('youtube-css3d-controls-frame')
     ));
+    const controls = controlsObject?.element.querySelector<HTMLElement>(
+      '.youtube-transport-controls',
+    );
     expect(videoObject).toBeDefined();
     expect(controlsObject).toBeDefined();
+    expect(controls).not.toBeNull();
     expect(controlsObject?.parent).toBe(videoObject);
     expect(controlsObject?.position.y).toBe(179);
     expect(controlsObject?.position.y).toBeGreaterThan(0);
-    expect(videoObject?.element.contains(controlsObject!.element)).toBe(false);
+    expect(controlsObject?.scale.toArray()).toEqual([270, 270, 270]);
+    expect(videoObject?.element.contains(controls!)).toBe(false);
 
     manager.dispose();
     expect(container.querySelector('.youtube-css3d-player')).toBeNull();
+    expect(container.querySelector('.youtube-css3d-controls-frame')).toBeNull();
     expect(container.querySelector('.youtube-transport-controls')).toBeNull();
   });
 
