@@ -1465,6 +1465,126 @@ describe('YouTubePlayerManager', () => {
     harness.manager.dispose();
   });
 
+  it('captures an orphaned native pointer through an outside release without swallowing later ID reuse', async () => {
+    const harness = await createLayerRoutingHarness();
+    const outside = document.body.appendChild(document.createElement('div'));
+    const capturedPointerIds = new Set<number>();
+    const setPointerCapture = vi.fn((pointerId: number) => {
+      capturedPointerIds.add(pointerId);
+    });
+    const releasePointerCapture = vi.fn((pointerId: number) => {
+      capturedPointerIds.delete(pointerId);
+    });
+    Object.assign(harness.container, {
+      setPointerCapture,
+      releasePointerCapture,
+    });
+    const floorGesture = vi.fn();
+    harness.container.addEventListener('pointerup', floorGesture);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 60,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    const capturedReleaseTarget = capturedPointerIds.has(60)
+      ? harness.container
+      : outside;
+    dispatchPointer(capturedReleaseTarget, 'pointerup', {
+      pointerId: 60,
+      clientX: 900,
+      clientY: 700,
+    });
+
+    dispatchPointer(harness.container, 'pointerdown', {
+      pointerId: 60,
+      clientX: 300,
+      clientY: 200,
+    });
+    dispatchPointer(harness.container, 'pointerup', {
+      pointerId: 60,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(setPointerCapture).toHaveBeenCalledWith(60);
+    expect(releasePointerCapture).toHaveBeenCalledWith(60);
+    expect(floorGesture).toHaveBeenCalledOnce();
+    expect(capturedPointerIds).not.toContain(60);
+    outside.remove();
+    harness.manager.dispose();
+  });
+
+  it('drops an orphan when capture transfer fails before an unrelated pointer ID reuse', async () => {
+    const harness = await createLayerRoutingHarness();
+    const setPointerCapture = vi.fn(() => {
+      throw new DOMException('The pointer is no longer active.', 'NotFoundError');
+    });
+    Object.assign(harness.container, { setPointerCapture });
+    const floorGesture = vi.fn();
+    harness.container.addEventListener('pointerup', floorGesture);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 62,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+
+    dispatchPointer(harness.container, 'pointerdown', {
+      pointerId: 62,
+      clientX: 300,
+      clientY: 200,
+    });
+    dispatchPointer(harness.container, 'pointerup', {
+      pointerId: 62,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(setPointerCapture).toHaveBeenCalledWith(62);
+    expect(floorGesture).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it('releases manager-owned orphan pointer capture and state on manager disposal', async () => {
+    const harness = await createLayerRoutingHarness();
+    const capturedPointerIds = new Set<number>();
+    const setPointerCapture = vi.fn((pointerId: number) => {
+      capturedPointerIds.add(pointerId);
+    });
+    const releasePointerCapture = vi.fn((pointerId: number) => {
+      capturedPointerIds.delete(pointerId);
+    });
+    Object.assign(harness.container, {
+      setPointerCapture,
+      releasePointerCapture,
+    });
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 61,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    expect(capturedPointerIds).toContain(61);
+
+    harness.manager.dispose();
+    const floorGesture = vi.fn();
+    harness.container.addEventListener('pointerup', floorGesture);
+    dispatchPointer(harness.container, 'pointerup', {
+      pointerId: 61,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(setPointerCapture).toHaveBeenCalledWith(61);
+    expect(releasePointerCapture).toHaveBeenCalledWith(61);
+    expect(capturedPointerIds).not.toContain(61);
+    expect(floorGesture).toHaveBeenCalledOnce();
+  });
+
   it('forgets a normally canceled native contact before later owner deactivation', async () => {
     const harness = await createLayerRoutingHarness();
     const bubbledPointerCancel = vi.fn();

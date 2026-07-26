@@ -82,6 +82,7 @@ type NativePointerContact = {
   ownerGeneration: number;
   controls: HTMLElement;
   orphaned: boolean;
+  capturedByContainer: boolean;
 };
 
 type TransportHitCandidate = {
@@ -395,6 +396,11 @@ export class YouTubePlayerManager {
   private connectTransportInputRouter(): void {
     const layer = this.renderer.domElement;
     this.container.addEventListener(
+      'pointerdown',
+      this.onNativePointerStartCapture,
+      true,
+    );
+    this.container.addEventListener(
       'pointerup',
       this.onNativePointerCompletionCapture,
       true,
@@ -420,6 +426,12 @@ export class YouTubePlayerManager {
 
   private disconnectTransportInputRouter(): void {
     const layer = this.renderer.domElement;
+    this.releaseAndClearNativePointerContacts();
+    this.container.removeEventListener(
+      'pointerdown',
+      this.onNativePointerStartCapture,
+      true,
+    );
     this.container.removeEventListener(
       'pointerup',
       this.onNativePointerCompletionCapture,
@@ -444,10 +456,20 @@ export class YouTubePlayerManager {
     layer.removeEventListener('click', this.onLayerClick);
     this.layerPointerGestures.clear();
     this.layerTouchGestures.clear();
-    this.nativePointerContacts.clear();
     this.clearCompletedLayerClicks();
     this.routedMouse = undefined;
   }
+
+  private readonly onNativePointerStartCapture = (
+    event: PointerEvent,
+  ): void => {
+    const contact = this.nativePointerContacts.get(event.pointerId);
+    if (!contact?.orphaned) {
+      return;
+    }
+    this.nativePointerContacts.delete(event.pointerId);
+    this.releaseContainerPointerCapture(event.pointerId, contact);
+  };
 
   private readonly onNativePointerCompletionCapture = (
     event: PointerEvent,
@@ -467,6 +489,7 @@ export class YouTubePlayerManager {
       return;
     }
     this.nativePointerContacts.delete(event.pointerId);
+    this.releaseContainerPointerCapture(event.pointerId, contact);
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -820,11 +843,16 @@ export class YouTubePlayerManager {
     if (active?.generation !== ownerGeneration) {
       return;
     }
+    const previousContact = this.nativePointerContacts.get(pointerId);
+    if (previousContact) {
+      this.releaseContainerPointerCapture(pointerId, previousContact);
+    }
     this.nativePointerContacts.set(pointerId, {
       ownerObjectId,
       ownerGeneration,
       controls: active.controls.element,
       orphaned: false,
+      capturedByContainer: false,
     });
   }
 
@@ -839,6 +867,7 @@ export class YouTubePlayerManager {
       && contact.ownerGeneration === ownerGeneration
     ) {
       this.nativePointerContacts.delete(pointerId);
+      this.releaseContainerPointerCapture(pointerId, contact);
     }
   }
 
@@ -856,6 +885,37 @@ export class YouTubePlayerManager {
       && contact.ownerGeneration === ownerGeneration
     ) {
       contact.orphaned = true;
+      const setPointerCapture = this.container.setPointerCapture;
+      if (typeof setPointerCapture === 'function') {
+        try {
+          setPointerCapture.call(this.container, pointerId);
+          contact.capturedByContainer = true;
+        } catch {
+          // The contact may already have completed outside this event turn.
+        }
+      }
+    }
+  }
+
+  private releaseContainerPointerCapture(
+    pointerId: number,
+    contact: NativePointerContact,
+  ): void {
+    if (!contact.capturedByContainer) {
+      return;
+    }
+    contact.capturedByContainer = false;
+    try {
+      this.container.releasePointerCapture?.(pointerId);
+    } catch {
+      // Native completion can auto-release capture before manager cleanup.
+    }
+  }
+
+  private releaseAndClearNativePointerContacts(): void {
+    for (const [pointerId, contact] of this.nativePointerContacts) {
+      this.releaseContainerPointerCapture(pointerId, contact);
+      this.nativePointerContacts.delete(pointerId);
     }
   }
 
