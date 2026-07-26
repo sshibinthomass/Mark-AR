@@ -80,8 +80,8 @@ describe('createCloudflareMarkerObject', () => {
     expect(previewSpace?.parent).toBe(markerObject.group);
     expect(previewSpace?.rotation.x).toBeCloseTo(Math.PI / 2);
     expect(groupRoot.parent).toBe(previewSpace);
-    expect(chairRoot.parent).toBe(groupRoot);
-    expect(textRoot.parent).toBe(previewSpace);
+    expect(chairRoot.parent?.parent).toBe(groupRoot);
+    expect(textRoot.parent?.parent).toBe(previewSpace);
     expect(groupRoot.position.toArray()).toEqual([0.3, 0.4, -0.25]);
     expect(chairRoot.position.toArray()).toEqual([-0.2, 0.1, 0.15]);
     expect(textRoot.position.toArray()).toEqual([0.25, 0.22, -0.1]);
@@ -160,12 +160,12 @@ describe('createCloudflareMarkerObject', () => {
     expect(groupRoot.position.y).toBeCloseTo(0.3);
     expect(groupRoot.position.z).toBeCloseTo(-0.1);
     expect(groupRoot.scale.x).toBeCloseTo(1.5);
-    expect(chairRoot.parent).toBe(groupRoot);
-    expect(lampRoot.parent).toBe(groupRoot);
+    expect(chairRoot.parent?.parent).toBe(groupRoot);
+    expect(lampRoot.parent?.parent).toBe(groupRoot);
     expect(chairRoot.position.x).toBeCloseTo(-0.2);
     expect(lampRoot.position.y).toBeCloseTo(0.1);
     expect(lampRoot.position.z).toBeCloseTo(0);
-    expect(orphanRoot.parent).toBe(previewSpace);
+    expect(orphanRoot.parent?.parent).toBe(previewSpace);
     expect(orphanRoot.position.x).toBeCloseTo(-0.4);
     expect(orphanRoot.position.y).toBeCloseTo(0.05);
     expect(orphanRoot.position.z).toBeCloseTo(0.2);
@@ -198,7 +198,7 @@ describe('createCloudflareMarkerObject', () => {
     expect(markerObject.group.name).toBe('cloudflare-model-object');
     expect(markerObject.group.getObjectByName('processed-base-plane')).toBeUndefined();
     expect(modelRoot.children).toContain(loadedModel);
-    expect(modelRoot.parent?.name).toBe('cloudflare-preview-space');
+    expect(modelRoot.parent?.parent?.name).toBe('cloudflare-preview-space');
     expect(modelRoot.position.y).toBeGreaterThan(0);
     expect(modelRoot.position.z).toBeCloseTo(0);
   });
@@ -378,7 +378,7 @@ describe('createCloudflareMarkerObject', () => {
     markerObject.update(0.5);
 
     const modelRoot = markerObject.group.getObjectByName('cloudflare-model-root-turntable-object') as Group;
-    expect(modelRoot.parent?.name).toBe('cloudflare-preview-space');
+    expect(modelRoot.parent?.parent?.name).toBe('cloudflare-preview-space');
     expect(modelRoot.position.y).toBeCloseTo(0.4);
     expect(modelRoot.position.z).toBeCloseTo(0.2);
     expect(modelRoot.rotation.y).toBeCloseTo(Math.PI / 2);
@@ -408,7 +408,7 @@ describe('createCloudflareMarkerObject', () => {
     const textRoot = markerObject.group.getObjectByName('cloudflare-model-root-text-object') as Group;
 
     expect(textRoot.children).toContain(textGroup);
-    expect(textRoot.parent?.name).toBe('cloudflare-preview-space');
+    expect(textRoot.parent?.parent?.name).toBe('cloudflare-preview-space');
     expect(textRoot.position.x).toBeCloseTo(0.25);
     expect(textRoot.position.y).toBeCloseTo(0.22);
     expect(textRoot.position.z).toBeCloseTo(-0.1);

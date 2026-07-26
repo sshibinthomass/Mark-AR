@@ -26,6 +26,18 @@ export class FloorSceneTransform {
     this.root.position.set(point.x, this.floorY, point.z);
   }
 
+  moveByWorldDelta(delta: Vector3): void {
+    if (this.floorY === null) {
+      return;
+    }
+
+    this.root.position.set(
+      this.root.position.x + delta.x,
+      this.floorY,
+      this.root.position.z + delta.z,
+    );
+  }
+
   rotateTo(degrees: number): void {
     this.root.quaternion.copy(this.baseQuaternion);
     this.root.rotateY(MathUtils.degToRad(degrees));

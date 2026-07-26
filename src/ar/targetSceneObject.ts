@@ -37,16 +37,28 @@ export type TargetSceneLoadMode = 'fallback' | 'strict';
 export type TargetSceneObject = {
   group: Group;
   ready: Promise<void>;
-  youtubeSurfaces: InteractiveYouTubeSurface[];
+  youtubeSurfaces: readonly TargetSceneYouTubeSurface[];
+  selectableObjects: readonly TargetSceneSelectableObject[];
   update(deltaSeconds: number): void;
   dispose(): void;
 };
 
-export type InteractiveYouTubeSurface = {
+export type TargetSceneYouTubeSurface = {
   objectId: string;
   root: Group;
   mesh: Mesh;
   youtube: YouTubeTargetObject['youtube'];
+};
+
+export type InteractiveYouTubeSurface = TargetSceneYouTubeSurface;
+
+export type TargetSceneSelectableKind = 'image' | 'youtube' | 'text' | 'model';
+
+export type TargetSceneSelectableObject = {
+  objectId: string;
+  kind: TargetSceneSelectableKind;
+  interactionRoot: Group;
+  contentRoot: Group;
 };
 
 type AnimatedRoot = {
@@ -76,6 +88,7 @@ export function createTargetSceneObject(
   const resourceLoads: Promise<void>[] = [];
   const preparedTexts: PreparedTextObject3D[] = [];
   const youtubeSurfaces: InteractiveYouTubeSurface[] = [];
+  const selectableObjects: TargetSceneSelectableObject[] = [];
   const disposedResources: DisposedResources = {
     geometries: new Set(),
     materials: new Set(),
@@ -99,6 +112,9 @@ export function createTargetSceneObject(
   }
 
   for (const [index, object] of placedObjects.entries()) {
+    const objectId = selectableObjectId(object, index);
+    const interactionRoot = new Group();
+    interactionRoot.name = `cloudflare-interaction-root-${objectId}`;
     const objectRoot = new Group();
     objectRoot.name = modelRootName(object, index, placedObjects.length);
     const parentGroup = object.groupId ? groupRoots.get(object.groupId) : undefined;
@@ -108,7 +124,14 @@ export function createTargetSceneObject(
         ? normalizePlacement(object.placement)
         : normalizePlacement({ height: 0.04 });
     applyTargetPlacement(objectRoot, placement);
-    (parentGroup ?? sceneRoot).add(objectRoot);
+    (parentGroup ?? sceneRoot).add(interactionRoot);
+    interactionRoot.add(objectRoot);
+    selectableObjects.push({
+      objectId,
+      kind: selectableKind(object),
+      interactionRoot,
+      contentRoot: objectRoot,
+    });
 
     if (isTextTargetObject(object)) {
       if (asset.createTextObject) {
@@ -174,6 +197,7 @@ export function createTargetSceneObject(
     group: sceneRoot,
     ready: Promise.all(resourceLoads).then(() => undefined),
     youtubeSurfaces,
+    selectableObjects,
     update(deltaSeconds) {
       for (const animatedRoot of animatedRoots) {
         animatedRoot.elapsedSeconds += deltaSeconds;
@@ -215,6 +239,29 @@ function modelRootName(object: CloudflarePlacedObject, index: number, objectCoun
     return `cloudflare-model-root-${object.id}`;
   }
   return objectCount === 1 ? 'cloudflare-model-root' : `cloudflare-model-root-${index + 1}`;
+}
+
+function selectableObjectId(object: CloudflarePlacedObject, index: number): string {
+  if (object.id) {
+    return object.id;
+  }
+  if (isModelTargetObject(object) && object.model.id) {
+    return object.model.id;
+  }
+  return `object-${index + 1}`;
+}
+
+function selectableKind(object: CloudflarePlacedObject): TargetSceneSelectableKind {
+  if (isImageTargetObject(object)) {
+    return 'image';
+  }
+  if (isYouTubeTargetObject(object)) {
+    return 'youtube';
+  }
+  if (isTextTargetObject(object)) {
+    return 'text';
+  }
+  return 'model';
 }
 
 function createPlacedObjects(asset: CloudflarePlacedAsset): CloudflarePlacedObject[] {

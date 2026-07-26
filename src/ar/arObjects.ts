@@ -15,7 +15,7 @@ export type MarkerObject = {
   group: Group;
   update: (deltaSeconds: number) => void;
   dispose?: () => void;
-  youtubeSurfaces?: InteractiveYouTubeSurface[];
+  youtubeSurfaces?: readonly InteractiveYouTubeSurface[];
 };
 
 export function createMarkerObject(spec: MarkerObjectSpec): MarkerObject {
