@@ -13,6 +13,12 @@ export type YouTubeTransportControls = {
   dispose(): void;
 };
 
+export type YouTubeTransportPointerContactCallbacks = {
+  onPointerContactStart?(pointerId: number): void;
+  onPointerContactEnd?(pointerId: number): void;
+  onPointerContactAbandon?(pointerId: number): void;
+};
+
 const PLAYING = 1;
 const BUFFERING = 3;
 const CAPTURED_CLICK_WINDOW_MS = 750;
@@ -29,7 +35,9 @@ const ROOT_INTERACTION_EVENTS = [
   'click',
 ] as const;
 
-export function createYouTubeTransportControls(): YouTubeTransportControls {
+export function createYouTubeTransportControls(
+  pointerContactCallbacks: YouTubeTransportPointerContactCallbacks = {},
+): YouTubeTransportControls {
   const element = document.createElement('div');
   element.className = 'youtube-transport-controls';
   element.hidden = true;
@@ -90,12 +98,16 @@ export function createYouTubeTransportControls(): YouTubeTransportControls {
       // Pointer capture can fail when the browser has already canceled the contact.
     }
     pointerContacts.set(event.pointerId, { origin, captureTarget });
+    pointerContactCallbacks.onPointerContactStart?.(event.pointerId);
   };
   const onPointerMove = (event: PointerEvent) => event.stopPropagation();
   const endPointerCapture = (event: PointerEvent) => {
     event.stopPropagation();
     const contact = pointerContacts.get(event.pointerId);
     pointerContacts.delete(event.pointerId);
+    if (contact) {
+      pointerContactCallbacks.onPointerContactEnd?.(event.pointerId);
+    }
     if (
       event.type === 'pointerup'
       && contact
@@ -163,6 +175,10 @@ export function createYouTubeTransportControls(): YouTubeTransportControls {
       toggle.setAttribute('aria-label', playing ? 'Pause video' : 'Play video');
     },
     dispose() {
+      const abandonedContacts = [...pointerContacts];
+      for (const [pointerId] of abandonedContacts) {
+        pointerContactCallbacks.onPointerContactAbandon?.(pointerId);
+      }
       rewind.removeEventListener('click', onRewind);
       toggle.removeEventListener('click', onToggle);
       forward.removeEventListener('click', onForward);
@@ -174,7 +190,7 @@ export function createYouTubeTransportControls(): YouTubeTransportControls {
       for (const eventName of ROOT_INTERACTION_EVENTS) {
         element.removeEventListener(eventName, stopInteractionPropagation);
       }
-      for (const [pointerId, contact] of pointerContacts) {
+      for (const [pointerId, contact] of abandonedContacts) {
         try {
           contact.captureTarget.releasePointerCapture?.(pointerId);
         } catch {

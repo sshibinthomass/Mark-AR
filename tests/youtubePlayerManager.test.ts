@@ -1314,6 +1314,215 @@ describe('YouTubePlayerManager', () => {
     manager.dispose();
   });
 
+  it.each(['renderer', 'another marker'] as const)(
+    'contains an in-flight native pointerup retargeted to the %s after marker loss',
+    async (destination) => {
+      const harness = await createLayerRoutingHarness();
+      const markerActivation = vi.fn();
+      const containerActivation = vi.fn();
+      const releaseTarget = destination === 'renderer'
+        ? harness.rendererElement
+        : harness.rendererElement.appendChild(document.createElement('div'));
+      releaseTarget.addEventListener('pointerup', markerActivation);
+      harness.container.addEventListener('pointerup', containerActivation);
+
+      dispatchPointer(harness.toggle, 'pointerdown', {
+        pointerId: 51,
+        clientX: 122,
+        clientY: 62,
+      });
+      harness.manager.setMarkerVisible('marker-1', false);
+      dispatchPointer(releaseTarget, 'pointerup', {
+        pointerId: 51,
+        clientX: 122,
+        clientY: 62,
+      });
+
+      expect(markerActivation).not.toHaveBeenCalled();
+      expect(containerActivation).not.toHaveBeenCalled();
+      harness.manager.dispose();
+    },
+  );
+
+  it('contains an in-flight native pointerup retargeted to the floor container after deactivation', async () => {
+    const harness = await createLayerRoutingHarness();
+    const floorGesture = vi.fn();
+    harness.container.addEventListener('pointerup', floorGesture);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 52,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(harness.container, 'pointerup', {
+      pointerId: 52,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(floorGesture).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('preserves a normal same-owner native pointer release and button command', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerUp = vi.fn();
+    harness.container.addEventListener('pointerup', bubbledPointerUp);
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(harness.toggle);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 53,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.toggle, 'pointerup', {
+      pointerId: 53,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.toggle, 'click', {
+      pointerId: 53,
+      clientX: 122,
+      clientY: 62,
+    });
+
+    expect(bubbledPointerUp).not.toHaveBeenCalled();
+    expect(harness.player.port.pauseVideo).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it('clears orphaned native pointer IDs independently and exactly once', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerUp = vi.fn();
+    const bubbledPointerCancel = vi.fn();
+    harness.container.addEventListener('pointerup', bubbledPointerUp);
+    harness.container.addEventListener('pointercancel', bubbledPointerCancel);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 54,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.forward, 'pointerdown', {
+      pointerId: 55,
+      clientX: 182,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 54,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerUp).not.toHaveBeenCalled();
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 54,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerUp).toHaveBeenCalledOnce();
+
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 55,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerCancel).not.toHaveBeenCalled();
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 55,
+      clientX: 300,
+      clientY: 200,
+    });
+    expect(bubbledPointerCancel).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it('hands native containment to the manager before disposal releases pointer capture', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerCancel = vi.fn();
+    harness.container.addEventListener('pointercancel', bubbledPointerCancel);
+    Object.assign(harness.toggle, {
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: (pointerId: number) => {
+        dispatchPointer(harness.toggle, 'pointercancel', {
+          pointerId,
+          clientX: 122,
+          clientY: 62,
+        });
+      },
+    });
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 59,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+
+    expect(bubbledPointerCancel).not.toHaveBeenCalled();
+    harness.manager.dispose();
+  });
+
+  it('forgets a normally canceled native contact before later owner deactivation', async () => {
+    const harness = await createLayerRoutingHarness();
+    const bubbledPointerCancel = vi.fn();
+    harness.container.addEventListener('pointercancel', bubbledPointerCancel);
+
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 56,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.toggle, 'pointercancel', {
+      pointerId: 56,
+      clientX: 122,
+      clientY: 62,
+    });
+    harness.manager.setMarkerVisible('marker-1', false);
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 56,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(bubbledPointerCancel).toHaveBeenCalledOnce();
+    harness.manager.dispose();
+  });
+
+  it('removes native completion containment state and listeners when disposed mid-contact', async () => {
+    const harness = await createLayerRoutingHarness();
+    dispatchPointer(harness.toggle, 'pointerdown', {
+      pointerId: 57,
+      clientX: 122,
+      clientY: 62,
+    });
+    dispatchPointer(harness.forward, 'pointerdown', {
+      pointerId: 58,
+      clientX: 182,
+      clientY: 62,
+    });
+
+    harness.manager.dispose();
+    harness.container.append(harness.rendererElement);
+    const receivedEvents: string[] = [];
+    harness.container.addEventListener('pointerup', () => receivedEvents.push('pointerup'));
+    harness.container.addEventListener('pointercancel', () => receivedEvents.push('pointercancel'));
+    dispatchPointer(harness.rendererElement, 'pointerup', {
+      pointerId: 57,
+      clientX: 300,
+      clientY: 200,
+    });
+    dispatchPointer(harness.rendererElement, 'pointercancel', {
+      pointerId: 58,
+      clientX: 300,
+      clientY: 200,
+    });
+
+    expect(receivedEvents).toEqual(['pointerup', 'pointercancel']);
+  });
+
   it('removes layer gesture listeners and state when disposed mid-gesture', async () => {
     const container = document.createElement('div');
     const rendererElement = document.createElement('div');

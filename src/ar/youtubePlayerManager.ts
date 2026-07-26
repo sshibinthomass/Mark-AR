@@ -77,6 +77,13 @@ type TransportGesture = {
   origin?: TransportHit;
 };
 
+type NativePointerContact = {
+  ownerObjectId: string;
+  ownerGeneration: number;
+  controls: HTMLElement;
+  orphaned: boolean;
+};
+
 type TransportHitCandidate = {
   ownerObjectId: string;
   ownerGeneration: number;
@@ -148,6 +155,7 @@ export class YouTubePlayerManager {
   private readonly surfaces: RegisteredSurface[] = [];
   private readonly pendingActivations = new Map<string, PendingActivation>();
   private readonly activePlayers = new Map<string, ActivePlayer>();
+  private readonly nativePointerContacts = new Map<number, NativePointerContact>();
   // Chrome can hit the renderer layer while omitting deeply scaled CSS3D descendants.
   private readonly layerPointerGestures = new Map<number, TransportGesture>();
   private readonly layerTouchGestures = new Map<number, TransportGesture>();
@@ -240,7 +248,33 @@ export class YouTubePlayerManager {
     const host = document.createElement('div');
     host.style.width = '100%';
     host.style.height = '100%';
-    const controls = createYouTubeTransportControls();
+    const generation = this.nextActivationGeneration;
+    this.nextActivationGeneration += 1;
+    const stackOrder = this.nextPlayerStackOrder;
+    this.nextPlayerStackOrder += 1;
+    const controls = createYouTubeTransportControls({
+      onPointerContactStart: (pointerId) => {
+        this.beginNativePointerContact(
+          pointerId,
+          surface.objectId,
+          generation,
+        );
+      },
+      onPointerContactEnd: (pointerId) => {
+        this.endNativePointerContact(
+          pointerId,
+          surface.objectId,
+          generation,
+        );
+      },
+      onPointerContactAbandon: (pointerId) => {
+        this.abandonNativePointerContact(
+          pointerId,
+          surface.objectId,
+          generation,
+        );
+      },
+    });
     const controlsFrame = document.createElement('div');
     controlsFrame.className = 'youtube-css3d-controls-frame';
     controlsFrame.append(controls.element);
@@ -248,10 +282,6 @@ export class YouTubePlayerManager {
     this.renderer.domElement.append(wrapper, controlsFrame);
     const cssObject = this.createCssObject(wrapper);
     const controlsCssObject = this.createCssObject(controlsFrame);
-    const generation = this.nextActivationGeneration;
-    this.nextActivationGeneration += 1;
-    const stackOrder = this.nextPlayerStackOrder;
-    this.nextPlayerStackOrder += 1;
     controlsCssObject.position.y = YOUTUBE_TRANSPORT_Y_OFFSET_PX;
     controlsCssObject.scale.setScalar(YOUTUBE_CSS_PIXELS_PER_WORLD_UNIT);
     cssObject.add(controlsCssObject);
@@ -364,6 +394,16 @@ export class YouTubePlayerManager {
 
   private connectTransportInputRouter(): void {
     const layer = this.renderer.domElement;
+    this.container.addEventListener(
+      'pointerup',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
+    this.container.addEventListener(
+      'pointercancel',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
     layer.addEventListener('pointerdown', this.onLayerPointerDown);
     layer.addEventListener('pointermove', this.onLayerPointerMove);
     layer.addEventListener('pointerup', this.onLayerPointerUp);
@@ -380,6 +420,16 @@ export class YouTubePlayerManager {
 
   private disconnectTransportInputRouter(): void {
     const layer = this.renderer.domElement;
+    this.container.removeEventListener(
+      'pointerup',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
+    this.container.removeEventListener(
+      'pointercancel',
+      this.onNativePointerCompletionCapture,
+      true,
+    );
     layer.removeEventListener('pointerdown', this.onLayerPointerDown);
     layer.removeEventListener('pointermove', this.onLayerPointerMove);
     layer.removeEventListener('pointerup', this.onLayerPointerUp);
@@ -394,9 +444,32 @@ export class YouTubePlayerManager {
     layer.removeEventListener('click', this.onLayerClick);
     this.layerPointerGestures.clear();
     this.layerTouchGestures.clear();
+    this.nativePointerContacts.clear();
     this.clearCompletedLayerClicks();
     this.routedMouse = undefined;
   }
+
+  private readonly onNativePointerCompletionCapture = (
+    event: PointerEvent,
+  ): void => {
+    const contact = this.nativePointerContacts.get(event.pointerId);
+    if (!contact) {
+      return;
+    }
+    const active = this.activePlayers.get(contact.ownerObjectId);
+    const reachesCurrentOwner = (
+      !contact.orphaned
+      && active?.generation === contact.ownerGeneration
+      && event.target instanceof Node
+      && contact.controls.contains(event.target)
+    );
+    if (reachesCurrentOwner) {
+      return;
+    }
+    this.nativePointerContacts.delete(event.pointerId);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
 
   private readonly onLayerPointerDown = (event: PointerEvent): void => {
     if (isNativeTransportTarget(event.target)) {
@@ -733,6 +806,57 @@ export class YouTubePlayerManager {
         || active.controls.element.contains(origin.target)
       )
       && (!origin.button || !origin.button.disabled);
+  }
+
+  private beginNativePointerContact(
+    pointerId: number,
+    ownerObjectId: string,
+    ownerGeneration: number,
+  ): void {
+    if (this.disposed) {
+      return;
+    }
+    const active = this.activePlayers.get(ownerObjectId);
+    if (active?.generation !== ownerGeneration) {
+      return;
+    }
+    this.nativePointerContacts.set(pointerId, {
+      ownerObjectId,
+      ownerGeneration,
+      controls: active.controls.element,
+      orphaned: false,
+    });
+  }
+
+  private endNativePointerContact(
+    pointerId: number,
+    ownerObjectId: string,
+    ownerGeneration: number,
+  ): void {
+    const contact = this.nativePointerContacts.get(pointerId);
+    if (
+      contact?.ownerObjectId === ownerObjectId
+      && contact.ownerGeneration === ownerGeneration
+    ) {
+      this.nativePointerContacts.delete(pointerId);
+    }
+  }
+
+  private abandonNativePointerContact(
+    pointerId: number,
+    ownerObjectId: string,
+    ownerGeneration: number,
+  ): void {
+    if (this.disposed) {
+      return;
+    }
+    const contact = this.nativePointerContacts.get(pointerId);
+    if (
+      contact?.ownerObjectId === ownerObjectId
+      && contact.ownerGeneration === ownerGeneration
+    ) {
+      contact.orphaned = true;
+    }
   }
 
   private refreshTransportHitGeometry(camera: Camera): void {
