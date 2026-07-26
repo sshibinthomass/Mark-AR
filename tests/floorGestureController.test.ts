@@ -48,9 +48,28 @@ describe('FloorGestureController', () => {
     expect(handlers.onTap).not.toHaveBeenCalled();
   });
 
-  it('emits point-pair drag deltas after a long press', () => {
+  it('does not drag after a long press when no transform becomes active', () => {
     vi.useFakeTimers();
     const { target, handlers, controller } = setupController();
+    controller.connect();
+
+    dispatchTouch(target, 'touchstart', [{ clientX: 0, clientY: 0 }]);
+    vi.advanceTimersByTime(450);
+    dispatchTouch(target, 'touchmove', [{ clientX: 3, clientY: 4 }]);
+
+    expect(handlers.onLongPress).toHaveBeenCalledOnce();
+    expect(handlers.onDrag).not.toHaveBeenCalled();
+  });
+
+  it('emits point-pair drag deltas when a long press activates a transform', () => {
+    vi.useFakeTimers();
+    let transformActive = false;
+    const { target, handlers, controller } = setupController(
+      () => transformActive,
+      () => {
+        transformActive = true;
+      },
+    );
     controller.connect();
 
     dispatchTouch(target, 'touchstart', [{ clientX: 0, clientY: 0 }]);
@@ -69,7 +88,7 @@ describe('FloorGestureController', () => {
   });
 
   it('emits drag after reaching the threshold when a transform was already active', () => {
-    const { target, handlers, controller } = setupController(true);
+    const { target, handlers, controller } = setupController(() => true);
     controller.connect();
 
     dispatchTouch(target, 'touchstart', [{ clientX: 0, clientY: 0 }]);
@@ -118,6 +137,44 @@ describe('FloorGestureController', () => {
     expect(handlers.onLongPress).not.toHaveBeenCalled();
   });
 
+  it('ignores generic interactive controls and their descendants', () => {
+    const { target, handlers, controller } = setupController();
+    controller.connect();
+
+    const roleButton = document.createElement('div');
+    roleButton.setAttribute('role', 'button');
+    const controls = [
+      document.createElement('button'),
+      document.createElement('a'),
+      document.createElement('input'),
+      document.createElement('select'),
+      document.createElement('textarea'),
+      roleButton,
+    ];
+
+    for (const control of controls) {
+      const eventTarget = control instanceof HTMLInputElement
+        || control instanceof HTMLSelectElement
+        || control instanceof HTMLTextAreaElement
+        ? control
+        : control.appendChild(document.createElement('span'));
+      target.replaceChildren(control);
+
+      const start = dispatchTouch(eventTarget, 'touchstart', [{ clientX: 1, clientY: 2 }]);
+      const move = dispatchTouch(eventTarget, 'touchmove', [{ clientX: 8, clientY: 9 }]);
+      const end = dispatchTouch(eventTarget, 'touchend', [], [{ clientX: 8, clientY: 9 }]);
+
+      expect(start.defaultPrevented).toBe(false);
+      expect(move.defaultPrevented).toBe(false);
+      expect(end.defaultPrevented).toBe(false);
+    }
+
+    expect(handlers.onTap).not.toHaveBeenCalled();
+    expect(handlers.onLongPress).not.toHaveBeenCalled();
+    expect(handlers.onDrag).not.toHaveBeenCalled();
+    expect(handlers.onPinch).not.toHaveBeenCalled();
+  });
+
   it('ignores events from inside the YouTube CSS3D player', () => {
     const { target, handlers, controller } = setupController();
     controller.connect();
@@ -141,12 +198,15 @@ describe('FloorGestureController', () => {
   });
 });
 
-function setupController(transformActive = false) {
+function setupController(
+  isTransformActive: () => boolean = () => false,
+  onLongPress: () => void = () => {},
+) {
   const target = document.createElement('div');
   const handlers = {
-    isTransformActive: vi.fn(() => transformActive),
+    isTransformActive: vi.fn(isTransformActive),
     onTap: vi.fn(),
-    onLongPress: vi.fn(),
+    onLongPress: vi.fn(onLongPress),
     onDrag: vi.fn(),
     onPinch: vi.fn(),
   };

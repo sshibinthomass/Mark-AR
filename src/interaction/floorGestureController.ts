@@ -150,9 +150,9 @@ export class FloorGestureController {
 
       this.pendingPress = false;
       this.longPressFired = true;
-      this.dragging = true;
       this.longPressTimer = undefined;
       this.handlers.onLongPress(this.gestureStart);
+      this.dragging = this.handlers.isTransformActive();
     }, LONG_PRESS_DELAY_MS);
   }
 
