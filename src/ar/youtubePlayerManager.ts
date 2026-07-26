@@ -97,6 +97,10 @@ export class YouTubePlayerManager {
       overflow: 'hidden',
       pointerEvents: 'auto',
     });
+    const viewElement = this.renderer.domElement.firstElementChild;
+    if (viewElement instanceof HTMLElement) {
+      viewElement.style.pointerEvents = 'auto';
+    }
     this.container.append(this.renderer.domElement);
     this.resize(this.container.clientWidth, this.container.clientHeight);
   }

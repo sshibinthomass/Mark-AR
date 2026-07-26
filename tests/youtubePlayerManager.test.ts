@@ -16,6 +16,8 @@ describe('YouTubePlayerManager', () => {
   it('keeps the CSS3D renderer layer pointer-interactive for player controls', () => {
     const container = document.createElement('div');
     const rendererElement = document.createElement('div');
+    const viewElement = rendererElement.appendChild(document.createElement('div'));
+    viewElement.style.pointerEvents = 'none';
     const manager = new YouTubePlayerManager(container, {
       createCssRenderer: () => ({
         domElement: rendererElement,
@@ -25,6 +27,7 @@ describe('YouTubePlayerManager', () => {
     });
 
     expect(rendererElement.style.pointerEvents).toBe('auto');
+    expect(viewElement.style.pointerEvents).toBe('auto');
 
     manager.dispose();
   });
