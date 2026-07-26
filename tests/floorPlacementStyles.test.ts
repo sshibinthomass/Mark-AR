@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync('src/style.css', 'utf8');
+const brandedCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
 
 function cssRule(selector: string, source = css): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -94,6 +95,34 @@ describe('floor placement styles', () => {
     expect(css).toMatch(
       /\.floor-ar-back:focus-visible,\s*\.floor-ar-controls button:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--gold\)/m,
     );
+  });
+
+  it('styles the selection toggle as a compact pressed control beside Done', () => {
+    const selectionControls = cssRule('.floor-ar-selection-controls');
+    const selectAll = cssRule('#floor-ar-select-all');
+    const pressedSelectAll = cssRule('#floor-ar-select-all[aria-pressed="true"]');
+    const selectionHint = cssRule('#floor-ar-selection-hint');
+    const brandedSelectionHint = cssRule('#floor-ar-selection-hint', brandedCss);
+
+    expect(selectionControls).toContain('display: flex');
+    expect(selectionControls).toContain('gap: 8px');
+    expect(selectionControls).toContain('align-items: center');
+    expect(selectAll).toContain('min-height: 44px');
+    expect(selectAll).toContain('padding: 0 14px');
+    expect(pressedSelectAll).toContain('background: var(--teal)');
+    expect(selectionHint).toContain('font-size: 12px');
+    expect(brandedSelectionHint).toContain('color: var(--color-mist-slate)');
+  });
+
+  it('keeps selection controls compact at the existing mobile breakpoint', () => {
+    const mobile = mediaSection('(max-width: 620px)');
+    const selectionControls = cssRule('.floor-ar-selection-controls', mobile);
+    const selectionButtons = cssRule('.floor-ar-selection-controls button', mobile);
+    const selectionHint = cssRule('#floor-ar-selection-hint', mobile);
+
+    expect(selectionControls).toContain('flex: 1 1 auto');
+    expect(selectionButtons).toContain('flex: 0 1 auto');
+    expect(selectionHint).toContain('flex-basis: 100%');
   });
 
   it('removes floor-control motion when reduced motion is requested', () => {

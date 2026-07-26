@@ -587,6 +587,32 @@ h1 {
   accent-color: var(--teal);
 }
 
+.floor-ar-selection-controls {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 8px;
+  align-items: center;
+}
+
+#floor-ar-select-all {
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+#floor-ar-select-all[aria-pressed="true"] {
+  border-color: var(--teal);
+  color: #031b18;
+  background: var(--teal);
+}
+
+#floor-ar-selection-hint {
+  flex: 1 1 100%;
+  margin: -2px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .floor-ar-controls button {
   min-height: 44px;
   border-color: rgba(94, 234, 212, 0.3);
@@ -2952,6 +2978,18 @@ button:disabled,
 
   .floor-ar-controls {
     align-items: stretch;
+  }
+
+  .floor-ar-selection-controls {
+    flex: 1 1 auto;
+  }
+
+  .floor-ar-selection-controls button {
+    flex: 0 1 auto;
+  }
+
+  #floor-ar-selection-hint {
+    flex-basis: 100%;
   }
 
   #floor-ar-status,

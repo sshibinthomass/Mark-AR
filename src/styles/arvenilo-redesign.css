@@ -882,6 +882,20 @@ p {
   box-shadow: none;
 }
 
+.floor-ar-selection-controls {
+  gap: var(--space-2);
+}
+
+#floor-ar-select-all[aria-pressed="true"] {
+  border-color: var(--color-signal-mint);
+  color: var(--color-spatial-ink);
+  background: var(--color-signal-mint);
+}
+
+#floor-ar-selection-hint {
+  color: var(--color-mist-slate);
+}
+
 #floor-ar-place {
   border-color: var(--color-signal-mint);
   color: var(--color-spatial-ink);
@@ -2213,6 +2227,18 @@ button:disabled,
     bottom: max(14px, env(safe-area-inset-bottom));
     left: max(14px, env(safe-area-inset-left));
     align-items: stretch;
+  }
+
+  .floor-ar-selection-controls {
+    flex: 1 1 auto;
+  }
+
+  .floor-ar-selection-controls button {
+    flex: 0 1 auto;
+  }
+
+  #floor-ar-selection-hint {
+    flex-basis: 100%;
   }
 
   #floor-ar-status,

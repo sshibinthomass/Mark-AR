@@ -198,6 +198,26 @@ describe('renderAppShell', () => {
     expect(container.querySelector('#floor-ar-reset')?.textContent?.trim()).toBe('Reset');
     expect(container.querySelector('#floor-ar-restart')?.textContent?.trim()).toBe('Restart floor AR');
     expect((container.querySelector('#floor-ar-rotation') as HTMLInputElement).type).toBe('range');
+    const floorSelectAll = container.querySelector<HTMLButtonElement>('#floor-ar-select-all');
+    const floorSelectionDone = container.querySelector<HTMLButtonElement>('#floor-ar-selection-done');
+    const floorSelectionHint = container.querySelector<HTMLElement>('#floor-ar-selection-hint');
+    expect(floorSelectAll).toMatchObject({
+      type: 'button',
+      textContent: 'Select all',
+    });
+    expect(floorSelectAll?.getAttribute('aria-pressed')).toBe('true');
+    expect(floorSelectionDone).toMatchObject({
+      hidden: true,
+      type: 'button',
+      textContent: 'Done',
+    });
+    expect(floorSelectionHint?.textContent).toBe('Long press an object to move or scale it.');
+    expect(floorOverlay?.contains(floorSelectAll)).toBe(true);
+    expect(floorOverlay?.contains(floorSelectionDone)).toBe(true);
+    expect(floorOverlay?.contains(floorSelectionHint)).toBe(true);
+    expect(markerStage?.querySelector('#floor-ar-select-all')).toBeNull();
+    expect(markerStage?.querySelector('#floor-ar-selection-done')).toBeNull();
+    expect(markerStage?.querySelector('#floor-ar-selection-hint')).toBeNull();
     expect(container.querySelector('#floor-ar-message')?.closest('[aria-live="polite"]')).toBeTruthy();
     expect(html).toContain('id="worker-email"');
     expect(container.querySelector('#target-image-file')).toBeTruthy();

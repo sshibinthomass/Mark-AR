@@ -10,9 +10,21 @@ export type FloorPlacementUiState =
   | { state: 'floor-ended'; message: string }
   | { state: 'floor-error'; message: string };
 
+export type FloorTransformSelectionUiState = {
+  selectAll: boolean;
+  active: boolean;
+  label?: string;
+};
+
+export const DEFAULT_FLOOR_TRANSFORM_SELECTION_UI: FloorTransformSelectionUiState = {
+  selectAll: true,
+  active: false,
+};
+
 export function applyFloorPlacementUi(
   root: HTMLElement,
   state: FloorPlacementUiState,
+  selection: FloorTransformSelectionUiState,
 ): void {
   const markerStage = required<HTMLElement>(root, '#ar-stage');
   const floorStage = required<HTMLElement>(root, '#floor-ar-stage');
@@ -25,6 +37,9 @@ export function applyFloorPlacementUi(
   const restart = required<HTMLButtonElement>(root, '#floor-ar-restart');
   const rotation = required<HTMLInputElement>(root, '#floor-ar-rotation');
   const rotationControl = rotation.closest<HTMLLabelElement>('.floor-ar-rotation-control');
+  const selectAll = required<HTMLButtonElement>(root, '#floor-ar-select-all');
+  const selectionDone = required<HTMLButtonElement>(root, '#floor-ar-selection-done');
+  const selectionHint = required<HTMLElement>(root, '#floor-ar-selection-hint');
   const message = required<HTMLElement>(root, '#floor-ar-message');
   const floorStatus = required<HTMLElement>(root, '#floor-ar-status');
   const scannerControls = required<HTMLElement>(root, '.scanner-controls');
@@ -57,6 +72,17 @@ export function applyFloorPlacementUi(
   reset.disabled = !floorPlaced;
   rotationControl.hidden = !floorPlaced;
   rotation.disabled = !floorPlaced;
+  selectAll.hidden = !floorPlaced;
+  selectAll.disabled = !floorPlaced;
+  selectAll.setAttribute('aria-pressed', String(selection.selectAll));
+  selectionDone.hidden = !floorPlaced || !selection.active;
+  selectionDone.disabled = !floorPlaced || !selection.active;
+  selectionHint.hidden = !floorPlaced;
+  selectionHint.textContent = selection.active
+    ? selection.label
+      ? `${selection.label} selected. Drag to move or pinch to scale.`
+      : 'Selected object. Drag to move or pinch to scale.'
+    : 'Long press an object to move or scale it.';
   restart.hidden = !restartVisible;
   restart.disabled = !restartVisible;
 
