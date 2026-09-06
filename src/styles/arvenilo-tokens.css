@@ -4,8 +4,21 @@
 @font-face { font-family: "IBM Plex Mono"; src: url("../assets/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }
 @font-face { font-family: "IBM Plex Mono"; src: url("../assets/fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); font-style: normal; font-weight: 500; font-display: swap; }
 
+/*
+ * Arvenilo token contract.
+ *
+ * Two layers live here:
+ *   1. The raw palette, verbatim from the design system. These never change
+ *      between themes -- mint is mint on any ground.
+ *   2. A semantic layer (surface / text / line / veil) that DOES flip. Component
+ *      rules read only the semantic layer, so both themes come from this file
+ *      alone rather than from a parallel set of component rules.
+ *
+ * The design system is dark-first: the void ground and mist text are the
+ * default, and `[data-theme="light"]` is the opt-in inversion.
+ */
 :root {
-  color-scheme: light;
+  /* Raw palette */
   --color-spatial-void: #020a0c;
   --color-spatial-ink: #081d21;
   --color-spatial-surface: #0d2a2e;
@@ -24,6 +37,9 @@
   --color-gold-wash: #fff1cf;
   --color-error-dark: #b83e4b;
   --color-error-light: #ff9099;
+  --color-violet-light: #a999ff;
+
+  /* Type */
   --font-display: "Sora Variable", "Sora", "Avenir Next", "Segoe UI", sans-serif;
   --font-text: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
   --font-utility: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", monospace;
@@ -36,12 +52,100 @@
   --text-body: 1rem;
   --text-small: 0.875rem;
   --text-label: 0.75rem;
+
+  /* Space, radius, measure */
   --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.5rem;
   --space-6: 2rem; --space-7: 3rem; --space-8: 4rem; --space-9: 6rem; --space-10: 8rem;
   --radius-control: 10px; --radius-card: 16px; --radius-stage: 24px; --radius-status: 999px;
   --content-reading: 720px; --content-standard: 1200px; --content-wide: 1440px; --content-max: 1600px;
+  --control-height: 44px;
+  --header-height: 64px;
+
+  /* Motion */
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --section-space: clamp(4.5rem, 8vw, 8rem);
+}
+
+/*
+ * Semantic layer -- dark ground (default).
+ *
+ * The three band surfaces are steps on one dark depth ladder, not a light/dark
+ * switch: `raised` sits above the ground, `recessed` sinks below it, `future`
+ * opens into violet-leaning void.
+ */
+:root {
+  color-scheme: dark;
+
+  --surface-ground: var(--color-spatial-void);
+  --surface-band-raised: #071a1e;
+  --surface-band-recessed: #010507;
+  --surface-band-future: #050f1b;
+
+  /* Panels are veils over the 3D field, never solid slabs. */
+  --veil-card: rgba(8, 29, 33, 0.72);
+  --veil-ink: rgba(8, 29, 33, 0.88);
+  --veil-inset: rgba(2, 10, 12, 0.58);
+  --veil-scrim: rgba(2, 10, 12, 0.76);
+
+  --surface-panel: var(--veil-card);
+  --surface-inset: var(--veil-inset);
+  --surface-chrome: var(--veil-ink);
+
+  --text-primary: var(--color-reality-mist);
+  --text-secondary: var(--color-mist-slate);
+  --text-on-accent: var(--color-spatial-ink);
+
+  --line-soft: var(--color-border-dark);
+  --line-strong: #2f6a71;
+  --line-hairline: rgba(168, 185, 187, 0.14);
+
+  --status-error: var(--color-error-light);
+  --status-error-contrast: var(--color-spatial-ink);
+  --accent-wash: rgba(94, 234, 212, 0.14);
+  --gold-wash-surface: rgba(244, 185, 66, 0.16);
+
+  /* Depth. The DS prefers borders and surface contrast to large shadows. */
+  --elevation-float: 0 28px 80px rgba(0, 0, 0, 0.52);
+  /* Chrome drawn inside the 3D scene keeps its own shadow in both themes. */
+  --elevation-scene: 0 12px 24px rgba(0, 0, 0, 0.45);
+  --state-locked: var(--color-violet-light);
+  --field-opacity: 1;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-ground: var(--color-reality-mist);
+  --surface-band-raised: var(--color-interface-white);
+  /* The recessed band stays ink in both themes: it is the closing CTA band. */
+  --surface-band-recessed: var(--color-spatial-ink);
+  --surface-band-future: #eaf3f6;
+
+  --veil-card: rgba(255, 255, 255, 0.88);
+  --veil-ink: rgba(255, 255, 255, 0.94);
+  --veil-inset: rgba(244, 251, 250, 0.76);
+  --veil-scrim: rgba(8, 29, 33, 0.68);
+
+  --surface-panel: var(--veil-card);
+  --surface-inset: var(--color-reality-mist);
+  --surface-chrome: var(--veil-ink);
+
+  --text-primary: var(--color-spatial-ink);
+  --text-secondary: var(--color-context-slate);
+  --text-on-accent: var(--color-spatial-ink);
+
+  --line-soft: var(--color-border-light);
+  --line-strong: var(--color-border-dark);
+  --line-hairline: rgba(77, 98, 101, 0.14);
+
+  --status-error: var(--color-error-dark);
+  --status-error-contrast: var(--color-interface-white);
+  --accent-wash: var(--color-mint-wash);
+  --gold-wash-surface: var(--color-gold-wash);
+
+  --elevation-float: 0 24px 66px rgba(15, 118, 110, 0.14);
+  --state-locked: var(--color-digital-violet);
+  --field-opacity: 0.42;
 }

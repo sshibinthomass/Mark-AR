@@ -1,14 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody, mediaBlock as sourceMediaBlock } from './cssSource';
 
-const css = readFileSync('src/style.css', 'utf8');
-const redesignCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
+const css = readFileSync('src/styles/arvenilo.css', 'utf8');
+const redesignCss = readFileSync('src/styles/arvenilo.css', 'utf8');
 
 describe('target QR prompt styles', () => {
   it('uses a fixed, high-priority modal layer with a split desktop layout', () => {
     expect(cssRule('.target-qr-overlay')).toContain('position: fixed');
     expect(cssRule('.target-qr-overlay')).toContain('z-index: 100');
-    expect(cssRule('.target-qr-overlay')).toContain('backdrop-filter: blur(12px)');
+    expect(cssRule('.target-qr-overlay')).toContain('backdrop-filter: none');
     expect(cssRule('.target-qr-dialog')).toContain(
       'grid-template-columns: minmax(260px, 0.9fr) minmax(280px, 1.1fr)',
     );
@@ -26,9 +27,12 @@ describe('target QR prompt styles', () => {
   it('replaces legacy glass and gradients with solid QR surfaces', () => {
     expect(cssRuleFrom(redesignCss, '.target-qr-overlay')).toContain('backdrop-filter: none');
     expect(cssRuleFrom(redesignCss, '.target-qr-dialog')).toContain(
-      'background: var(--color-reality-mist)',
+      'background: var(--surface-band-raised)',
     );
-    expect(cssRuleFrom(redesignCss, '.target-qr-dialog')).toContain('box-shadow: none');
+    /* A modal is the one place the design system allows a lifted surface. */
+    expect(cssRuleFrom(redesignCss, '.target-qr-dialog')).toContain(
+      'box-shadow: var(--elevation-float)',
+    );
     expect(cssRuleFrom(redesignCss, '.target-qr-preview-shell')).toContain(
       'background: var(--color-interface-white)',
     );
@@ -41,18 +45,16 @@ describe('target QR prompt styles', () => {
     expect(cssRuleFrom(redesignCss, '.target-qr-target span')).toContain(
       'background: var(--color-anchor-gold)',
     );
-    const decoration = cssRuleFrom(redesignCss, '.target-qr-dialog::before');
-    expect(decoration).toContain('content: none');
-    expect(decoration).toContain('display: none');
-    expect(decoration).not.toContain('var(--color-anchor-gold)');
+    /* The legacy gradient bar is gone outright rather than neutralised. */
+    expect(cssRuleFrom(redesignCss, '.target-qr-dialog::before')).toBe('');
   });
 
   it('shows QR errors and busy sharing with explicit semantic colors', () => {
     expect(cssRuleFrom(redesignCss, '.target-qr-error')).toContain(
-      'color: var(--color-error-dark)',
+      'color: var(--status-error)',
     );
     expect(cssRuleFrom(redesignCss, '.target-qr-share-status[data-tone="error"]')).toContain(
-      'color: var(--color-error-dark)',
+      'color: var(--status-error)',
     );
     expect(cssRuleFrom(redesignCss, '.target-qr-actions [aria-busy="true"]')).toContain(
       'cursor: progress',
@@ -60,21 +62,15 @@ describe('target QR prompt styles', () => {
   });
 
   it('switches to one column on small screens and removes motion when requested', () => {
-    expect(mediaBlock('(max-width: 720px)')).toMatch(
+    expect(mediaBlock('(max-width: 767px)')).toMatch(
       /\.target-qr-dialog\s*\{[^}]*grid-template-columns:\s*1fr/m,
     );
     const reducedMotion = mediaBlock('(prefers-reduced-motion: reduce)');
-    expect(reducedMotion).toMatch(
-      /\.target-qr-dialog\s*\{[^}]*animation:\s*none/m,
-    );
-    expect(reducedMotion).toMatch(
-      /\.target-qr-loading::before\s*\{[^}]*animation:\s*none/m,
-    );
+    expect(cssRuleFrom(reducedMotion, '.target-qr-dialog')).toContain('animation: none');
+    expect(cssRuleFrom(reducedMotion, '.target-qr-loading::before')).toContain('animation: none');
 
     const redesignReducedMotion = mediaBlockFrom(redesignCss, '(prefers-reduced-motion: reduce)');
-    expect(redesignReducedMotion).toMatch(
-      /\.target-qr-dialog\s*\{[^}]*animation:\s*none/m,
-    );
+    expect(cssRuleFrom(redesignReducedMotion, '.target-qr-dialog')).toContain('animation: none');
     expect(redesignReducedMotion).toMatch(
       /\.target-qr-loading::before,\s*\.target-model-card-loader::before,\s*\.target-preview-loader-spinner\s*\{[^}]*animation:\s*none/m,
     );
@@ -82,49 +78,17 @@ describe('target QR prompt styles', () => {
 });
 
 function cssRuleFrom(source: string, selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+  return selectorBody(selector, source);
 }
 
 function mediaBlockFrom(source: string, query: string): string {
-  const start = source.lastIndexOf(`@media ${query}`);
-  if (start < 0) return '';
-  let depth = 0;
-  let entered = false;
-  for (let index = start; index < source.length; index += 1) {
-    if (source[index] === '{') {
-      depth += 1;
-      entered = true;
-    } else if (source[index] === '}') {
-      depth -= 1;
-      if (entered && depth === 0) return source.slice(start, index + 1);
-    }
-  }
-  return '';
+  return sourceMediaBlock(query, source);
 }
 
 function cssRule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(css)?.groups?.body ?? '';
+  return selectorBody(selector, css);
 }
 
 function mediaBlock(query: string): string {
-  const start = css.indexOf(`@media ${query}`);
-  if (start < 0) {
-    return '';
-  }
-  let depth = 0;
-  let entered = false;
-  for (let index = start; index < css.length; index += 1) {
-    if (css[index] === '{') {
-      depth += 1;
-      entered = true;
-    } else if (css[index] === '}') {
-      depth -= 1;
-      if (entered && depth === 0) {
-        return css.slice(start, index + 1);
-      }
-    }
-  }
-  return '';
+  return sourceMediaBlock(query, css);
 }

@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody } from './cssSource';
 
 const tokenCss = readFileSync('src/styles/arvenilo-tokens.css', 'utf8');
-const componentCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
+const componentCss = readFileSync('src/styles/arvenilo.css', 'utf8');
 
 function cssRule(source: string, selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+  return selectorBody(selector, source);
 }
 
 describe('shared UI system styles', () => {
@@ -26,12 +26,12 @@ describe('shared UI system styles', () => {
   });
 
   it('provides coherent action variants and a shared focus ring', () => {
-    expect(cssRule(componentCss, '.action-control')).toContain('min-height: 44px');
+    expect(cssRule(componentCss, '.action-control')).toContain('min-height: var(--control-height)');
     expect(cssRule(componentCss, '.action-control--primary')).toContain('background: var(--color-signal-mint)');
-    expect(cssRule(componentCss, '.action-control--secondary')).toContain('border-color: var(--color-border-dark)');
+    expect(cssRule(componentCss, '.action-control--secondary')).toContain('border-color: var(--line-strong)');
     expect(cssRule(componentCss, '.action-control--quiet')).toContain('background: transparent');
-    expect(cssRule(componentCss, '.action-control--danger')).toContain('color: var(--color-error-dark)');
-    expect(cssRule(componentCss, '.action-control--inverse')).toContain('color: var(--color-interface-white)');
+    expect(cssRule(componentCss, '.action-control--danger')).toContain('color: var(--status-error)');
+    expect(cssRule(componentCss, '.action-control--inverse')).toContain('color: var(--color-reality-mist)');
     expect(componentCss).toMatch(/:focus-visible\s*\{[^}]*outline:\s*3px solid/m);
     expect(cssRule(componentCss, '[data-page-heading]:focus')).toContain('outline: none');
   });

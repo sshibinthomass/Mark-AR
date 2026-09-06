@@ -1,27 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody, mediaBlock as sourceMediaBlock } from './cssSource';
 
 const css = [
-  readFileSync('src/style.css', 'utf8'),
-  readFileSync('src/styles/arvenilo-redesign.css', 'utf8'),
+  readFileSync('src/styles/arvenilo.css', 'utf8'),
+  readFileSync('src/styles/arvenilo.css', 'utf8'),
 ].join('\n');
 
 function mediaBlock(query: string): string {
-  const start = css.indexOf(`@media ${query}`);
-  if (start < 0) return '';
-  const open = css.indexOf('{', start);
-  let depth = 0;
-  for (let index = open; index < css.length; index += 1) {
-    if (css[index] === '{') depth += 1;
-    if (css[index] === '}') depth -= 1;
-    if (depth === 0) return css.slice(open + 1, index);
-  }
-  return '';
+  return sourceMediaBlock(query, css);
 }
 
 function cssRule(source: string, selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+  return selectorBody(selector, source);
 }
 
 describe('responsive navigation styles', () => {
@@ -91,7 +82,7 @@ describe('responsive navigation styles', () => {
   it('keeps page Home controls compact instead of full width', () => {
     const homeLink = cssRule(mobile, '.page-home-link');
     expect(homeLink).toContain('width: fit-content');
-    expect(homeLink).toContain('min-height: 44px');
+    expect(homeLink).toContain('min-height: var(--control-height)');
   });
 
   it('lays out Settings cards responsively and gives keys a visible affordance', () => {
@@ -128,10 +119,10 @@ describe('responsive navigation styles', () => {
       'gap: var(--space-3)',
     );
     expect(cssRule(compactAccount, '[data-page="account"] .login-form input')).toContain(
-      'min-height: 44px',
+      'min-height: var(--control-height)',
     );
     expect(cssRule(compactAccount, '[data-page="account"] #worker-login')).toContain(
-      'min-height: 44px',
+      'min-height: var(--control-height)',
     );
   });
 

@@ -1,27 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody, mediaBlock as sourceMediaBlock } from './cssSource';
 
-const css = readFileSync('src/style.css', 'utf8');
-const redesignCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
+const css = readFileSync('src/styles/arvenilo.css', 'utf8');
+const redesignCss = readFileSync('src/styles/arvenilo.css', 'utf8');
 
 function cssRule(source: string, selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+  return selectorBody(selector, source);
 }
 
 function mediaBlock(query: string): string {
-  const start = css.lastIndexOf(`@media ${query}`);
-  if (start < 0) {
-    return '';
-  }
-  const open = css.indexOf('{', start);
-  let depth = 0;
-  for (let index = open; index < css.length; index += 1) {
-    if (css[index] === '{') depth += 1;
-    if (css[index] === '}') depth -= 1;
-    if (depth === 0) return css.slice(open + 1, index);
-  }
-  return '';
+  return sourceMediaBlock(query, css);
 }
 
 describe('scanner stage styles', () => {
@@ -32,7 +21,8 @@ describe('scanner stage styles', () => {
     expect(guide).toContain('inset: 0');
     expect(guide).toContain('z-index: 3');
     expect(guide).toContain('pointer-events: none');
-    expect(cssRule(css, '.scanner-guide[hidden]')).toContain('display: none');
+    /* Hiding is handled once, globally, for every [hidden] element. */
+    expect(cssRule(css, '[hidden]')).toContain('display: none !important');
     expect(cssRule(css, '.scanner-guide-frame')).toContain('inset: 9% 7%');
     expect(cssRule(css, '.scanner-guide-line')).toContain('animation: scanner-guide-sweep');
   });
@@ -81,14 +71,5 @@ describe('scanner stage styles', () => {
 });
 
 function mediaBlockFrom(source: string, query: string): string {
-  const start = source.lastIndexOf(`@media ${query}`);
-  if (start < 0) return '';
-  const open = source.indexOf('{', start);
-  let depth = 0;
-  for (let index = open; index < source.length; index += 1) {
-    if (source[index] === '{') depth += 1;
-    if (source[index] === '}') depth -= 1;
-    if (depth === 0) return source.slice(open + 1, index);
-  }
-  return '';
+  return sourceMediaBlock(query, source);
 }
