@@ -7,7 +7,9 @@
   "compatibility_date": "2026-07-25",
   "vars": {
     "PUBLIC_ORIGIN": "https://mark-ar-targets.sshibinthomass.workers.dev",
-    "ALLOWED_ORIGINS": "https://sshibinthomass.github.io,http://localhost:5173,http://127.0.0.1:5173",
+    // 5273 is this project's reserved dev port: Vite drifts off 5173 whenever
+    // another project holds it, and origins here are matched exactly.
+    "ALLOWED_ORIGINS": "https://sshibinthomass.github.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5273,http://127.0.0.1:5273",
     "LEGACY_WORKER_ORIGIN": "https://web-ar-generate-model.sshibinthomass.workers.dev"
   },
   "r2_buckets": [

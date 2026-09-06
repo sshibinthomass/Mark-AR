@@ -50,11 +50,37 @@ const routeIconPaths: Record<AppRoute, string> = {
   account: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>',
 };
 
+/**
+ * The object the background aperture shows. Text alternatives live in the
+ * button labels, so the demonstration is never explained only inside WebGL.
+ */
+const APERTURE_OBJECTS: { name: string; label: string }[] = [
+  { name: 'card', label: 'Card' },
+  { name: 'book', label: 'Book' },
+  { name: 'menu', label: 'Menu' },
+  { name: 'ad', label: 'Poster' },
+  { name: 'story', label: 'Story' },
+];
+
+function renderApertureOption(option: { name: string; label: string }): string {
+  const pressed = option.name === 'card' ? 'true' : 'false';
+  return `<button type="button" data-aperture-object="${option.name}" aria-pressed="${pressed}">${option.label}</button>`;
+}
+
+function renderThemeToggle(): string {
+  return `
+    <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="Switch to light theme" title="Switch to light theme">
+      <svg data-theme-icon="dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      <svg data-theme-icon="light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg>
+    </button>`;
+}
+
 export function renderAppShell(): string {
   const brandAssets = brandAssetUrls();
 
   return `
-    <main class="app-shell" data-app-shell>
+    <a class="action-control action-control--primary skip-link" href="#main-content">Skip to content</a>
+    <main class="app-shell" id="main-content" data-app-shell>
       <nav class="shell-nav" aria-label="AnchorAR pages">
         <a class="brand-link" href="${hrefForRoute('home')}" aria-label="AnchorAR by Arvenilo home">
           <picture>
@@ -74,6 +100,7 @@ export function renderAppShell(): string {
             ${renderRouteLink('settings', 'Settings')}
             ${renderRouteLink('account', '<span data-auth-account-label>Sign in</span>')}
           </div>
+          ${renderThemeToggle()}
         </div>
       </nav>
 
@@ -100,10 +127,13 @@ export function renderAppShell(): string {
                 <li class="proof-step"><strong>Share</strong><span>Publish one link or branded QR.</span></li>
               </ol>
             </div>
-            <div class="spatial-aperture-demo" aria-hidden="true">
+            <div class="spatial-aperture-demo" data-aperture-stage data-aperture-mode="poster" aria-hidden="true">
               <span class="aperture-frame"></span>
               <span class="aperture-object"></span>
               <span class="aperture-signal"></span>
+            </div>
+            <div class="aperture-stage-controls" role="group" aria-label="Aperture demonstration object">
+              ${APERTURE_OBJECTS.map(renderApertureOption).join('')}
             </div>
           </div>
         </section>

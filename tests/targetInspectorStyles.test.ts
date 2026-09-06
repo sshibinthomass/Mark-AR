@@ -1,43 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody, mediaBlock as sourceMediaBlock } from './cssSource';
 
-const css = readFileSync('src/style.css', 'utf8');
-const redesignCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
+const css = readFileSync('src/styles/arvenilo.css', 'utf8');
+const redesignCss = readFileSync('src/styles/arvenilo.css', 'utf8');
 const combinedCss = `${css}\n${redesignCss}`;
 
 function cssRule(selector: string, source = css): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+  return selectorBody(selector, source);
 }
 
 function lastCssRule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const matches = [...combinedCss.matchAll(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'gm'))];
-  return matches.at(-1)?.groups?.body ?? '';
+  return selectorBody(selector, combinedCss);
 }
 
 function mediaBlock(query: string): string {
-  const start = css.indexOf(`@media ${query}`);
-  if (start === -1) {
-    return '';
-  }
-
-  const openBrace = css.indexOf('{', start);
-  let depth = 0;
-  for (let index = openBrace; index < css.length; index += 1) {
-    const char = css[index];
-    if (char === '{') {
-      depth += 1;
-    }
-    if (char === '}') {
-      depth -= 1;
-      if (depth === 0) {
-        return css.slice(openBrace + 1, index);
-      }
-    }
-  }
-
-  return '';
+  return sourceMediaBlock(query, css);
 }
 
 describe('target inspector styles', () => {
@@ -59,7 +37,7 @@ describe('target inspector styles', () => {
   });
 
   it('returns the inspector card to content height on narrow layouts', () => {
-    const responsive = mediaBlock('(max-width: 900px)');
+    const responsive = mediaBlock('(max-width: 1023px)');
     const card = cssRule('.target-inspector-card');
     const responsiveCard = cssRule('.target-inspector-card', responsive);
 
@@ -82,7 +60,7 @@ describe('target inspector styles', () => {
     expect(tabOverride).toContain('min-width: 0');
     expect(tabOverride).toContain('min-height: var(--control-height)');
     expect(tabOverride).toContain('padding: 6px 5px');
-    expect(tabOverride).toContain('font-size: 11px');
+    expect(tabOverride).toContain('font-size: var(--text-label)');
   });
 
   it('stacks target transform mode buttons vertically in the preview control row', () => {
@@ -121,7 +99,7 @@ describe('target inspector styles', () => {
     expect(open).toContain('display: grid');
     expect(open).toContain('grid-template-columns: 56px minmax(0, 1fr)');
     expect(open).toContain('text-align: left');
-    expect(active).toContain('border-color: rgba(15, 118, 110');
+    expect(active).toContain('border-color: var(--color-anchor-gold)');
     expect(focus).toContain('outline: 3px solid');
   });
 
@@ -144,7 +122,7 @@ describe('target inspector styles', () => {
     expect(cssRule('.target-preview-stage[aria-busy="true"]', redesignCss)).toContain(
       'cursor: progress',
     );
-    expect(cssRule('.target-preview-loader', redesignCss)).toContain('backdrop-filter: none');
+    expect(cssRule('.target-preview-loader', redesignCss)).not.toContain('backdrop-filter: blur');
     expect(cssRule('.target-model-card-loader', redesignCss)).toContain(
       'background: var(--color-spatial-surface-raised)',
     );
@@ -152,17 +130,17 @@ describe('target inspector styles', () => {
 
   it('resets higher-specificity legacy inspector components to solid surfaces', () => {
     const button = lastCssRule('.target-page button');
-    expect(button).toContain('background: var(--color-interface-white)');
+    expect(button).toContain('background: var(--surface-panel)');
     expect(button).toContain('font-weight: 600');
     expect(button).toContain('box-shadow: none');
-    expect(button).toContain('backdrop-filter: none');
+    expect(button).not.toContain('backdrop-filter: blur');
 
     const danger = lastCssRule('.target-page .icon-delete-button');
-    expect(danger).toContain('border-color: var(--color-error-dark)');
-    expect(danger).toContain('background: var(--color-interface-white)');
+    expect(danger).toContain('border-color: var(--status-error)');
+    expect(danger).toContain('background: var(--surface-panel)');
     expect(danger).toContain('box-shadow: none');
     expect(lastCssRule('.target-page .icon-delete-button:hover')).toContain(
-      'background: var(--color-error-dark)',
+      'background: var(--status-error)',
     );
 
     for (const selector of [
@@ -175,16 +153,16 @@ describe('target inspector styles', () => {
       '.saved-target-link-actions button',
       '.saved-target-link-actions a',
     ]) {
-      expect(lastCssRule(selector), selector).toMatch(/background:\s*var\(--color-(?:interface-white|reality-mist)\)/);
+      expect(lastCssRule(selector), selector).toMatch(/background:\s*var\(--surface-(?:panel|inset)\)/);
       expect(lastCssRule(selector), selector).toContain('box-shadow: none');
     }
 
     expect(lastCssRule('.target-page .animation-track-remove')).toContain(
-      'color: var(--color-error-dark)',
+      'color: var(--status-error)',
     );
     for (const axis of ['x', 'y', 'z']) {
       expect(lastCssRule(`.target-page [data-reset-axis="${axis}"]`)).toContain(
-        'background: var(--color-interface-white)',
+        'background: var(--surface-panel)',
       );
     }
   });

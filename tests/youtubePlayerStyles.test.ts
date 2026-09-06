@@ -1,12 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody } from './cssSource';
 
-const css = readFileSync('src/style.css', 'utf8');
+const css = readFileSync('src/styles/arvenilo.css', 'utf8');
 
 function cssRule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm')
-    .exec(css)?.groups?.body ?? '';
+  return selectorBody(selector, css);
 }
 
 describe('YouTube AR transport styles', () => {

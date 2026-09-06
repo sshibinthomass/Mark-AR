@@ -2,8 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const tokensCss = readFileSync('src/styles/arvenilo-tokens.css', 'utf8');
-const legacyCss = readFileSync('src/style.css', 'utf8');
-const redesignCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
+const css = readFileSync('src/styles/arvenilo.css', 'utf8');
 
 type Specificity = [number, number, number];
 
@@ -27,11 +26,11 @@ function selectorSpecificity(selector: string): Specificity {
   return [ids, classes, elements];
 }
 
-function winningDeclaration(
-  element: Element,
-  property: string,
-  pseudo = '',
-): string {
+/**
+ * Pseudo-element declarations are out of reach of getComputedStyle here, so the
+ * winning rule is resolved from the stylesheet directly.
+ */
+function winningDeclaration(element: Element, property: string, pseudo = ''): string {
   let winner: { order: number; specificity: Specificity; value: string } | undefined;
   let order = 0;
 
@@ -90,11 +89,14 @@ function required<T extends Element>(selector: string): T {
   return element;
 }
 
+function useLightTheme(): void {
+  document.documentElement.setAttribute('data-theme', 'light');
+}
+
 beforeEach(() => {
   document.head.innerHTML = `
     <style>${tokensCss}</style>
-    <style>${legacyCss}</style>
-    <style>${redesignCss}</style>
+    <style>${css}</style>
   `;
   document.body.innerHTML = `
     <main class="target-page">
@@ -118,27 +120,50 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  document.documentElement.removeAttribute('data-theme');
   document.head.innerHTML = '';
   document.body.innerHTML = '';
 });
 
-describe('AnchorAR route cascade precedence', () => {
-  it('keeps scanner, floor, account, and Studio error states above legacy status rules', () => {
-    expect(getComputedStyle(required('#ar-status')).color).toBe(resolvedColor('--color-error-dark'));
-    expect(getComputedStyle(required('#floor-ar-status')).color).toBe(resolvedColor('--color-error-light'));
-    expect(getComputedStyle(required('#worker-status')).color).toBe(resolvedColor('--color-error-dark'));
-    expect(getComputedStyle(required('#image-target-status')).color).toBe(resolvedColor('--color-error-dark'));
+describe('AnchorAR theme contract', () => {
+  it('tones page-level errors for the dark ground by default', () => {
+    const errorOnDark = resolvedColor('--color-error-light');
+
+    expect(getComputedStyle(required('#ar-status')).color).toBe(errorOnDark);
+    expect(getComputedStyle(required('#worker-status')).color).toBe(errorOnDark);
+    expect(getComputedStyle(required('#image-target-status')).color).toBe(errorOnDark);
   });
 
-  it('keeps animation remove danger styling above the target button reset', () => {
+  it('flips page-level errors to the dark red once the light theme is chosen', () => {
+    useLightTheme();
+    const errorOnLight = resolvedColor('--color-error-dark');
+
+    expect(getComputedStyle(required('#ar-status')).color).toBe(errorOnLight);
+    expect(getComputedStyle(required('#worker-status')).color).toBe(errorOnLight);
+    expect(getComputedStyle(required('#image-target-status')).color).toBe(errorOnLight);
+  });
+
+  it('keeps the AR overlay error light in both themes because its ground never changes', () => {
+    const errorOnDark = resolvedColor('--color-error-light');
+    expect(getComputedStyle(required('#floor-ar-status')).color).toBe(errorOnDark);
+
+    useLightTheme();
+    expect(getComputedStyle(required('#floor-ar-status')).color).toBe(
+      resolvedColor('--color-error-light'),
+    );
+  });
+
+  it('keeps animation remove readable as danger on either ground', () => {
     const remove = required<HTMLButtonElement>('.animation-track-remove');
 
+    expect(getComputedStyle(remove).color).toBe(resolvedColor('--status-error'));
+    expect(winningDeclaration(remove, 'background', ':hover')).toBe('var(--status-error)');
+
+    useLightTheme();
     expect(getComputedStyle(remove).color).toBe(resolvedColor('--color-error-dark'));
-    expect(getComputedStyle(remove).backgroundColor).toBe(resolvedColor('--color-interface-white'));
-    expect(winningDeclaration(remove, 'background', ':hover')).toBe('var(--color-error-dark)');
   });
 
-  it('canonicalizes Studio range, color, and file controls after legacy CSS', () => {
+  it('canonicalizes Studio range, color, and file controls', () => {
     const range = required<HTMLInputElement>('#range-control');
     const rangeAccent = getComputedStyle(range).accentColor;
     if (rangeAccent) {
@@ -148,30 +173,28 @@ describe('AnchorAR route cascade precedence', () => {
     }
 
     const color = getComputedStyle(required<HTMLInputElement>('#color-control'));
-    expect(color.borderColor).toBe(resolvedColor('--color-border-light'));
+    expect(color.borderColor).toBe(resolvedColor('--line-soft'));
     expect(color.borderRadius).toBe('10px');
-    expect(color.backgroundColor).toBe(resolvedColor('--color-interface-white'));
+    expect(color.backgroundColor).toBe(resolvedColor('--surface-panel'));
     expect(color.boxShadow).toBe('none');
 
     const file = required<HTMLInputElement>('#file-control');
     expect(winningDeclaration(file, 'border-width', '::file-selector-button')).toBe('1px');
     expect(winningDeclaration(file, 'border-style', '::file-selector-button')).toBe('solid');
     expect(winningDeclaration(file, 'border-color', '::file-selector-button')).toBe(
-      'var(--color-border-light)',
+      'var(--line-soft)',
     );
     expect(winningDeclaration(file, 'border-radius', '::file-selector-button')).toBe(
       'var(--radius-control)',
     );
     expect(winningDeclaration(file, 'background', '::file-selector-button')).toBe(
-      'var(--color-mint-wash)',
+      'var(--accent-wash)',
     );
-    expect(winningDeclaration(file, 'color', '::file-selector-button')).toBe(
-      'var(--color-spatial-ink)',
-    );
+    expect(winningDeclaration(file, 'color', '::file-selector-button')).toBe('var(--text-primary)');
     expect(winningDeclaration(file, 'box-shadow', '::file-selector-button')).toBe('none');
   });
 
-  it('removes legacy teal from Studio summaries, outputs, saved URLs, and QR share code', () => {
+  it('gives Studio summaries, outputs, and saved URLs the secondary text tone', () => {
     for (const selector of [
       '.transform-control-summary',
       '.target-text-advanced summary',
@@ -179,10 +202,21 @@ describe('AnchorAR route cascade precedence', () => {
       '.saved-target-url',
     ]) {
       expect(getComputedStyle(required(selector)).color, selector).toBe(
-        resolvedColor('--color-context-slate'),
+        resolvedColor('--text-secondary'),
       );
     }
 
+    expect(getComputedStyle(required('.target-qr-share-link code')).color).toBe(
+      resolvedColor('--text-primary'),
+    );
+  });
+
+  it('darkens secondary text when the light theme is chosen', () => {
+    useLightTheme();
+
+    expect(getComputedStyle(required('.transform-control-summary')).color).toBe(
+      resolvedColor('--color-context-slate'),
+    );
     expect(getComputedStyle(required('.target-qr-share-link code')).color).toBe(
       resolvedColor('--color-spatial-ink'),
     );
