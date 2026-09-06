@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody } from './cssSource';
 
-const css = readFileSync('src/style.css', 'utf8');
+const css = readFileSync('src/styles/arvenilo.css', 'utf8');
 
 function cssRule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(css)?.groups?.body ?? '';
+  return selectorBody(selector, css);
 }
 
 describe('target model rail styles', () => {
@@ -28,15 +28,15 @@ describe('target model rail styles', () => {
     expect(label).toContain('clip-path: inset(50%)');
   });
 
-  it('restores tile geometry after the broad target button rule', () => {
-    const buttonRuleIndex = css.indexOf('.target-page button');
-    const cardOverrideIndex = css.indexOf('.target-page .target-model-card');
-    const cardOverride = cssRule('.target-page .target-model-card');
+  it('sizes the tile from the rail variable and outranks the generic button rule', () => {
+    const card = cssRule('.target-model-card');
 
-    expect(cardOverrideIndex).toBeGreaterThan(buttonRuleIndex);
-    expect(cardOverride).toContain('width: var(--target-model-card-size)');
-    expect(cardOverride).toContain('height: var(--target-model-card-size)');
-    expect(cardOverride).toContain('padding: 6px');
-    expect(cardOverride).toContain('font-size: 11px');
+    expect(card).toContain('width: var(--target-model-card-size)');
+    expect(card).toContain('height: var(--target-model-card-size)');
+    expect(card).toContain('padding: var(--space-2)');
+    expect(card).toContain('font-size: var(--text-label)');
+    /* A class outranks the bare `button` element rule, so the tile geometry
+       needs no extra qualifier to hold. */
+    expect(css.indexOf('.target-model-card {')).toBeGreaterThan(css.indexOf('button {'));
   });
 });

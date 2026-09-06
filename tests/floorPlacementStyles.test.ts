@@ -1,19 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { selectorBody, mediaBlock as sourceMediaBlock } from './cssSource';
 
-const css = readFileSync('src/style.css', 'utf8');
-const brandedCss = readFileSync('src/styles/arvenilo-redesign.css', 'utf8');
+const css = readFileSync('src/styles/arvenilo.css', 'utf8');
+const brandedCss = readFileSync('src/styles/arvenilo.css', 'utf8');
 
 function cssRule(selector: string, source = css): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escaped}\\s*\\{(?<body>[^}]*)\\}`, 'm').exec(source)?.groups?.body ?? '';
+  return selectorBody(selector, source);
 }
 
 function mediaSection(query: string, source = css): string {
-  const start = source.indexOf(`@media ${query}`);
-  if (start < 0) return '';
-  const nextMedia = source.indexOf('@media ', start + 1);
-  return source.slice(start, nextMedia < 0 ? source.length : nextMedia);
+  return sourceMediaBlock(query, source);
 }
 
 describe('floor placement styles', () => {
@@ -59,7 +56,7 @@ describe('floor placement styles', () => {
   it('keeps the taller mobile scanner controls outside the overlay containing block', () => {
     const stageStack = cssRule('.scanner-stage-stack');
     const overlay = cssRule('.floor-ar-overlay');
-    const mobileScannerControls = cssRule('.scanner-controls', mediaSection('(max-width: 620px)'));
+    const mobileScannerControls = cssRule('.scanner-controls', mediaSection('(max-width: 767px)'));
 
     expect(stageStack).toContain('position: relative');
     expect(overlay).toMatch(/(?:^|\n)\s*inset:\s*0\s*;/);
@@ -71,9 +68,9 @@ describe('floor placement styles', () => {
     const controls = cssRule('.floor-ar-controls');
     const scannerActions = cssRule('.scanner-actions');
 
-    expect(controls).toContain('bottom: max(14px, env(safe-area-inset-bottom))');
-    expect(controls).toContain('right: 14px');
-    expect(controls).toContain('left: 14px');
+    expect(controls).toContain('bottom: max(var(--space-4), env(safe-area-inset-bottom))');
+    expect(controls).toContain('right: var(--space-4)');
+    expect(controls).toContain('left: var(--space-4)');
     expect(controls).toContain('display: flex');
     expect(controls).toContain('flex-wrap: wrap');
     expect(scannerActions).toContain('display: flex');
@@ -86,14 +83,14 @@ describe('floor placement styles', () => {
     const floorToggle = cssRule('#floor-ar-toggle');
     const rotation = cssRule('#floor-ar-rotation');
 
-    expect(floorBack).toContain('top: max(14px, env(safe-area-inset-top))');
-    expect(floorBack).toContain('left: 14px');
-    expect(floorBack).toContain('min-height: 44px');
-    expect(floorButtons).toContain('min-height: 44px');
-    expect(floorToggle).toContain('min-height: 44px');
-    expect(rotation).toContain('min-height: 44px');
+    expect(floorBack).toContain('top: max(var(--space-4), env(safe-area-inset-top))');
+    expect(floorBack).toContain('left: var(--space-4)');
+    expect(floorBack).toContain('min-height: var(--control-height)');
+    expect(floorButtons).toContain('min-height: var(--control-height)');
+    expect(floorToggle).toContain('min-height: var(--control-height)');
+    expect(rotation).toContain('min-height: var(--control-height)');
     expect(css).toMatch(
-      /\.floor-ar-back:focus-visible,\s*\.floor-ar-controls button:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--gold\)/m,
+      /\.floor-ar-back:focus-visible,\s*\.floor-ar-controls button:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--color-signal-mint\)/m,
     );
   });
 
@@ -105,17 +102,17 @@ describe('floor placement styles', () => {
     const brandedSelectionHint = cssRule('#floor-ar-selection-hint', brandedCss);
 
     expect(selectionControls).toContain('display: flex');
-    expect(selectionControls).toContain('gap: 8px');
+    expect(selectionControls).toContain('gap: var(--space-2)');
     expect(selectionControls).toContain('align-items: center');
-    expect(selectAll).toContain('min-height: 44px');
-    expect(selectAll).toContain('padding: 0 14px');
-    expect(pressedSelectAll).toContain('background: var(--teal)');
-    expect(selectionHint).toContain('font-size: 12px');
+    expect(selectAll).toContain('min-height: var(--control-height)');
+    expect(selectAll).toContain('padding: 0 var(--space-4)');
+    expect(pressedSelectAll).toContain('background: var(--color-signal-mint)');
+    expect(selectionHint).toContain('font-size: var(--text-label)');
     expect(brandedSelectionHint).toContain('color: var(--color-mist-slate)');
   });
 
   it('keeps selection controls compact at the existing mobile breakpoint', () => {
-    const mobile = mediaSection('(max-width: 620px)');
+    const mobile = mediaSection('(max-width: 767px)');
     const selectionControls = cssRule('.floor-ar-selection-controls', mobile);
     const selectionButtons = cssRule('.floor-ar-selection-controls button', mobile);
     const selectionHint = cssRule('#floor-ar-selection-hint', mobile);
@@ -142,8 +139,11 @@ describe('floor placement styles', () => {
     const reducedMotion = reducedMotionStart >= 0 ? css.slice(reducedMotionStart) : '';
 
     expect(reducedMotion).toContain('.floor-ar-controls');
-    expect(reducedMotion).toContain('#floor-ar-toggle');
     expect(reducedMotion).toContain('animation: none');
-    expect(reducedMotion).toContain('transition: none');
+    /* Transitions are cut for everything by one blanket rule rather than by
+       re-listing each control. */
+    expect(reducedMotion).toMatch(
+      /\*,\s*\*::before,\s*\*::after\s*\{[^}]*transition-duration:\s*0\.01ms !important/s,
+    );
   });
 });

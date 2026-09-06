@@ -14,6 +14,10 @@
   --studio-control-height: 32px;
   --studio-control-large: 38px;
   --studio-control-font: 13px;
+  /*
+    Chrome drawn over the 3D stage. The stage is void in both themes, so this
+    pair stays dark on purpose and does not follow the semantic surface layer.
+  */
   --studio-hud-surface: rgba(6, 22, 26, 0.82);
   --studio-hud-line: rgba(202, 255, 248, 0.22);
 }
@@ -48,7 +52,7 @@
   min-height: var(--studio-nav-height);
   margin: 0;
   border: 0;
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--line-soft);
   border-radius: 0;
   padding: 0 var(--space-3);
 }
@@ -89,9 +93,9 @@
   align-items: center;
   min-height: var(--studio-topbar-height);
   margin: 0;
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--line-soft);
   padding: 0 var(--space-3);
-  background: var(--color-interface-white);
+  background: var(--surface-chrome);
 }
 
 .target-page .page-heading-copy {
@@ -172,7 +176,7 @@
 }
 
 .target-stage-empty strong {
-  color: var(--color-interface-white);
+  color: var(--color-reality-mist);
   font-family: var(--font-display);
   font-size: 18px;
   font-weight: 650;
@@ -287,7 +291,7 @@
   padding: 0;
   border: 1px solid var(--studio-hud-line);
   border-radius: var(--radius-control);
-  color: var(--color-interface-white);
+  color: var(--color-reality-mist);
   background: var(--studio-hud-surface);
   box-shadow: none;
   cursor: pointer;
@@ -340,7 +344,7 @@
   height: 100%;
   max-height: none;
   border: 0;
-  border-left: 1px solid var(--color-border-light);
+  border-left: 1px solid var(--line-soft);
   border-radius: 0;
   padding: var(--space-3);
   overflow: hidden;
@@ -428,7 +432,7 @@
 }
 
 .target-page .transform-control-group {
-  border-top: 1px solid var(--color-border-light);
+  border-top: 1px solid var(--line-soft);
   padding-top: var(--space-2);
 }
 

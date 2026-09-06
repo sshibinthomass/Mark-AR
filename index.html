@@ -3,12 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="%BASE_URL%brand/anchorar/anchorar-mark.png" />
-    <meta name="theme-color" content="#F4FBFA" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#020a0c" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Interactive web-based augmented reality experiences created with AnchorAR by Arvenilo." />
     <title>AnchorAR by Arvenilo</title>
+    <script>
+      /*
+       * Applies the stored theme before first paint. The design system is
+       * dark-first, so the absence of the attribute is the dark ground and only
+       * an explicit light preference writes anything.
+       */
+      (function () {
+        try {
+          if (localStorage.getItem('anchorar:theme') === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#f4fbfa');
+          }
+        } catch (error) {
+          /* Storage refused: the dark default stands. */
+        }
+      })();
+    </script>
   </head>
   <body>
+    <div class="field-ground" aria-hidden="true"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

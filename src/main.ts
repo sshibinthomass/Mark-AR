@@ -1,6 +1,5 @@
 import './styles/arvenilo-tokens.css';
-import './style.css';
-import './styles/arvenilo-redesign.css';
+import './styles/arvenilo.css';
 import './styles/studio-shell.css';
 import {
   prepareFloorPlacement,
@@ -157,6 +156,8 @@ import {
 import { AuthNavigation } from './ui/authNavigation';
 import { applyAuthFormMode, type AuthFormMode } from './ui/authFormMode';
 import { renderAppShell } from './ui/appShell';
+import { initTheme } from './ui/theme';
+import { isApertureObjectName, mountFieldLayer } from './ui/fieldLayer';
 import { createAnimationTrackEditor } from './ui/animationTrackEditor';
 import { setupHomeSectionNavigation } from './ui/homeSectionNavigation';
 import {
@@ -198,6 +199,28 @@ if (!app) {
 
 app.innerHTML = renderAppShell();
 const shell = queryRequired<HTMLElement>('[data-app-shell]');
+
+/*
+ * The background 3D layer and the theme are wired before anything else so the
+ * ground is correct on the first frame the shell is visible.
+ */
+const fieldLayer = mountFieldLayer(document, locationFromHash(window.location.hash).route);
+initTheme({ onChange: (theme) => fieldLayer.setTheme(theme) });
+
+shell.querySelectorAll<HTMLButtonElement>('[data-aperture-object]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const name = button.dataset.apertureObject ?? '';
+    if (!isApertureObjectName(name)) {
+      return;
+    }
+
+    fieldLayer.setApertureObject(name);
+    shell.querySelectorAll<HTMLButtonElement>('[data-aperture-object]').forEach((other) => {
+      other.setAttribute('aria-pressed', other === button ? 'true' : 'false');
+    });
+  });
+});
+
 setupHomeSectionNavigation(shell);
 setupResponsiveLayout(shell);
 const targetInspectorTabs = setupTargetInspectorTabs(app);
@@ -1054,6 +1077,7 @@ function setAuthFormMode(mode: AuthFormMode): void {
 
 function activateRequestedRoute(requestedRoute: AppRoute): void {
   const result = authNavigation.activate(shell, requestedRoute, authUiState);
+  fieldLayer.setRoute(result.activeRoute);
   if (!result.blocked) {
     return;
   }
