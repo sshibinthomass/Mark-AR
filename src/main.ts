@@ -1,6 +1,7 @@
 import './styles/arvenilo-tokens.css';
 import './style.css';
 import './styles/arvenilo-redesign.css';
+import './styles/studio-shell.css';
 import {
   prepareFloorPlacement,
   type FloorPlacementController,
@@ -179,6 +180,7 @@ import {
   resetScannerStage,
   setScannerGuideVisible,
 } from './ui/scannerStage';
+import { setupStudioShell } from './ui/studioShell';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
 import { createKeyboardHelpOverlay } from './ui/keyboardHelpOverlay';
@@ -199,6 +201,7 @@ const shell = queryRequired<HTMLElement>('[data-app-shell]');
 setupHomeSectionNavigation(shell);
 setupResponsiveLayout(shell);
 const targetInspectorTabs = setupTargetInspectorTabs(app);
+setupStudioShell(shell);
 const targetPage = queryRequired<HTMLElement>('[data-page="targets"]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');

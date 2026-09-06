@@ -4,9 +4,9 @@ export function applyResponsiveLayout(root: HTMLElement, mobile: boolean): void 
   arrange(root, '.scanner-panel', mobile
     ? ['scanner-controls', 'scanner-stage']
     : ['scanner-stage', 'scanner-controls']);
-  arrange(root, '.target-workspace', mobile
-    ? ['target-inspector', 'target-preview']
-    : ['target-preview', 'target-inspector']);
+  // The studio canvas stays first at every width: it is sticky on narrow layouts, so
+  // a transform is visible while its control is being dragged.
+  arrange(root, '.target-workspace', ['target-preview', 'target-inspector']);
   arrange(root, '.auth-layout', mobile
     ? ['auth-controls', 'auth-access']
     : ['auth-access', 'auth-controls']);

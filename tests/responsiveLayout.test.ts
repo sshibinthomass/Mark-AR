@@ -15,8 +15,8 @@ describe('responsive layout coordinator', () => {
       'scanner-stage',
     ]);
     expect(layoutOrder(root, '.target-workspace')).toEqual([
-      'target-inspector',
       'target-preview',
+      'target-inspector',
     ]);
     expect(layoutOrder(root, '.auth-layout')).toEqual([
       'auth-controls',
