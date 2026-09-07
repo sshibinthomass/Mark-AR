@@ -13,17 +13,6 @@ import {
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { Font, FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { TTFLoader } from 'three/examples/jsm/loaders/TTFLoader.js';
-import droidSansBoldFontJson from 'three/examples/fonts/droid/droid_sans_bold.typeface.json?raw';
-import studioMonoFontJson from 'three/examples/fonts/droid/droid_sans_mono_regular.typeface.json?raw';
-import studioSansFontJson from 'three/examples/fonts/droid/droid_sans_regular.typeface.json?raw';
-import droidSerifBoldFontJson from 'three/examples/fonts/droid/droid_serif_bold.typeface.json?raw';
-import droidSerifFontJson from 'three/examples/fonts/droid/droid_serif_regular.typeface.json?raw';
-import gentilisBoldFontJson from 'three/examples/fonts/gentilis_bold.typeface.json?raw';
-import helvetikerBoldFontJson from 'three/examples/fonts/helvetiker_bold.typeface.json?raw';
-import helvetikerFontJson from 'three/examples/fonts/helvetiker_regular.typeface.json?raw';
-import optimerBoldFontJson from 'three/examples/fonts/optimer_bold.typeface.json?raw';
-import optimerFontJson from 'three/examples/fonts/optimer_regular.typeface.json?raw';
-import studioSerifFontJson from 'three/examples/fonts/gentilis_regular.typeface.json?raw';
 import {
   normalizeTargetText,
   type LocalTextTargetObject,
@@ -40,18 +29,23 @@ const TARGET_HEIGHT = 0.3;
 const TEXT_SIZE = 0.2;
 const MAX_LINE_LENGTH = 18;
 
-const bundledFontJson: Partial<Record<TargetTextFont, string>> = {
-  'studio-sans': studioSansFontJson,
-  'studio-sans-bold': droidSansBoldFontJson,
-  'studio-serif': studioSerifFontJson,
-  'studio-serif-bold': gentilisBoldFontJson,
-  'droid-serif': droidSerifFontJson,
-  'droid-serif-bold': droidSerifBoldFontJson,
-  optimer: optimerFontJson,
-  'optimer-bold': optimerBoldFontJson,
-  helvetiker: helvetikerFontJson,
-  'helvetiker-bold': helvetikerBoldFontJson,
-  'studio-mono': studioMonoFontJson,
+/*
+ * The typeface JSON is 3.3 MB across these eleven faces, so each one is fetched
+ * on the first use of that face rather than bundled into the entry chunk. A
+ * target uses one face at a time, and most visitors never build 3D text at all.
+ */
+const bundledFontJson: Partial<Record<TargetTextFont, () => Promise<{ default: string }>>> = {
+  'studio-sans': () => import('three/examples/fonts/droid/droid_sans_regular.typeface.json?raw'),
+  'studio-sans-bold': () => import('three/examples/fonts/droid/droid_sans_bold.typeface.json?raw'),
+  'studio-serif': () => import('three/examples/fonts/gentilis_regular.typeface.json?raw'),
+  'studio-serif-bold': () => import('three/examples/fonts/gentilis_bold.typeface.json?raw'),
+  'droid-serif': () => import('three/examples/fonts/droid/droid_serif_regular.typeface.json?raw'),
+  'droid-serif-bold': () => import('three/examples/fonts/droid/droid_serif_bold.typeface.json?raw'),
+  optimer: () => import('three/examples/fonts/optimer_regular.typeface.json?raw'),
+  'optimer-bold': () => import('three/examples/fonts/optimer_bold.typeface.json?raw'),
+  helvetiker: () => import('three/examples/fonts/helvetiker_regular.typeface.json?raw'),
+  'helvetiker-bold': () => import('three/examples/fonts/helvetiker_bold.typeface.json?raw'),
+  'studio-mono': () => import('three/examples/fonts/droid/droid_sans_mono_regular.typeface.json?raw'),
 };
 
 const loadedFonts = new Map<TargetTextFont, Promise<Font>>();
@@ -120,13 +114,13 @@ async function buildTextMesh(
   try {
     font = await loadFont(text.font);
   } catch {
-    font = parseBundledFont('studio-sans');
+    font = await parseBundledFont('studio-sans');
   }
 
   try {
     return createExtrudedTextMesh(renderableText(text.value), font, text);
   } catch {
-    return createExtrudedTextMesh(renderableText('Text'), parseBundledFont('studio-sans'), text);
+    return createExtrudedTextMesh(renderableText('Text'), await parseBundledFont('studio-sans'), text);
   }
 }
 
@@ -327,7 +321,7 @@ function loadTextFont(font: TargetTextFont): Promise<Font> {
     return cached;
   }
 
-  const loaded = font === 'tamil-ui' ? loadTamilFont() : Promise.resolve(parseBundledFont(font));
+  const loaded = font === 'tamil-ui' ? loadTamilFont() : parseBundledFont(font);
   loadedFonts.set(font, loaded);
   return loaded;
 }
@@ -337,10 +331,10 @@ function loadTamilFont(): Promise<Font> {
   return loader.loadAsync(`${import.meta.env.BASE_URL}fonts/NotoSansTamil.ttf`).then((json) => new Font(json));
 }
 
-function parseBundledFont(font: TargetTextFont): Font {
-  const rawJson = bundledFontJson[font] ?? bundledFontJson['studio-sans'];
-  if (!rawJson) {
+async function parseBundledFont(font: TargetTextFont): Promise<Font> {
+  const loadJson = bundledFontJson[font] ?? bundledFontJson['studio-sans'];
+  if (!loadJson) {
     throw new Error('Missing bundled 3D text font');
   }
-  return new FontLoader().parse(JSON.parse(rawJson));
+  return new FontLoader().parse(JSON.parse((await loadJson()).default));
 }
