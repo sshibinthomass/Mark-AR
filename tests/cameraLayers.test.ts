@@ -24,4 +24,24 @@ describe('normalizeMindARCameraLayers', () => {
     expect(cssRenderer.style.zIndex).toBe('2');
     expect(scannerGuide.style.zIndex).toBe('3');
   });
+
+  it('leaves the YouTube CSS3D layer able to receive taps', () => {
+    const stage = document.createElement('div');
+    const webglCanvas = document.createElement('canvas');
+    const youtubeLayer = document.createElement('div');
+    const scannerGuide = document.createElement('div');
+
+    youtubeLayer.classList.add('youtube-css3d-layer');
+    youtubeLayer.style.pointerEvents = 'auto';
+    scannerGuide.dataset.scannerGuide = '';
+    stage.append(webglCanvas, youtubeLayer, scannerGuide);
+
+    normalizeMindARCameraLayers(stage);
+
+    /* Without this the transport's projected-tap fallback is unreachable. */
+    expect(youtubeLayer.style.pointerEvents).toBe('auto');
+    expect(youtubeLayer.style.zIndex).toBe('2');
+    expect(scannerGuide.style.pointerEvents).toBe('none');
+    expect(webglCanvas.style.pointerEvents).toBe('none');
+  });
 });

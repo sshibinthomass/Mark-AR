@@ -21,6 +21,14 @@ export function normalizeMindARCameraLayers(container: HTMLElement): void {
 
   for (const layer of rendererLayers) {
     layer.style.zIndex = layer.hasAttribute('data-scanner-guide') ? '3' : '2';
-    layer.style.pointerEvents = 'none';
+    /*
+     * The CSS3D layer keeps its own pointer handling: it routes taps that land
+     * on the layer rather than on a deeply scaled transport button, which is
+     * the only way those presses are recovered. Every other layer here is
+     * decoration and must not eat input meant for the stage.
+     */
+    if (!layer.classList.contains('youtube-css3d-layer')) {
+      layer.style.pointerEvents = 'none';
+    }
   }
 }
