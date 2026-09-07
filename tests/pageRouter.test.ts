@@ -32,14 +32,17 @@ describe('activateRoute', () => {
         <h2 data-page-heading tabindex="-1">Scan target</h2>
       </section>
     `;
-    const scrollToTop = vi.fn();
-    const focusHeading = vi.fn();
+    document.body.append(root);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 
-    activateRoute(root, 'scan', { scrollToTop, focusHeading });
+    activateRoute(root, 'scan');
 
-    const scanHeading = root.querySelector<HTMLElement>('[data-page="scan"] [data-page-heading]');
-    expect(scrollToTop).toHaveBeenCalledTimes(1);
-    expect(focusHeading).toHaveBeenCalledWith(scanHeading);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
+    expect(document.activeElement)
+      .toBe(root.querySelector('[data-page="scan"] [data-page-heading]'));
+
+    scrollTo.mockRestore();
+    root.remove();
   });
 
   it('activates Account and reports a block when a signed-out user requests Targets', () => {

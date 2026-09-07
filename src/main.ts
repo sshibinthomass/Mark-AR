@@ -60,6 +60,7 @@ import {
 import {
   clearWorkerAuthToken,
   getCurrentWebArUser,
+  isAuthRequestError,
   loadWorkerAuthToken,
   loginToWebArWorker,
   saveWorkerAuthToken,
@@ -72,12 +73,12 @@ import {
 } from './app/targetQrCode';
 import { shareTargetQrArtifact } from './app/targetQrShare';
 import {
+  duplicateAccountMessage,
   loginIntroMessage,
   protectedTargetsMessage,
   signupIntroMessage,
   userFacingAuthErrorMessage,
 } from './app/authMessages';
-import { recoverExistingAccount } from './app/authRecovery';
 import {
   DEFAULT_TARGET_TEXT,
   createLocalImageObject,
@@ -371,7 +372,6 @@ type TargetEditorSnapshot = {
 };
 
 const targetEditorHistory = createEditorHistory<TargetEditorSnapshot>({
-  clone: (snapshot) => structuredClone(snapshot),
   equals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
 });
 let restoringTargetEditorHistory = false;
@@ -798,14 +798,10 @@ async function createWorkerAccount(): Promise<void> {
     await refreshImageTargets();
     restorePendingProtectedRoute();
   } catch (error) {
-    if (await recoverExistingAccount(error, {
-      setFormMode: setAuthFormMode,
-      setSignedOutMessage: (message) => setAuthUiState({
-        status: 'signed-out',
-        message,
-        tone: 'error',
-      }),
-    })) {
+    /* A duplicate email is a sign-in, not a failure: switch the form over. */
+    if (isAuthRequestError(error, 409)) {
+      setAuthFormMode('login');
+      setAuthUiState({ status: 'signed-out', message: duplicateAccountMessage, tone: 'error' });
       return;
     }
     setAuthUiState({

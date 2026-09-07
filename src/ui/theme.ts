@@ -104,8 +104,6 @@ export type ThemeControllerOptions = {
 
 export type ThemeController = {
   get: () => ThemeName;
-  set: (theme: ThemeName) => void;
-  toggle: () => ThemeName;
 };
 
 /**
@@ -138,14 +136,7 @@ export function initTheme(options: ThemeControllerOptions = {}): ThemeController
 
   render();
 
-  return {
-    get: () => theme,
-    set,
-    toggle: () => {
-      set(otherTheme(theme));
-      return theme;
-    },
-  };
+  return { get: () => theme };
 }
 
 function safeLocalStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {

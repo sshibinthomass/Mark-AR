@@ -6,11 +6,6 @@ export type AccessibleRouteResult = {
   blocked: boolean;
 };
 
-export type RouteActivationEffects = {
-  scrollToTop(): void;
-  focusHeading(heading: HTMLElement): void;
-};
-
 /*
  * Each route names itself in the tab and in browser history. Without this the
  * document title stayed "AnchorAR by Arvenilo" everywhere, so back/forward
@@ -28,21 +23,16 @@ export function activateAccessibleRoute(
   root: HTMLElement,
   requestedRoute: AppRoute,
   authState: AuthUiState,
-  effects?: RouteActivationEffects,
 ): AccessibleRouteResult {
   const activeRoute = resolveAccessibleRoute(requestedRoute, authState);
-  activateRoute(root, activeRoute, effects);
+  activateRoute(root, activeRoute);
   return {
     activeRoute,
     blocked: activeRoute !== requestedRoute,
   };
 }
 
-export function activateRoute(
-  root: HTMLElement,
-  route: AppRoute,
-  effects: RouteActivationEffects = browserRouteEffects(root),
-): void {
+export function activateRoute(root: HTMLElement, route: AppRoute): void {
   root.dataset.activePage = route;
   root.ownerDocument.title = ROUTE_TITLES[route];
   let activePage: HTMLElement | undefined;
@@ -62,21 +52,7 @@ export function activateRoute(
     }
   });
 
-  effects.scrollToTop();
-  const heading = activePage?.querySelector<HTMLElement>('[data-page-heading]');
-  if (heading) {
-    effects.focusHeading(heading);
-  }
-}
-
-function browserRouteEffects(root: HTMLElement): RouteActivationEffects {
-  const view = root.ownerDocument.defaultView;
-  return {
-    scrollToTop(): void {
-      view?.scrollTo?.({ top: 0, left: 0, behavior: 'auto' });
-    },
-    focusHeading(heading: HTMLElement): void {
-      heading.focus({ preventScroll: true });
-    },
-  };
+  root.ownerDocument.defaultView?.scrollTo?.({ top: 0, left: 0, behavior: 'auto' });
+  /* The new page's heading takes focus so a screen reader announces the route. */
+  activePage?.querySelector<HTMLElement>('[data-page-heading]')?.focus({ preventScroll: true });
 }

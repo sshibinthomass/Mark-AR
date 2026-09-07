@@ -3,7 +3,7 @@ import { createEditorHistory } from '../src/app/editorHistory';
 
 describe('editor history', () => {
   it('undoes, redoes, and clears redo after a new edit', () => {
-    const history = createEditorHistory<number>({ clone: (value) => value });
+    const history = createEditorHistory<number>();
 
     history.record(0);
     expect(history.undo(1)).toBe(0);
@@ -17,7 +17,6 @@ describe('editor history', () => {
   it('coalesces the same operation inside the configured window', () => {
     let time = 1000;
     const history = createEditorHistory<number>({
-      clone: (value) => value,
       now: () => time,
       coalesceWindowMs: 300,
     });
@@ -33,7 +32,6 @@ describe('editor history', () => {
   it('starts a new undo point after the coalescing window', () => {
     let time = 1000;
     const history = createEditorHistory<number>({
-      clone: (value) => value,
       now: () => time,
       coalesceWindowMs: 300,
     });
@@ -47,7 +45,7 @@ describe('editor history', () => {
   });
 
   it('keeps only the configured number of snapshots', () => {
-    const history = createEditorHistory<number>({ clone: (value) => value, limit: 2 });
+    const history = createEditorHistory<number>({ limit: 2 });
 
     history.record(0);
     history.record(1);
@@ -60,7 +58,6 @@ describe('editor history', () => {
 
   it('clones stack boundaries and skips equal consecutive snapshots', () => {
     const history = createEditorHistory<{ value: number }>({
-      clone: (value) => ({ ...value }),
       equals: (left, right) => left.value === right.value,
     });
     const original = { value: 1 };

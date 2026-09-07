@@ -1,5 +1,4 @@
 export type EditorHistoryOptions<T> = {
-  clone(value: T): T;
   equals?(left: T, right: T): boolean;
   limit?: number;
   coalesceWindowMs?: number;
@@ -16,12 +15,13 @@ export type EditorHistory<T> = {
 };
 
 export function createEditorHistory<T>({
-  clone,
   equals = Object.is,
   limit = 100,
   coalesceWindowMs = 300,
   now = Date.now,
-}: EditorHistoryOptions<T>): EditorHistory<T> {
+}: EditorHistoryOptions<T> = {}): EditorHistory<T> {
+  /* Snapshots are plain data, so the platform's deep copy is the whole job. */
+  const clone = structuredClone;
   const undoStack: T[] = [];
   const redoStack: T[] = [];
   let lastObserved: T | undefined;
