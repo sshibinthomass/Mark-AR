@@ -93,15 +93,6 @@ textarea {
   background: var(--color-signal-mint);
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 .skip-link {
   position: fixed;
   top: var(--space-2);
@@ -168,42 +159,10 @@ textarea {
  * a white ground; `dark-section` is the recessed ink band used for closing
  * CTAs; `future-section` is open void for coming-soon material.
  */
-.light-section,
-.dark-section,
-.future-section {
-  position: relative;
-  width: 100%;
-  padding: var(--section-space) 0;
-}
-
-.light-section {
-  background: var(--surface-band-raised);
-}
-
-.dark-section {
-  color: var(--color-reality-mist);
-  background: var(--surface-band-recessed);
-}
-
-.future-section {
-  background: var(--surface-band-future);
-}
-
 .container {
   width: min(var(--content-standard), 100%);
   margin: 0 auto;
   padding: 0 var(--space-5);
-}
-
-.container--wide {
-  width: min(var(--content-wide), 100%);
-  margin: 0 auto;
-  padding: 0 var(--space-5);
-}
-
-.reading-width {
-  width: min(var(--content-reading), 100%);
-  margin: 0 auto;
 }
 
 /* -------------------------------------------------------- 4. Text helpers */
@@ -211,8 +170,7 @@ textarea {
 .eyebrow,
 .landing-page .eyebrow,
 .page .eyebrow,
-.status-label,
-.marker-index {
+.status-label {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -233,14 +191,6 @@ textarea {
   height: 1px;
   background: var(--color-signal-mint);
   content: "";
-}
-
-.utility-text {
-  color: var(--text-secondary);
-  font-family: var(--font-utility);
-  font-size: var(--text-label);
-  font-weight: 500;
-  letter-spacing: 0.08em;
 }
 
 .target-qr-dialog .eyebrow,
@@ -355,12 +305,6 @@ button.primary,
   color: var(--color-reality-mist);
   background: var(--color-spatial-surface);
   box-shadow: none;
-}
-
-.action-control--danger {
-  border-color: var(--status-error);
-  color: var(--status-error);
-  background: transparent;
 }
 
 .button-row {
@@ -1852,15 +1796,6 @@ button.primary,
   font-weight: 700;
 }
 
-.target-model-card-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 .target-model-rail-empty {
   margin: 0;
   color: var(--color-mist-slate);
@@ -1950,9 +1885,7 @@ button.primary,
   background: transparent;
 }
 
-.target-setup-card,
-.target-controls-card,
-.saved-target-card {
+.target-setup-card {
   gap: var(--space-3);
   padding: var(--space-4);
 }
@@ -1962,15 +1895,13 @@ button.primary,
   gap: var(--space-3);
 }
 
-.target-setup-card label,
-.target-controls-card label {
+.target-setup-card label {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
 }
 
 .target-setup-card label > span,
-.target-controls-card label > span,
 .target-object-row small,
 .saved-target-row span {
   color: var(--text-secondary);
@@ -2088,7 +2019,6 @@ button.primary,
   padding: 4px;
 }
 
-.control-section,
 .transform-control-group {
   display: grid;
   gap: var(--space-2);
@@ -4057,9 +3987,7 @@ button:disabled,
     align-items: flex-start;
   }
 
-  .target-setup-card,
-  .target-controls-card,
-  .saved-target-card {
+  .target-setup-card {
     padding: var(--space-3);
   }
 

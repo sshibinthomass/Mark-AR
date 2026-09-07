@@ -33,7 +33,6 @@
   --color-border-dark: #1d454a;
   --color-border-light: #c9dada;
   --color-mint-wash: #d8f8f2;
-  --color-violet-wash: #e9e5ff;
   --color-gold-wash: #fff1cf;
   --color-error-dark: #b83e4b;
   --color-error-light: #ff9099;
@@ -43,7 +42,6 @@
   --font-display: "Sora Variable", "Sora", "Avenir Next", "Segoe UI", sans-serif;
   --font-text: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
   --font-utility: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", monospace;
-  --text-display-xl: clamp(3.35rem, 6.7vw, 7.3rem);
   --text-display-lg: clamp(2.7rem, 5vw, 5.2rem);
   --text-heading-1: clamp(2.3rem, 4vw, 4rem);
   --text-heading-2: clamp(1.8rem, 3vw, 3rem);
@@ -57,14 +55,13 @@
   --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.5rem;
   --space-6: 2rem; --space-7: 3rem; --space-8: 4rem; --space-9: 6rem; --space-10: 8rem;
   --radius-control: 10px; --radius-card: 16px; --radius-stage: 24px; --radius-status: 999px;
-  --content-reading: 720px; --content-standard: 1200px; --content-wide: 1440px; --content-max: 1600px;
+  --content-standard: 1200px; --content-wide: 1440px; --content-max: 1600px;
   --control-height: 44px;
   --header-height: 64px;
 
   /* Motion */
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --section-space: clamp(4.5rem, 8vw, 8rem);
 }
 
@@ -80,8 +77,6 @@
 
   --surface-ground: var(--color-spatial-void);
   --surface-band-raised: #071a1e;
-  --surface-band-recessed: #010507;
-  --surface-band-future: #050f1b;
 
   /* Panels are veils over the 3D field, never solid slabs. */
   --veil-card: rgba(8, 29, 33, 0.72);
@@ -120,8 +115,6 @@
   --surface-ground: var(--color-reality-mist);
   --surface-band-raised: var(--color-interface-white);
   /* The recessed band stays ink in both themes: it is the closing CTA band. */
-  --surface-band-recessed: var(--color-spatial-ink);
-  --surface-band-future: #eaf3f6;
 
   --veil-card: rgba(255, 255, 255, 0.88);
   --veil-ink: rgba(255, 255, 255, 0.94);

@@ -42,7 +42,6 @@ describe('renderTargetModelRail', () => {
     expect(options[0].getAttribute('aria-selected')).toBe('true');
     expect(options[0].getAttribute('aria-label')).toBe('Chair');
     expect(options[0].querySelector('img')?.src).toBe('https://worker.example/previews/chair.png');
-    expect(options[0].querySelector('.target-model-card-label')?.getAttribute('aria-hidden')).toBe('true');
     expect(options[1].querySelector('.target-model-thumb-fallback')?.textContent).toBe('LS');
 
     options[1].click();

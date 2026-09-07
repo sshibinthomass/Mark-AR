@@ -51,12 +51,7 @@ export function renderTargetModelRail(
       thumb.append(fallback);
     }
 
-    const label = document.createElement('span');
-    label.className = 'target-model-card-label';
-    label.setAttribute('aria-hidden', 'true');
-    label.textContent = model.label;
-
-    option.append(thumb, label);
+    option.append(thumb);
     if (isLoading) {
       const loader = document.createElement('span');
       loader.className = 'target-model-card-loader';
