@@ -84,7 +84,7 @@ export function animationForPreset(preset: ImageTargetAnimationPreset): ImageTar
   if (preset === 'custom') {
     return { preset, tracks: [] };
   }
-  return { preset, tracks: PRESET_TRACKS[preset].map(cloneTrack) };
+  return { preset, tracks: PRESET_TRACKS[preset].map((track) => ({ ...track })) };
 }
 
 export function normalizeAnimation(value: ImageTargetAnimationInput = {}): ImageTargetAnimation {
@@ -223,10 +223,6 @@ function waveValue(
 ): number {
   const angle = 2 * Math.PI * speed * elapsedSeconds + phaseRadians;
   return motion === 'triangle' ? (2 / Math.PI) * Math.asin(Math.sin(angle)) : Math.sin(angle);
-}
-
-function cloneTrack(track: ImageTargetAnimationTrack): ImageTargetAnimationTrack {
-  return { ...track };
 }
 
 function isNamedPreset(value: unknown): value is Exclude<ImageTargetAnimationPreset, 'custom'> {

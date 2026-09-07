@@ -26,6 +26,7 @@ import { normalizeAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import { normalizePlacement } from '../app/imageTargetPayload';
 import {
+  clampNumber,
   isImageTargetObject,
   isModelTargetObject,
   isTextTargetObject,
@@ -1197,19 +1198,15 @@ function normalizePreviewGroups(groups: TargetEditorGroup[] | undefined): Target
 }
 
 function clonePreviewObject(object: TargetEditorObject): TargetEditorObject {
+  /* normalizeAnimation validates rather than copies, so it still runs. */
   return {
-    ...object,
-    placement: { ...object.placement },
-    ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
+    ...structuredClone(object),
     animation: normalizeAnimation(object.animation),
   } as TargetEditorObject;
 }
 
 function cloneSelection(selection: TargetEditorSelection): TargetEditorSelection {
-  return {
-    objectIds: [...selection.objectIds],
-    ...(selection.groupId ? { groupId: selection.groupId } : {}),
-  };
+  return structuredClone(selection);
 }
 
 function selectPreviewObjectId(
@@ -1239,13 +1236,7 @@ function normalizeCameraView(value: Partial<PreviewCameraView> | undefined): Pre
   };
 }
 
-function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
-  const numberValue = Number(value);
-  if (!Number.isFinite(numberValue)) {
-    return fallback;
-  }
-  return Math.min(max, Math.max(min, numberValue));
-}
+
 
 function pointerFromEvent(event: PointerEvent): PointerPoint {
   return {

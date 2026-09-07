@@ -446,7 +446,7 @@ export function isTargetTextStylePreset(value: unknown): value is TargetTextStyl
   return TEXT_STYLE_PRESETS.some((option) => option.id === value);
 }
 
-function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+export function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const numericValue = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(numericValue)) {
     return fallback;

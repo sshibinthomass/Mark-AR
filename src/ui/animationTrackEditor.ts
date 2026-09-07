@@ -42,7 +42,7 @@ export function createAnimationTrackEditor(
 
   const emitCustomState = (): void => {
     state = normalizeAnimation({ preset: 'custom', tracks: state.tracks });
-    onChange(cloneAnimation(state));
+    onChange(structuredClone(state));
   };
 
   const render = (animation: ImageTargetAnimation): void => {
@@ -264,6 +264,3 @@ function trackIndexFromElement(element: Element): number {
   return Number(element.closest<HTMLElement>('[data-animation-track]')?.dataset.animationTrack ?? -1);
 }
 
-function cloneAnimation(animation: ImageTargetAnimation): ImageTargetAnimation {
-  return { preset: animation.preset, tracks: animation.tracks.map((track) => ({ ...track })) };
-}

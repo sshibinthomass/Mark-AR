@@ -2370,8 +2370,9 @@ function targetControlsTabLabel(): string {
   return 'Object';
 }
 
+/* normalizeAnimation rebuilds every track, so it already returns a fresh copy. */
 function cloneTargetAnimation(animation: ImageTargetAnimation): ImageTargetAnimation {
-  return normalizeAnimation({ preset: animation.preset, tracks: animation.tracks.map((track) => ({ ...track })) });
+  return normalizeAnimation(animation);
 }
 
 function nextTargetObjectPlacement(): ImageTargetPlacement {
@@ -2387,18 +2388,13 @@ function nextTargetObjectPlacement(): ImageTargetPlacement {
   });
 }
 
+/* The camera needs a secure context, so crypto.randomUUID is always there. */
 function createTargetObjectId(): string {
-  const cryptoId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `object-${cryptoId}`;
+  return `object-${crypto.randomUUID()}`;
 }
 
 function createTargetGroupId(): string {
-  const cryptoId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  return `group-${cryptoId}`;
+  return `group-${crypto.randomUUID()}`;
 }
 
 function readTargetTextLanguage(): TargetTextLanguage {

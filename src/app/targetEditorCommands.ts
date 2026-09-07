@@ -6,9 +6,6 @@ import {
   type TargetEditorSelection,
 } from './targetEditorGroups';
 import {
-  isImageTargetObject,
-  isTextTargetObject,
-  isYouTubeTargetObject,
   type TargetEditorObject,
 } from './targetEditorObjects';
 
@@ -136,44 +133,8 @@ export function duplicateTargetSelection({
 }
 
 function cloneTargetObject(object: TargetEditorObject, id: string): TargetEditorObject {
-  if (isTextTargetObject(object)) {
-    return {
-      ...object,
-      id,
-      placement: { ...object.placement },
-      ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
-      animation: normalizeAnimation(object.animation),
-      text: { ...object.text },
-    };
-  }
-  if (isImageTargetObject(object)) {
-    return {
-      ...object,
-      id,
-      placement: { ...object.placement },
-      ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
-      animation: normalizeAnimation(object.animation),
-      image: { ...object.image },
-    };
-  }
-  if (isYouTubeTargetObject(object)) {
-    return {
-      ...object,
-      id,
-      placement: { ...object.placement },
-      ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
-      animation: normalizeAnimation(object.animation),
-      youtube: { ...object.youtube },
-    };
-  }
-  return {
-    ...object,
-    id,
-    placement: { ...object.placement },
-    ...(object.localPlacement ? { localPlacement: { ...object.localPlacement } } : {}),
-    animation: normalizeAnimation(object.animation),
-    model: { ...object.model },
-  };
+  /* normalizeAnimation validates rather than copies, so it still runs. */
+  return { ...structuredClone(object), id, animation: normalizeAnimation(object.animation) };
 }
 
 function offsetPlacement<T extends { offsetX: number; offsetY: number }>(placement: T): T {

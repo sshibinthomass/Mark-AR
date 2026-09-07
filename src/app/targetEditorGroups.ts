@@ -3,7 +3,7 @@
 // and placementFromMatrix are called synchronously from main.ts. Replacing it
 // means hand-writing the quaternion/matrix composition, which is not worth
 // owning; revisit only if the landing page needs to go below ~250 kB.
-import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
+import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
 import { DEFAULT_IMAGE_TARGET_ANIMATION, normalizeAnimation, type ImageTargetAnimation } from './imageTargetAnimation';
 import type {
   ImageTargetPlacement,
@@ -246,10 +246,10 @@ export function normalizeLocalPlacement(value: Partial<ImageTargetPlacement>): I
   const placement = finitePlacement(value);
   return {
     ...placement,
-    scale: clamp(placement.scale, 0.1, 5),
-    offsetX: clamp(placement.offsetX, -2, 2),
-    offsetY: clamp(placement.offsetY, -2, 2),
-    height: clamp(placement.height, -2, 2),
+    scale: MathUtils.clamp(placement.scale, 0.1, 5),
+    offsetX: MathUtils.clamp(placement.offsetX, -2, 2),
+    offsetY: MathUtils.clamp(placement.offsetY, -2, 2),
+    height: MathUtils.clamp(placement.height, -2, 2),
   };
 }
 
@@ -280,10 +280,10 @@ export function resetLocalPlacementTransform(
 
 function finitePlacement(value: Partial<ImageTargetPlacement>): ImageTargetPlacement {
   return {
-    scale: clamp(finite(value.scale, 1), 0.01, 50),
-    offsetX: clamp(finite(value.offsetX, 0), -50, 50),
-    offsetY: clamp(finite(value.offsetY, 0), -50, 50),
-    height: clamp(finite(value.height, 0), -50, 50),
+    scale: MathUtils.clamp(finite(value.scale, 1), 0.01, 50),
+    offsetX: MathUtils.clamp(finite(value.offsetX, 0), -50, 50),
+    offsetY: MathUtils.clamp(finite(value.offsetY, 0), -50, 50),
+    height: MathUtils.clamp(finite(value.height, 0), -50, 50),
     rotationX: normalizeDegrees(value.rotationX),
     rotationY: normalizeDegrees(value.rotationY),
     rotationZ: normalizeDegrees(value.rotationZ),
@@ -296,10 +296,6 @@ function average(values: number[]): number {
 
 function finite(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 function normalizeDegrees(value: unknown): number {
