@@ -1,4 +1,4 @@
-export type BrandAssetUrls = {
+type BrandAssetUrls = {
   productLockup: string;
   productMark: string;
   companyLockup: string;

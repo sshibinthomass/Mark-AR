@@ -29,8 +29,8 @@ const CAMERA_PRESETS = ['reset', 'home', 'front', 'left', 'right', 'top'] as con
 const CAMERA_ARROW_DIRECTIONS = ['up', 'down', 'left', 'right'] as const;
 const CAMERA_CARDINAL_STEP_DEGREES = 90;
 
-export type CameraPreset = (typeof CAMERA_PRESETS)[number];
-export type CameraArrowDirection = (typeof CAMERA_ARROW_DIRECTIONS)[number];
+type CameraPreset = (typeof CAMERA_PRESETS)[number];
+type CameraArrowDirection = (typeof CAMERA_ARROW_DIRECTIONS)[number];
 
 export function isCameraPreset(value: string | undefined): value is CameraPreset {
   return CAMERA_PRESETS.includes(value as CameraPreset);

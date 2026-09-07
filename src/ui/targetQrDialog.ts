@@ -1,13 +1,13 @@
 import type { TargetQrShareResult } from '../app/targetQrShare';
 
-export type TargetQrDialogOpenInput = {
+type TargetQrDialogOpenInput = {
   targetLabel: string;
   scanUrl: string;
   scanHref: string;
   returnFocus?: HTMLElement;
 };
 
-export type TargetQrDialogHandlers = {
+type TargetQrDialogHandlers = {
   onShare: (scanUrl: string, targetLabel: string) => Promise<TargetQrShareResult>;
   onDownload: () => void;
   onCopy: (scanUrl: string) => void | Promise<void>;

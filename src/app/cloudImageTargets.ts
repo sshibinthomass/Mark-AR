@@ -713,7 +713,7 @@ function positiveNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-export function resolveGroupedObjectsForSave(
+function resolveGroupedObjectsForSave(
   objects: TargetEditorObject[],
   groups: CloudImageTargetGroup[],
 ): TargetEditorObject[] {
@@ -755,7 +755,7 @@ function textRequestBody(text: TargetTextContent): Record<string, string | numbe
   };
 }
 
-export function normalizeCloudImageTargetGroups(
+function normalizeCloudImageTargetGroups(
   groups: CloudImageTargetGroup[] | undefined,
 ): CloudImageTargetGroup[] {
   const seen = new Set<string>();

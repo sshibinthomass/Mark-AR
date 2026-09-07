@@ -211,7 +211,7 @@ export function toggleTargetObjectSelection(
   return { objectIds };
 }
 
-export function placementMatrix(placement: ImageTargetPlacement): Matrix4 {
+function placementMatrix(placement: ImageTargetPlacement): Matrix4 {
   const normalized = finitePlacement(placement);
   return new Matrix4().compose(
     new Vector3(normalized.offsetX, normalized.height, normalized.offsetY),
@@ -225,7 +225,7 @@ export function placementMatrix(placement: ImageTargetPlacement): Matrix4 {
   );
 }
 
-export function placementFromMatrix(matrix: Matrix4): ImageTargetPlacement {
+function placementFromMatrix(matrix: Matrix4): ImageTargetPlacement {
   const position = new Vector3();
   const quaternion = new Quaternion();
   const scale = new Vector3();

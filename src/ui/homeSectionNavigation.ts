@@ -1,4 +1,4 @@
-export type HomeSectionNavigationEffects = {
+type HomeSectionNavigationEffects = {
   isHome(): boolean;
   openHome(): void;
   schedule(callback: () => void): void;

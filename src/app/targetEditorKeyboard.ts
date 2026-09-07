@@ -1,6 +1,6 @@
 import type { ImageTargetPlacement } from './imageTargetPayload';
 
-export type TargetEditorKeyboardCommand =
+type TargetEditorKeyboardCommand =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'duplicate' }

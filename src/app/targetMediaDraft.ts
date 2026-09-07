@@ -8,7 +8,7 @@ import {
   type TargetImageContent,
 } from './targetMedia';
 
-export type TargetImageDraft = {
+type TargetImageDraft = {
   image: TargetImageContent;
   source: PendingTargetImageSource;
 };

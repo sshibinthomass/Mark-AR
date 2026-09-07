@@ -13,7 +13,7 @@ type Rect = {
   height: number;
 };
 
-export type TargetQrLayout = {
+type TargetQrLayout = {
   canvas: Rect;
   qr: Rect;
   centerBadge: Rect;

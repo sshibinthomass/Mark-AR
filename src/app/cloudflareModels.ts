@@ -41,7 +41,7 @@ export const DEFAULT_GENERATE_MODEL_API_URL =
 
 const CLOUDFLARE_ASSET_ORIGIN = 'https://web-ar-model-assets.pages.dev';
 
-export const STATIC_CLOUDFLARE_MODELS: CloudflareModelOption[] = [
+const STATIC_CLOUDFLARE_MODELS: CloudflareModelOption[] = [
   {
     id: 'trellis-fast-output',
     label: 'Fast output',

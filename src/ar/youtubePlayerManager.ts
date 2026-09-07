@@ -29,7 +29,7 @@ export type YouTubePlayerPort = YouTubeTransportPlayer & {
   destroy(): void;
 };
 
-export type YouTubeActivationResult = 'activated' | 'missed' | 'failed';
+type YouTubeActivationResult = 'activated' | 'missed' | 'failed';
 
 type YouTubePlayerStateHandler = (state: number) => void;
 

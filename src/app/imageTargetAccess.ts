@@ -1,4 +1,4 @@
-export const IMAGE_TARGET_ACCESS_MODES = [
+const IMAGE_TARGET_ACCESS_MODES = [
   'anyone_with_link',
   'any_signed_in',
   'owner_only',

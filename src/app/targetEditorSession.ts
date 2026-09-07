@@ -9,7 +9,7 @@ export type EditingTargetState = {
   imageUrl: string;
 };
 
-export type EditableTargetSession = EditingTargetState & {
+type EditableTargetSession = EditingTargetState & {
   label: string;
   objects: TargetEditorObject[];
   groups: TargetEditorGroup[];

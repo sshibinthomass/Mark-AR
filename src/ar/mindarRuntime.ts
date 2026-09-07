@@ -15,14 +15,14 @@ import {
 } from './targetCompiler';
 import { YouTubePlayerManager } from './youtubePlayerManager';
 
-export type MindARAnchor = {
+type MindARAnchor = {
   group: Group;
   onTargetFound?: () => void;
   onTargetLost?: () => void;
   targetIndex: number;
 };
 
-export type MindARThreeInstance = {
+type MindARThreeInstance = {
   addAnchor: (targetIndex: number) => MindARAnchor;
   camera: unknown;
   renderer: {
@@ -34,7 +34,7 @@ export type MindARThreeInstance = {
   stop?: () => void;
 };
 
-export type MindARThreeConstructor = new (options: {
+type MindARThreeConstructor = new (options: {
   container: HTMLElement;
   imageTargetSrc: string;
   filterMinCF?: number;
@@ -44,7 +44,7 @@ export type MindARThreeConstructor = new (options: {
   uiError?: 'yes' | 'no' | string;
 }) => MindARThreeInstance;
 
-export type MarkerVisibilityEvent = {
+type MarkerVisibilityEvent = {
   marker: MarkerSpec;
   visible: boolean;
 };
@@ -53,7 +53,7 @@ export type MarkerARSession = {
   stop: () => void;
 };
 
-export type StartMarkerARHooks = {
+type StartMarkerARHooks = {
   targets?: RuntimeMarkerTarget[];
   onCompileProgress?: (percent: number) => void;
   onMarkerVisibility?: (event: MarkerVisibilityEvent) => void;

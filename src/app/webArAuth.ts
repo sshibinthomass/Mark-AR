@@ -1,7 +1,7 @@
-export type AuthRole = 'admin' | 'user';
-export type AuthStatus = 'active' | 'pending';
+type AuthRole = 'admin' | 'user';
+type AuthStatus = 'active' | 'pending';
 
-export type AuthUser = {
+type AuthUser = {
   email: string;
   name?: string;
   role: AuthRole;

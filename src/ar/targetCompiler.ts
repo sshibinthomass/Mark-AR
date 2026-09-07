@@ -1,6 +1,6 @@
 import type { MarkerSpec } from './markerCatalog';
 
-export type MindARCompiler = {
+type MindARCompiler = {
   compileImageTargets: (
     images: HTMLImageElement[],
     onProgress: (percent: number) => void,
@@ -16,7 +16,7 @@ export type CompiledMarkerTargets = {
   dispose: () => void;
 };
 
-export type CompileMarkerTargetOptions = {
+type CompileMarkerTargetOptions = {
   Compiler: MindARCompilerConstructor;
   createObjectUrl?: (blob: Blob) => string;
   loadImage?: (path: string) => Promise<HTMLImageElement>;

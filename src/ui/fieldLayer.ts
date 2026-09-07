@@ -17,7 +17,7 @@ import type { ApertureObjectName, PointFieldHandle } from '../scene/pointField';
 import type { AppRoute } from './pageRoutes';
 import { currentTheme } from './theme';
 
-export type FieldLayer = {
+type FieldLayer = {
   mode: FieldMode;
   setRoute: (route: AppRoute) => void;
   setTheme: (theme: 'dark' | 'light') => void;

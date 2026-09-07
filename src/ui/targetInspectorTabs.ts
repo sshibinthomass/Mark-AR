@@ -1,7 +1,7 @@
 const TARGET_INSPECTOR_TAB_SELECTOR = '[data-target-inspector-tab]';
 const TARGET_INSPECTOR_PANEL_SELECTOR = '[data-target-inspector-panel]';
 
-export type TargetInspectorTabsController = {
+type TargetInspectorTabsController = {
   activate: (tabId: string) => boolean;
   getActiveTab: () => string | undefined;
   setTabEnabled: (tabId: string, enabled: boolean) => void;

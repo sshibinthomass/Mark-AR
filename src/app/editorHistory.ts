@@ -1,11 +1,11 @@
-export type EditorHistoryOptions<T> = {
+type EditorHistoryOptions<T> = {
   equals?(left: T, right: T): boolean;
   limit?: number;
   coalesceWindowMs?: number;
   now?(): number;
 };
 
-export type EditorHistory<T> = {
+type EditorHistory<T> = {
   record(snapshot: T, coalesceKey?: string): void;
   undo(current: T): T | undefined;
   redo(current: T): T | undefined;

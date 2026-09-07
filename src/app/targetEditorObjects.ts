@@ -186,7 +186,7 @@ export type TargetTextContent = {
   stylePreset?: TargetTextStylePreset;
 };
 
-export type TargetObjectBase = {
+type TargetObjectBase = {
   id: string;
   placement: ImageTargetPlacement;
   animation?: ImageTargetAnimation;
@@ -204,7 +204,7 @@ export type ModelTargetObject = TargetObjectBase & {
   model: CloudflareModelOption;
 };
 
-export type ImageTargetObject = TargetObjectBase & {
+type ImageTargetObject = TargetObjectBase & {
   kind: 'image';
   image: TargetImageContent;
 };

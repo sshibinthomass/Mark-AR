@@ -7,26 +7,26 @@ import {
   type Camera,
 } from 'three';
 
-export type ClientPoint = {
+type ClientPoint = {
   x: number;
   y: number;
 };
 
-export type ClientViewport = {
+type ClientViewport = {
   left: number;
   top: number;
   width: number;
   height: number;
 };
 
-export type ProjectedQuad = readonly [
+type ProjectedQuad = readonly [
   ClientPoint,
   ClientPoint,
   ClientPoint,
   ClientPoint,
 ];
 
-export type TransportLayout<TButton> = {
+type TransportLayout<TButton> = {
   widthPx: number;
   heightPx: number;
   buttons: readonly {

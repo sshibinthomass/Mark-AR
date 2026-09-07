@@ -9,11 +9,11 @@ export type AuthUiState =
   | ({ status: 'signed-out' } & AuthUiMessage)
   | ({ status: 'signed-in'; email: string } & AuthUiMessage);
 
-export type SignupResult =
+type SignupResult =
   | { kind: 'pending'; email: string; message: string }
   | { kind: 'signed-in'; token: string; state: Extract<AuthUiState, { status: 'signed-in' }> };
 
-export type LoginResult = {
+type LoginResult = {
   token: string;
   state: Extract<AuthUiState, { status: 'signed-in' }>;
 };

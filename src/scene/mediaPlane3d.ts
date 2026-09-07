@@ -9,16 +9,16 @@ import {
   TextureLoader,
 } from 'three';
 
-export type MediaPlaneKind = 'image' | 'youtube';
+type MediaPlaneKind = 'image' | 'youtube';
 
-export type MediaPlaneInput = {
+type MediaPlaneInput = {
   objectId: string;
   kind: MediaPlaneKind;
   url: string;
   aspectRatio: number;
 };
 
-export type PreparedMediaPlane = {
+type PreparedMediaPlane = {
   group: Group;
   mesh: Mesh<PlaneGeometry, MeshBasicMaterial>;
   ready: Promise<void>;

@@ -13,7 +13,7 @@ import type { AppRoute } from '../ui/pageRoutes';
  */
 export type FieldMode = 'interactive' | 'poster';
 
-export type FieldEnvironment = {
+type FieldEnvironment = {
   reducedMotion: boolean;
   saveData: boolean;
   webglSupported: boolean;

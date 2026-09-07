@@ -32,7 +32,7 @@ import type {
   CloudflarePlacedObject,
 } from './cloudflareMarkerObject';
 
-export type TargetSceneLoadMode = 'fallback' | 'strict';
+type TargetSceneLoadMode = 'fallback' | 'strict';
 
 export type TargetSceneObject = {
   group: Group;
@@ -43,7 +43,7 @@ export type TargetSceneObject = {
   dispose(): void;
 };
 
-export type TargetSceneYouTubeSurface = {
+type TargetSceneYouTubeSurface = {
   objectId: string;
   root: Group;
   mesh: Mesh;
@@ -52,7 +52,7 @@ export type TargetSceneYouTubeSurface = {
 
 export type InteractiveYouTubeSurface = TargetSceneYouTubeSurface;
 
-export type TargetSceneSelectableKind = 'image' | 'youtube' | 'text' | 'model';
+type TargetSceneSelectableKind = 'image' | 'youtube' | 'text' | 'model';
 
 export type TargetSceneSelectableObject = {
   objectId: string;

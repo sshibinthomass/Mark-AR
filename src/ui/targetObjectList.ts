@@ -11,7 +11,7 @@ import {
 import type { TargetEditorGroup, TargetEditorSelection } from '../app/targetEditorGroups';
 import { decorateDeleteIconButton } from './deleteIconButton';
 
-export type TargetObjectListItemOptions = {
+type TargetObjectListItemOptions = {
   object: TargetEditorObject;
   index: number;
   selectedObjectId?: string;
@@ -22,7 +22,7 @@ export type TargetObjectListItemOptions = {
   onDelete: (objectId: string) => void;
 };
 
-export type TargetObjectListOptions = {
+type TargetObjectListOptions = {
   objects: TargetEditorObject[];
   groups: TargetEditorGroup[];
   selection: TargetEditorSelection;

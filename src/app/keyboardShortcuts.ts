@@ -1,11 +1,11 @@
-export type ShortcutSectionId =
+type ShortcutSectionId =
   | 'editing'
   | 'object-movement'
   | 'transform-tools'
   | 'visibility-playback'
   | 'camera-views';
 
-export type KeyboardShortcut = Readonly<{
+type KeyboardShortcut = Readonly<{
   action: string;
   keys: readonly string[];
   scope: string;

@@ -1,6 +1,6 @@
-export const MAX_TARGET_MEDIA_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_TARGET_MEDIA_IMAGE_BYTES = 5 * 1024 * 1024;
 
-export const SUPPORTED_TARGET_IMAGE_MIME_TYPES = [
+const SUPPORTED_TARGET_IMAGE_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/webp',

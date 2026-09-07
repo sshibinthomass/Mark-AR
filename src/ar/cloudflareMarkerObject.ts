@@ -1,22 +1,12 @@
 import { Group, type Texture } from 'three';
 import type { CloudflareModelOption } from '../app/cloudflareModels';
-import type { ImageTargetAnimation } from '../app/imageTargetAnimation';
 import type { ImageTargetPlacement } from '../app/imageTargetPayload';
 import type { TargetEditorGroup } from '../app/targetEditorGroups';
 import type { TargetEditorObject, TargetTextContent } from '../app/targetEditorObjects';
 import type { MarkerObject } from './arObjects';
 import { createTargetSceneObject } from './targetSceneObject';
 
-export type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
-
-export type CloudflareModelPlacedObject = {
-  id?: string;
-  model: CloudflareModelOption;
-  placement?: ImageTargetPlacement;
-  animation?: ImageTargetAnimation;
-  groupId?: string;
-  localPlacement?: ImageTargetPlacement;
-};
+type ModelGroupLoader = (modelUrl: string) => Promise<Group>;
 
 export type CloudflarePlacedObject = TargetEditorObject;
 

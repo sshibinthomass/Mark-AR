@@ -10,7 +10,7 @@ type AnimationTrackEditorOptions = {
   onChange: (animation: ImageTargetAnimation) => void;
 };
 
-export type AnimationTrackEditor = {
+type AnimationTrackEditor = {
   render: (animation: ImageTargetAnimation) => void;
   addTrack: () => void;
   destroy: () => void;

@@ -7,13 +7,13 @@
  * token layer, so nothing here needs to know about individual components.
  */
 
-export type ThemeName = 'dark' | 'light';
+type ThemeName = 'dark' | 'light';
 
 export const THEME_STORAGE_KEY = 'anchorar:theme';
 export const DEFAULT_THEME: ThemeName = 'dark';
 
 /** Ground colour per theme, mirrored into `<meta name="theme-color">`. */
-export const THEME_COLORS: Record<ThemeName, string> = {
+const THEME_COLORS: Record<ThemeName, string> = {
   dark: '#020a0c',
   light: '#f4fbfa',
 };
@@ -95,14 +95,14 @@ export function syncThemeToggle(button: HTMLElement, theme: ThemeName): void {
   button.setAttribute('title', themeToggleLabel(theme));
 }
 
-export type ThemeControllerOptions = {
+type ThemeControllerOptions = {
   doc?: Document;
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
   /** Called on the initial apply and on every change. */
   onChange?: (theme: ThemeName) => void;
 };
 
-export type ThemeController = {
+type ThemeController = {
   get: () => ThemeName;
 };
 

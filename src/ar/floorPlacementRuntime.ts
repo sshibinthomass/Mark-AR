@@ -53,24 +53,24 @@ export type FloorPlacementController = {
   dispose(): Promise<void>;
 };
 
-export type FloorTransformSelectionState = {
+type FloorTransformSelectionState = {
   selectAll: boolean;
   active: boolean;
   objectId?: string;
   label?: string;
 };
 
-export type FloorSelectionOutline = {
+type FloorSelectionOutline = {
   object: Object3D;
   update(): void;
   dispose(): void;
 };
 
-export type FloorPlacementPreparation =
+type FloorPlacementPreparation =
   | { supported: false; message: string }
   | { supported: true; controller: FloorPlacementController };
 
-export type FloorPlacementRuntimeHooks = {
+type FloorPlacementRuntimeHooks = {
   onSessionStart(): void;
   onSessionEnd(): void;
   onStatus(message: string): void;

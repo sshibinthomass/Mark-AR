@@ -33,7 +33,7 @@ export type ImageTargetAnimation = {
   tracks: ImageTargetAnimationTrack[];
 };
 
-export type ImageTargetAnimationFrame = {
+type ImageTargetAnimationFrame = {
   position: { x: number; y: number; z: number };
   rotationRadians: { x: number; y: number; z: number };
   scaleMultiplier: number;

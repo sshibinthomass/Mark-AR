@@ -1,10 +1,10 @@
-export type CapturedImage = {
+type CapturedImage = {
   imageBase64: string;
   imageMimeType: string;
   blob: Blob;
 };
 
-export const DEFAULT_CAPTURE_IMAGE_MIME_TYPE = 'image/png';
+const DEFAULT_CAPTURE_IMAGE_MIME_TYPE = 'image/png';
 
 export async function imageFileToCapturedImage(file: File): Promise<CapturedImage> {
   if (!file.type.startsWith('image/')) {

@@ -1,4 +1,4 @@
-export type MarkerObjectKind = 'crystalTower' | 'orbitBeacon';
+type MarkerObjectKind = 'crystalTower' | 'orbitBeacon';
 
 export type MarkerObjectSpec = {
   kind: MarkerObjectKind;

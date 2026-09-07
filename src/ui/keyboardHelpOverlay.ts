@@ -1,4 +1,4 @@
-export type KeyboardHelpOverlay = {
+type KeyboardHelpOverlay = {
   open(): void;
   close(): void;
   toggle(): void;

@@ -13,7 +13,7 @@ export type YouTubeTransportControls = {
   dispose(): void;
 };
 
-export type YouTubeTransportPointerContactCallbacks = {
+type YouTubeTransportPointerContactCallbacks = {
   onPointerContactStart?(pointerId: number): void;
   onPointerContactEnd?(pointerId: number): void;
   onPointerContactAbandon?(pointerId: number): void;

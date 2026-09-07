@@ -76,12 +76,12 @@ export type PreviewTransformMode = 'translate' | 'rotate' | 'scale';
 const selectionTargetKey = '@selection';
 const groupTargetPrefix = '@group:';
 
-export type PreviewPlacementChange = {
+type PreviewPlacementChange = {
   objectId: string;
   placement: ImageTargetPlacement;
 };
 
-export type PreviewGroupPlacementChange = {
+type PreviewGroupPlacementChange = {
   groupId: string;
   placement: ImageTargetPlacement;
 };
@@ -101,7 +101,7 @@ type PreviewDeps = {
   onTransformModeChange?: (mode: PreviewTransformMode) => void;
 };
 
-export type PreviewState = {
+type PreviewState = {
   imageUrl?: string;
   model?: CloudflareModelOption;
   placement?: ImageTargetPlacement;

@@ -1,11 +1,11 @@
-export interface R2ObjectLike {
+interface R2ObjectLike {
   body: BodyInit | null;
   httpMetadata?: { contentType?: string };
   text?(): Promise<string>;
   arrayBuffer?(): Promise<ArrayBuffer>;
 }
 
-export interface R2BucketLike {
+interface R2BucketLike {
   get(key: string): Promise<R2ObjectLike | null>;
   put(
     key: string,
@@ -25,7 +25,7 @@ export interface WorkerEnv {
   ASSET_BUCKET: R2BucketLike;
 }
 
-export type WorkerDeps = {
+type WorkerDeps = {
   fetch: typeof fetch;
   now: () => Date;
   randomUUID: () => string;
