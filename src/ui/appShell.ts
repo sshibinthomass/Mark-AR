@@ -238,7 +238,7 @@ export function renderAppShell(): string {
                 <button type="button" data-transform-mode="rotate" aria-pressed="false">Rotate</button>
                 <button type="button" data-transform-mode="scale" aria-pressed="false">Scale</button>
               </div>
-              <div class="target-camera-view-controls" aria-label="Camera view">
+              <div class="target-camera-view-controls" aria-label="Camera view" data-studio-hud-panel="camera" data-studio-hud="collapsed">
                 <div class="target-camera-view-head">
                   <p class="eyebrow">Camera view</p>
                   <div class="target-camera-preset-row" aria-label="Camera presets">
@@ -248,8 +248,17 @@ export function renderAppShell(): string {
                     <button type="button" data-camera-preset="right">Right</button>
                     <button type="button" data-camera-preset="top">Top</button>
                   </div>
+                  <button
+                    class="studio-hud-toggle"
+                    type="button"
+                    data-studio-hud-toggle="camera"
+                    aria-expanded="false"
+                    aria-controls="target-camera-view-grid"
+                    aria-label="Show camera sliders"
+                    title="Show camera sliders"
+                  >${renderStudioChevron()}</button>
                 </div>
-                <div class="target-camera-view-grid">
+                <div id="target-camera-view-grid" class="target-camera-view-grid">
                   <label><span>Distance</span><input id="target-camera-distance" type="range" min="0.8" max="5" step="0.05" value="2.1" /></label>
                   <label><span>View height</span><input id="target-camera-height" type="range" min="0.1" max="3" step="0.05" value="1.1" /></label>
                   <label><span>Orbit</span><input id="target-camera-yaw" type="range" min="-180" max="180" step="1" value="0" /></label>
@@ -258,9 +267,22 @@ export function renderAppShell(): string {
               </div>
             </div>
             <div id="target-preview-stage" class="target-preview-stage" aria-label="3D target preview"></div>
+            <div class="target-stage-empty" data-target-stage-empty>
+              <strong>Start an experience</strong>
+              <p>Upload a scan image, place 3D models above it, and save the experience to AnchorAR Studio.</p>
+            </div>
+            <button
+              class="studio-dock-toggle"
+              type="button"
+              data-studio-dock-toggle
+              aria-expanded="true"
+              aria-controls="target-inspector-dock"
+              aria-label="Hide the inspector"
+              title="Hide the inspector"
+            >${renderStudioDockIcon()}</button>
           </div>
 
-          <section class="tool-card target-inspector-card target-setup-card" data-layout-role="target-inspector">
+          <section id="target-inspector-dock" class="tool-card target-inspector-card target-setup-card" data-layout-role="target-inspector">
             <div class="tool-card-head target-inspector-head">
               <p class="eyebrow">Experience</p>
               <p id="image-target-status">Sign in, choose an image, and select a 3D model.</p>
@@ -675,6 +697,22 @@ export function renderAppShell(): string {
       </footer>
     </main>
   `;
+}
+
+function renderStudioIcon(paths: string): string {
+  return `
+    <svg class="studio-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      ${paths}
+    </svg>
+  `;
+}
+
+function renderStudioChevron(): string {
+  return renderStudioIcon('<path d="m6 15 6-6 6 6"/>');
+}
+
+function renderStudioDockIcon(): string {
+  return renderStudioIcon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>');
 }
 
 function renderRouteLink(route: AppRoute, label: string): string {

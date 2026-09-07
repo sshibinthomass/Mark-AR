@@ -379,6 +379,22 @@ describe('renderAppShell', () => {
       'Top',
     ]);
     expect(cameraPresetButtons.every((button) => button.closest('.target-camera-view-controls'))).toBe(true);
+    const hudToggle = container.querySelector<HTMLButtonElement>('[data-studio-hud-toggle="camera"]');
+    expect(hudToggle?.closest('.target-camera-view-head')).toBe(cameraViewHead);
+    expect(hudToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(hudToggle?.getAttribute('aria-controls')).toBe('target-camera-view-grid');
+    expect(cameraViewControls?.getAttribute('data-studio-hud-panel')).toBe('camera');
+    expect(cameraViewControls?.getAttribute('data-studio-hud')).toBe('collapsed');
+    expect(container.querySelector('.target-camera-view-grid')?.id).toBe('target-camera-view-grid');
+    const dockToggle = container.querySelector<HTMLButtonElement>('[data-studio-dock-toggle]');
+    expect(dockToggle?.closest('.target-preview-shell')).toBe(targetPreviewShell);
+    expect(dockToggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(dockToggle?.getAttribute('aria-controls')).toBe('target-inspector-dock');
+    expect(container.querySelector('.target-inspector-card')?.id).toBe('target-inspector-dock');
+    const stageEmpty = container.querySelector<HTMLElement>('[data-target-stage-empty]');
+    expect(stageEmpty?.closest('.target-preview-shell')).toBe(targetPreviewShell);
+    expect(stageEmpty?.closest('#target-preview-stage')).toBeNull();
+    expect(stageEmpty?.querySelector('strong')?.textContent).toBe('Start an experience');
     const animationPreset = container.querySelector<HTMLSelectElement>('#target-animation-preset');
     expect(animationPreset).toBeTruthy();
     expect(animationPreset?.closest('[data-target-inspector-panel="object-controls"]')).toBeTruthy();

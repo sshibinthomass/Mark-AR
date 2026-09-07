@@ -1,0 +1,622 @@
+/*
+  AnchorAR Studio shell.
+
+  The Studio route is an editor, not a document: the 3D canvas is the page, chrome
+  docks to the edges, and the inspector is the only scroll container. These rules are
+  scoped to the Studio route so every other route keeps the marketing document layout.
+*/
+
+:root {
+  --studio-topbar-height: 44px;
+  --studio-nav-height: 52px;
+  --studio-dock-width: 320px;
+  --studio-control-small: 26px;
+  --studio-control-height: 32px;
+  --studio-control-large: 38px;
+  --studio-control-font: 13px;
+  /*
+    Chrome drawn over the 3D stage. The stage is void in both themes, so this
+    pair stays dark on purpose and does not follow the semantic surface layer.
+  */
+  --studio-hud-surface: rgba(6, 22, 26, 0.82);
+  --studio-hud-line: rgba(202, 255, 248, 0.22);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --studio-control-small: 36px;
+    --studio-control-height: 44px;
+    --studio-control-large: 46px;
+    --studio-control-font: 14px;
+  }
+}
+
+/* Fixed application shell: full bleed, no document gutters, no page scroll. */
+.app-shell[data-active-page="targets"] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-shell[data-active-page="targets"] .shell-nav {
+  position: static;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: none;
+  min-height: var(--studio-nav-height);
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: 0 var(--space-3);
+}
+
+.app-shell[data-active-page="targets"] .brand-link {
+  min-height: var(--studio-control-height);
+}
+
+.app-shell[data-active-page="targets"] .brand-link img {
+  width: clamp(112px, 11vw, 148px);
+  height: 30px;
+}
+
+.app-shell[data-active-page="targets"] .shell-nav-actions {
+  gap: var(--space-3);
+}
+
+.app-shell[data-active-page="targets"] .route-tabs a,
+.app-shell[data-active-page="targets"] .shell-story-links a {
+  min-height: var(--studio-control-height);
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.target-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  margin: 0;
+}
+
+/* The document header collapses into a 44px editor topbar. */
+.target-page .page-header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: var(--studio-topbar-height);
+  margin: 0;
+  border-bottom: 1px solid var(--line-soft);
+  padding: 0 var(--space-3);
+  background: var(--surface-chrome);
+}
+
+.target-page .page-heading-copy {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.target-page .page-header .eyebrow,
+.target-page .page-heading-copy > p {
+  display: none;
+}
+
+.target-page .page-header h2 {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.target-page .page-home-link {
+  flex: 0 0 auto;
+  align-self: center;
+  min-width: 0;
+  min-height: var(--studio-control-height);
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* Canvas and dock. */
+.target-page .target-workspace {
+  display: grid;
+  grid-template-areas: none;
+  grid-template-columns: minmax(0, 1fr) var(--studio-dock-width);
+  gap: 0;
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
+}
+
+.target-page .target-preview-shell,
+.target-page .target-inspector-card {
+  grid-area: auto;
+}
+
+.target-page .target-preview-shell {
+  position: relative;
+  top: auto;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.target-page .target-preview-stage {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.target-stage-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--space-2);
+  place-content: center;
+  justify-items: center;
+  padding: var(--space-6);
+  color: var(--color-mist-slate);
+  text-align: center;
+  pointer-events: none;
+}
+
+.target-stage-empty strong {
+  color: var(--color-reality-mist);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.target-stage-empty p {
+  max-width: 42ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+[data-has-target-draft="true"] .target-stage-empty {
+  display: none;
+}
+
+/* Canvas overlays sit above the stage without stealing pointer events from it. */
+.target-page .target-preview-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: block;
+  width: auto;
+  padding: 0;
+  pointer-events: none;
+}
+
+.target-page .target-transform-toolbar {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  flex-direction: column;
+  align-self: auto;
+  gap: 2px;
+  width: max-content;
+  min-width: 0;
+  border-color: var(--studio-hud-line);
+  padding: 4px;
+  background: var(--studio-hud-surface);
+  pointer-events: auto;
+}
+
+.target-page .target-transform-toolbar button {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  min-height: var(--studio-control-height);
+  padding: 0 12px;
+  font-size: var(--studio-control-font);
+  text-align: left;
+}
+
+.target-page .target-camera-view-controls {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  left: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  width: min(660px, calc(100% - var(--space-6)));
+  margin-inline: auto;
+  border-color: var(--studio-hud-line);
+  padding: 6px;
+  background: var(--studio-hud-surface);
+  pointer-events: auto;
+}
+
+.target-page .target-camera-view-head {
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+}
+
+.target-page .target-camera-view-controls .eyebrow {
+  font-size: 10px;
+}
+
+.target-page .target-camera-preset-row {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+}
+
+.target-page .target-camera-preset-row button {
+  min-height: var(--studio-control-height);
+  border-radius: var(--radius-control);
+  padding: 0 12px;
+  font-size: var(--studio-control-font);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.target-page .target-camera-view-grid {
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-1) var(--space-2) var(--space-2);
+}
+
+.target-page .target-camera-view-grid label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Studio disclosures: the camera sliders and the dock open only when asked for. */
+.studio-hud-toggle,
+.studio-dock-toggle {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--studio-control-height);
+  height: var(--studio-control-height);
+  min-width: var(--studio-control-height);
+  min-height: var(--studio-control-height);
+  padding: 0;
+  border: 1px solid var(--studio-hud-line);
+  border-radius: var(--radius-control);
+  color: var(--color-reality-mist);
+  background: var(--studio-hud-surface);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.target-page .studio-hud-toggle,
+.target-page .studio-dock-toggle {
+  min-height: var(--studio-control-height);
+  padding: 0;
+}
+
+.studio-hud-toggle:hover,
+.studio-dock-toggle:hover {
+  border-color: var(--color-signal-mint);
+  color: var(--color-signal-mint);
+}
+
+.studio-hud-toggle:focus-visible,
+.studio-dock-toggle:focus-visible {
+  outline: 3px solid var(--color-signal-mint);
+  outline-offset: 3px;
+}
+
+.studio-toggle-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 160ms var(--ease-standard);
+}
+
+.studio-hud-toggle[aria-expanded="true"] .studio-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.studio-dock-toggle {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 6;
+}
+
+.target-camera-view-controls[data-studio-hud="collapsed"] .target-camera-view-grid {
+  display: none;
+}
+
+/* Inspector dock: full height, and the only scroll container in the editor. */
+.target-page .target-inspector-card {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--space-2);
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-left: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: var(--space-3);
+  overflow: hidden;
+}
+
+.target-page .target-inspector-head {
+  display: grid;
+  gap: 2px;
+}
+
+.target-page .target-inspector-head p:not(.eyebrow) {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.target-page .target-inspector-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px;
+}
+
+.target-page .target-inspector-tabs button {
+  min-height: var(--studio-control-height);
+  font-size: 12px;
+}
+
+.target-page .target-inspector-panels {
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.target-page .target-inspector-panel {
+  gap: var(--space-3);
+}
+
+/* Compact control scale. Coarse pointers keep a 44px touch target via the tokens. */
+.target-page button {
+  min-height: var(--studio-control-height);
+  padding: 0 12px;
+  font-size: var(--studio-control-font);
+}
+
+.target-page .target-save-strip button,
+.target-page .target-save-strip .action-control {
+  min-height: var(--studio-control-large);
+}
+
+.target-page .axis-control button,
+.target-page .transform-control-actions button {
+  min-height: var(--studio-control-small);
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.target-page .icon-delete-button {
+  width: var(--studio-control-height);
+  min-width: var(--studio-control-height);
+  min-height: var(--studio-control-height);
+  padding: 0;
+}
+
+.target-page .target-object-kind-picker {
+  gap: 4px;
+  margin-bottom: var(--space-2);
+}
+
+.target-page .target-object-kind-picker button {
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.target-page input:not([type="range"]):not([type="color"]),
+.target-page select,
+.target-page textarea {
+  min-height: var(--studio-control-height);
+  padding: 4px 8px;
+  font-size: var(--studio-control-font);
+}
+
+.target-page textarea {
+  min-height: calc(var(--studio-control-height) * 2);
+  padding: 6px 8px;
+}
+
+.target-page .transform-control-group {
+  border-top: 1px solid var(--line-soft);
+  padding-top: var(--space-2);
+}
+
+.target-page .transform-control-summary,
+.target-page .target-text-advanced summary {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: var(--studio-control-height);
+  font-size: 11px;
+  list-style: none;
+}
+
+.target-page .transform-control-summary::-webkit-details-marker,
+.target-page .target-text-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Flex summaries drop the native marker, so the disclosure state is drawn here. */
+.target-page .transform-control-summary::before,
+.target-page .target-text-advanced summary::before {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  content: "";
+  transition: transform 140ms var(--ease-standard);
+}
+
+.target-page details[open] > .transform-control-summary::before,
+.target-page .target-text-advanced[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.target-page .transform-control-body {
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+/* A 320px dock is too narrow for the two-column access heading. */
+.target-page .target-access-card {
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.target-page .target-access-heading {
+  display: grid;
+  gap: 2px;
+}
+
+/* Dock collapse only exists where the dock is a column. */
+@media (min-width: 901px) {
+  .target-page[data-studio-dock="collapsed"] .target-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .target-page[data-studio-dock="collapsed"] .target-inspector-card {
+    display: none;
+  }
+}
+
+/*
+  Below 900px the editor stacks, but the canvas stays pinned to the top of the
+  viewport so a slider drag is always visible while it happens.
+*/
+@media (max-width: 900px) {
+  .app-shell[data-active-page="targets"] {
+    display: block;
+    height: auto;
+    min-height: 100dvh;
+    padding-bottom: max(var(--space-5), env(safe-area-inset-bottom));
+    overflow: visible;
+  }
+
+  .app-shell[data-active-page="targets"] .shell-nav {
+    position: static;
+  }
+
+  .target-page .target-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .target-page .target-preview-shell {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    height: auto;
+    background: var(--color-spatial-void);
+  }
+
+  .target-page .target-preview-stage {
+    height: clamp(240px, 44svh, 420px);
+    border-bottom: 1px solid var(--color-border-dark);
+  }
+
+  .target-page .target-inspector-card {
+    height: auto;
+    max-height: none;
+    border-left: 0;
+    overflow: visible;
+  }
+
+  .target-page .target-inspector-panels {
+    overflow: visible;
+  }
+
+  .studio-dock-toggle {
+    display: none;
+  }
+
+  .target-page .target-camera-view-controls {
+    right: var(--space-2);
+    bottom: var(--space-2);
+    left: var(--space-2);
+    width: calc(100% - var(--space-4));
+  }
+
+  .target-page .target-transform-toolbar {
+    top: var(--space-2);
+    left: var(--space-2);
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-shell[data-active-page="targets"] {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  /*
+    The topbar already carries the Home link, so the brand bar is 52px of chrome
+    above a short canvas. The nav itself stays in the layout because the bottom
+    route tabs are positioned from inside it.
+  */
+  .app-shell[data-active-page="targets"] .shell-nav {
+    min-height: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  .app-shell[data-active-page="targets"] .brand-link,
+  .app-shell[data-active-page="targets"] .shell-story-links {
+    display: none;
+  }
+
+  /*
+    The camera bar floats over a short canvas here, so it stays one row: the
+    "Camera view" label is dropped and the presets scroll instead of wrapping.
+  */
+  .target-page .target-camera-view-controls .eyebrow {
+    display: none;
+  }
+
+  .target-page .target-camera-preset-row {
+    display: flex;
+    justify-content: flex-start;
+    width: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .target-page .target-camera-preset-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .target-page .target-camera-preset-row button {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0 10px;
+  }
+
+  .target-page .target-camera-view-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-toggle-icon,
+  .target-page .transform-control-summary::before,
+  .target-page .target-text-advanced summary::before {
+    transition: none;
+  }
+}

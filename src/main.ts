@@ -1,5 +1,6 @@
 import './styles/arvenilo-tokens.css';
 import './styles/arvenilo.css';
+import './styles/studio-shell.css';
 import {
   prepareFloorPlacement,
   type FloorPlacementController,
@@ -180,6 +181,7 @@ import {
   resetScannerStage,
   setScannerGuideVisible,
 } from './ui/scannerStage';
+import { setupStudioShell } from './ui/studioShell';
 import { setupTargetInspectorTabs } from './ui/targetInspectorTabs';
 import { renderTargetObjectList as createTargetObjectList } from './ui/targetObjectList';
 import { createKeyboardHelpOverlay } from './ui/keyboardHelpOverlay';
@@ -222,6 +224,7 @@ shell.querySelectorAll<HTMLButtonElement>('[data-aperture-object]').forEach((but
 setupHomeSectionNavigation(shell);
 setupResponsiveLayout(shell);
 const targetInspectorTabs = setupTargetInspectorTabs(app);
+setupStudioShell(shell);
 const targetPage = queryRequired<HTMLElement>('[data-page="targets"]');
 const stage = queryRequired<HTMLDivElement>('#ar-stage');
 const startButton = queryRequired<HTMLButtonElement>('#start-ar');
