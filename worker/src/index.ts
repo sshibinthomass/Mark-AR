@@ -766,7 +766,7 @@ async function hashPassword(password: string, salt: string): Promise<string> {
   const bits = await crypto.subtle.deriveBits({
     name: 'PBKDF2',
     hash: 'SHA-256',
-    salt: arrayBuffer(base64UrlToBytes(salt)),
+    salt: base64UrlToBytes(salt),
     iterations: PASSWORD_ITERATIONS,
   }, key, 256);
   return bytesToBase64Url(new Uint8Array(bits));
@@ -1011,20 +1011,13 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function base64UrlToBytes(value: string): Uint8Array {
+function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
   const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
   return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
 }
 
-function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
-
 function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-  });
+  return Response.json(value, { status });
 }
 
 function withCors(response: Response, request: Request, env: WorkerEnv): Response {
