@@ -216,6 +216,7 @@ describe('target editor keyboard integration', () => {
     dispatchEditorKey(document.body, 'e');
     dispatchEditorKey(document.body, 'r');
     dispatchEditorKey(document.body, 'w');
+    await waitFor(() => previewTransformModes.length >= 3);
     expect(previewTransformModes.slice(-3)).toEqual(['rotate', 'scale', 'translate']);
 
     dispatchEditorKey(document.body, 'Home');
@@ -242,10 +243,10 @@ describe('target editor keyboard integration', () => {
 
     const tabEvent = dispatchEditorKey(document.body, 'Tab');
     expect(tabEvent.defaultPrevented).toBe(true);
-    expect(modelIdOf(selectedObject())).toBe('chair');
+    await waitFor(() => modelIdOf(selectedObject()) === 'chair');
 
     dispatchEditorKey(document.body, 'Tab', { shiftKey: true });
-    expect(modelIdOf(selectedObject())).toBe('plant');
+    await waitFor(() => modelIdOf(selectedObject()) === 'plant');
 
     const plantOffset = selectedObject().placement.offsetX;
     dispatchEditorKey(document.body, 'd', { ctrlKey: true });
@@ -276,11 +277,13 @@ describe('target editor keyboard integration', () => {
     await waitFor(() => latest().selectionLocked === true);
     expect(latest().lockedObjectIds).toEqual([latest().objects[0].id]);
     expect(document.querySelector('[data-object-state="locked"]')?.textContent).toBe('Locked');
+    await flushPreviewCalls();
     const modeCount = previewTransformModes.length;
     const lockedMode = dispatchEditorKey(document.body, 'e');
     const lockedMove = dispatchEditorKey(document.body, 'ArrowRight');
     const lockedDelete = dispatchEditorKey(document.body, 'Delete');
     expect(lockedMode.defaultPrevented).toBe(true);
+    await flushPreviewCalls();
     expect(previewTransformModes).toHaveLength(modeCount);
     expect(lockedMove.defaultPrevented).toBe(true);
     expect(lockedDelete.defaultPrevented).toBe(true);
@@ -304,7 +307,7 @@ describe('target editor keyboard integration', () => {
 
     const animationEvent = dispatchEditorKey(document.body, ' ');
     expect(animationEvent.defaultPrevented).toBe(true);
-    expect(previewAnimationStates.at(-1)).toBe(false);
+    await waitFor(() => previewAnimationStates.at(-1) === false);
 
     document.querySelectorAll<HTMLButtonElement>('.target-model-card')[0].click();
     await waitFor(() => latest().objects.length === 1);
@@ -404,6 +407,11 @@ async function waitForEditor(): Promise<void> {
     document.querySelectorAll('.target-model-card').length === models.length
     && document.querySelector('[data-app-shell]')?.getAttribute('data-active-page') === 'targets'
   ));
+}
+
+/* The preview module is fetched on demand, so its calls land a task later. */
+async function flushPreviewCalls(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 async function waitFor(assertion: () => boolean): Promise<void> {

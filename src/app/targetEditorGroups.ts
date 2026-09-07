@@ -1,3 +1,8 @@
+// ponytail: this is the one eager import of three left on the landing page --
+// it pins three's core (~430 kB) into the entry chunk, because placementMatrix
+// and placementFromMatrix are called synchronously from main.ts. Replacing it
+// means hand-writing the quaternion/matrix composition, which is not worth
+// owning; revisit only if the landing page needs to go below ~250 kB.
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { DEFAULT_IMAGE_TARGET_ANIMATION, normalizeAnimation, type ImageTargetAnimation } from './imageTargetAnimation';
 import type {

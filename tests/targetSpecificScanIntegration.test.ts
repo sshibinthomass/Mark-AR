@@ -796,7 +796,10 @@ describe('target-specific scan route integration', () => {
     cloudImageTargetMocks.getImageTargetForScan.mockResolvedValue(scanTarget);
 
     await import('../src/main');
-    await waitFor(() => required<HTMLButtonElement>('#floor-ar-toggle').disabled);
+    await waitFor(() => (
+      markerArMocks.startMarkerAR.mock.calls.length === 1
+      && required<HTMLButtonElement>('#floor-ar-toggle').disabled
+    ));
 
     expect(markerArMocks.startMarkerAR).toHaveBeenCalledTimes(1);
     expect(markerArMocks.sessionStop).not.toHaveBeenCalled();

@@ -1,11 +1,8 @@
 import './styles/arvenilo-tokens.css';
 import './styles/arvenilo.css';
 import './styles/studio-shell.css';
-import {
-  prepareFloorPlacement,
-  type FloorPlacementController,
-} from './ar/floorPlacementRuntime';
-import { startMarkerAR, type MarkerARSession } from './ar/mindarRuntime';
+import type { FloorPlacementController } from './ar/floorPlacementRuntime';
+import type { MarkerARSession } from './ar/mindarRuntime';
 import { createRuntimeMarkerTargets, createSingleTargetRuntimeMarker } from './ar/markerTargets';
 import {
   DEFAULT_GENERATE_MODEL_API_URL,
@@ -144,8 +141,7 @@ import {
   cameraViewForPreset,
   isCameraPreset,
 } from './scene/previewCamera';
-import { ImageTargetPreview } from './scene/ImageTargetPreview';
-import type { PreviewTransformMode } from './scene/ImageTargetPreview';
+import type { ImageTargetPreview, PreviewTransformMode } from './scene/ImageTargetPreview';
 import {
   applyAuthUi,
   isAuthenticated,
@@ -654,6 +650,7 @@ async function startCurrentArSession(): Promise<void> {
       && activeSharedLinkMode === 'marker'
       && focusedScanTarget === startTarget
     );
+    const { startMarkerAR } = await import('./ar/mindarRuntime');
     const startedSession = await startMarkerAR(stage, {
       targets: runtimeTargets,
       onCompileProgress: (percent) => {
@@ -1193,6 +1190,7 @@ async function prepareFocusedFloorPlacement(
   );
 
   try {
+    const { prepareFloorPlacement } = await import('./ar/floorPlacementRuntime');
     const preparation = await prepareFloorPlacement({
       stage: floorStage,
       overlayRoot: floorOverlay,
@@ -1550,10 +1548,19 @@ function renderTargetModelOptions(models: CloudflareModelOption[]): void {
   renderTargetObjectList();
 }
 
-function ensureImageTargetPreview(): ImageTargetPreview | undefined {
+/*
+ * The preview drags in three's GLTF, transform-control and text-geometry
+ * modules, none of which the landing page needs, so the module is fetched on
+ * first use of the Studio stage.
+ */
+async function ensureImageTargetPreview(): Promise<ImageTargetPreview | undefined> {
   if (!targetPreviewStage) {
     return undefined;
   }
+  if (imageTargetPreview) {
+    return imageTargetPreview;
+  }
+  const { ImageTargetPreview } = await import('./scene/ImageTargetPreview');
   imageTargetPreview ??= new ImageTargetPreview(targetPreviewStage, {
     onPlacementChange: ({ objectId, placement }) => {
       recordTargetEditorMutation(`preview-placement:${objectId}`);
@@ -2066,7 +2073,7 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
     case 'transform-mode':
       targetTransformMode = command.mode;
       syncTargetTransformModeButtons(command.mode);
-      ensureImageTargetPreview()?.setTransformMode(command.mode);
+      void ensureImageTargetPreview().then((preview) => preview?.setTransformMode(command.mode));
       break;
     case 'toggle-hidden':
       toggleSelectedTransientState(hiddenTargetKeys, 'hidden');
@@ -2079,7 +2086,7 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
       break;
     case 'toggle-animation':
       targetAnimationPlaying = !targetAnimationPlaying;
-      ensureImageTargetPreview()?.setAnimationPlaying(targetAnimationPlaying);
+      void ensureImageTargetPreview().then((preview) => preview?.setAnimationPlaying(targetAnimationPlaying));
       updateImageTargetStatus(
         targetAnimationPlaying ? 'Animation preview playing.' : 'Animation preview paused.',
         false,
@@ -2094,7 +2101,7 @@ function handleTargetEditorKeyDown(event: KeyboardEvent): void {
     case 'finish-interaction':
       targetTransformMode = 'translate';
       syncTargetTransformModeButtons(targetTransformMode);
-      ensureImageTargetPreview()?.setTransformMode(targetTransformMode);
+      void ensureImageTargetPreview().then((preview) => preview?.setTransformMode(targetTransformMode));
       break;
     case 'toggle-help':
       if (!targetKeyboardHelpOverlay) {
@@ -2657,7 +2664,7 @@ function isPlacementTransformResetAxis(value: string | undefined): value is Plac
 }
 
 async function updateTargetPreview(loadingModel?: CloudflareModelOption): Promise<void> {
-  const preview = ensureImageTargetPreview();
+  const preview = await ensureImageTargetPreview();
   if (!preview) {
     return;
   }

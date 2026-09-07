@@ -152,6 +152,7 @@ describe('saved target editing integration', () => {
     expect(document.querySelector('[data-page="targets"]')?.getAttribute('data-has-target-draft')).toBe('true');
     expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
     expect(document.querySelector('[data-edit-target="target-1"]')?.getAttribute('aria-current')).toBe('true');
+    await flushPreviewCalls();
     expect(previewMocks.update).toHaveBeenLastCalledWith(expect.objectContaining({
       imageUrl: savedTarget.imageUrl,
       objects: expect.arrayContaining([
@@ -297,6 +298,7 @@ describe('saved target editing integration', () => {
     await waitFor(() => document.querySelector('#image-target-status')?.textContent?.includes('did not preserve') === true);
 
     expect(document.querySelectorAll('.target-object-row')).toHaveLength(2);
+    await flushPreviewCalls();
     expect(previewMocks.update).toHaveBeenLastCalledWith(expect.objectContaining({
       objects: expect.arrayContaining([
         expect.objectContaining({ id: 'chair-1' }),
@@ -409,6 +411,11 @@ describe('saved target editing integration', () => {
     });
   });
 });
+
+/* The preview module is fetched on demand, so its calls land a task later. */
+async function flushPreviewCalls(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 async function waitFor(assertion: () => boolean): Promise<void> {
   const timeoutAt = Date.now() + 1500;
