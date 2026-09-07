@@ -150,10 +150,10 @@ export function renderAppShell(): string {
           <p class="eyebrow">Built for the visible world</p>
           <h2 id="use-cases-title">Built for the moments people can already see.</h2>
           <div class="use-case-grid">
-            <article class="use-case-card"><h3>Packaging and products</h3><p>Let a product surface open a useful, immersive layer at the moment of discovery.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
-            <article class="use-case-card"><h3>Retail visualization</h3><p>Help shoppers explore a placed scene from the product or display already in front of them.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
-            <article class="use-case-card"><h3>Campaigns and events</h3><p>Connect a printed moment to a shareable experience with one scan link or branded QR code.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
-            <article class="use-case-card"><h3>Learning and storytelling</h3><p>Add objects, styled text, and motion to the stories people can encounter in the real world.</p><a href="${hrefForRoute('scan')}">Open scanner</a></article>
+            <article class="use-case-card"><h3>Packaging and products</h3><p>Let a product surface open a useful, immersive layer at the moment of discovery.</p><a href="${hrefForRoute('scan')}" aria-label="Open scanner for packaging and products">Open scanner</a></article>
+            <article class="use-case-card"><h3>Retail visualization</h3><p>Help shoppers explore a placed scene from the product or display already in front of them.</p><a href="${hrefForRoute('scan')}" aria-label="Open scanner for retail visualization">Open scanner</a></article>
+            <article class="use-case-card"><h3>Campaigns and events</h3><p>Connect a printed moment to a shareable experience with one scan link or branded QR code.</p><a href="${hrefForRoute('scan')}" aria-label="Open scanner for campaigns and events">Open scanner</a></article>
+            <article class="use-case-card"><h3>Learning and storytelling</h3><p>Add objects, styled text, and motion to the stories people can encounter in the real world.</p><a href="${hrefForRoute('scan')}" aria-label="Open scanner for learning and storytelling">Open scanner</a></article>
           </div>
         </section>
 
@@ -177,7 +177,7 @@ export function renderAppShell(): string {
         </section>
 
         <section id="arvenilo" class="story-arvenilo home-endorsement" data-home-section tabindex="-1" aria-labelledby="arvenilo-title">
-          <h2 id="arvenilo-title">Where Intelligence Meets Reality.</h2>
+          <h2 id="arvenilo-title">Where intelligence meets reality.</h2>
           <img class="arvenilo-lockup" src="${brandAssets.companyLockup}" alt="Arvenilo" />
           <p>AnchorAR is an Arvenilo product.</p>
         </section>
@@ -189,7 +189,7 @@ export function renderAppShell(): string {
           <div class="scanner-stage-stack" data-layout-role="scanner-stage">
             <div id="ar-stage" class="ar-stage" aria-label="AR camera stage">
               <div class="stage-idle">
-                <span>Scan an experience</span>
+                <span>Point the camera at a saved target</span>
               </div>
             </div>
             <div id="floor-ar-stage" class="ar-stage floor-ar-stage" hidden aria-label="Floor AR camera stage"></div>
@@ -614,8 +614,8 @@ export function renderAppShell(): string {
             <div data-auth-panel="signed-out">
               <div class="auth-form-shell" data-auth-form-mode="login">
                 <div class="auth-mode-switch" role="group" aria-label="Account action">
-                  <button type="button" data-auth-mode="login" aria-pressed="true">Sign in</button>
-                  <button type="button" data-auth-mode="signup" aria-pressed="false">Create account</button>
+                  <button type="button" data-auth-mode="login" aria-pressed="true" aria-label="Show the sign in form">Sign in</button>
+                  <button type="button" data-auth-mode="signup" aria-pressed="false" aria-label="Show the create account form">Create account</button>
                 </div>
                 <form id="worker-login-form" class="login-form">
                   <label data-auth-name-field hidden>
@@ -628,7 +628,10 @@ export function renderAppShell(): string {
                   </label>
                   <label>
                     <span>Password</span>
-                    <input id="worker-password" name="password" type="password" minlength="8" autocomplete="current-password" required />
+                    <span class="password-field">
+                      <input id="worker-password" name="password" type="password" minlength="8" autocomplete="current-password" required />
+                      <button class="password-reveal" type="button" data-password-reveal aria-pressed="false" aria-controls="worker-password">Show</button>
+                    </span>
                   </label>
                   <button id="worker-login" class="action-control action-control--primary auth-primary-action" type="submit"><span data-auth-submit-label>Sign in</span></button>
                 </form>
@@ -660,6 +663,16 @@ export function renderAppShell(): string {
           </section>
         </section>
       </section>
+
+      <footer class="site-footer">
+        <p class="site-footer-brand">AnchorAR is an Arvenilo product.</p>
+        <nav class="site-footer-links" aria-label="Footer">
+          <a href="${hrefForRoute('scan')}">Scan</a>
+          <a href="${hrefForRoute('targets')}">Studio</a>
+          <a href="${hrefForRoute('settings')}">Keyboard settings</a>
+          <a href="${hrefForRoute('account')}">Account</a>
+        </nav>
+      </footer>
     </main>
   `;
 }
@@ -692,7 +705,7 @@ function renderPageHeader(route: Exclude<AppRoute, 'home'>, title: string, text:
       </a>
       <div class="page-heading-copy">
         <p class="eyebrow">AnchorAR by Arvenilo</p>
-        <h2 id="${route}-page-title" data-page-heading tabindex="-1">${title}</h2>
+        <h1 id="${route}-page-title" data-page-heading tabindex="-1">${title}</h1>
         <p>${text}</p>
       </div>
     </header>

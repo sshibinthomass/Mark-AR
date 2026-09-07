@@ -525,6 +525,20 @@ authModeButtons.forEach((button) => {
   });
 });
 
+/*
+ * Reveal toggle for the password field. Keeps focus in the input so the
+ * keyboard does not close on mobile mid-entry.
+ */
+shell.querySelectorAll<HTMLButtonElement>('[data-password-reveal]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const shown = workerPasswordInput.type === 'text';
+    workerPasswordInput.type = shown ? 'password' : 'text';
+    button.setAttribute('aria-pressed', String(!shown));
+    button.textContent = shown ? 'Show' : 'Hide';
+    workerPasswordInput.focus();
+  });
+});
+
 startButton.addEventListener('click', async () => {
   await startCurrentArSession();
 });

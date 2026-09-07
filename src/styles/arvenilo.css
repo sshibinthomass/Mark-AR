@@ -415,7 +415,12 @@ button.primary,
   justify-content: space-between;
   gap: var(--space-5);
   width: 100%;
-  max-width: var(--content-max);
+  /*
+   * The nav rides the same rail as page content (--content-standard), so the
+   * pill edges line up with the cards below it. Pinning it to --content-max
+   * left the logo ~48px outboard of every heading on the page.
+   */
+  max-width: var(--content-standard);
   min-height: var(--header-height);
   margin: 0 auto;
   border: 1px solid var(--line-soft);
@@ -424,6 +429,11 @@ button.primary,
   background: var(--surface-chrome);
   box-shadow: none;
   backdrop-filter: blur(14px);
+}
+
+/* Studio runs on the wider --content-wide rail; the nav follows it there. */
+.app-shell:has(.target-page:not([hidden])) .shell-nav {
+  max-width: var(--content-wide);
 }
 
 .brand-link {
@@ -600,9 +610,13 @@ button.primary,
   font-size: var(--text-heading-2);
 }
 
+/*
+ * The back link sits on its own row above the copy. Keeping it as a second
+ * grid column pushed every page title off the container rail that the cards
+ * below it sit on, and stole ~110px from the title on narrow screens.
+ */
 .page-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
   margin-bottom: var(--space-5);
@@ -614,8 +628,8 @@ button.primary,
   min-width: 0;
 }
 
-.page-header h2,
-.target-page .page-header h2 {
+.page-header h1,
+.target-page .page-header h1 {
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-display);
@@ -632,6 +646,8 @@ button.primary,
 
 .page-home-link {
   align-self: start;
+  justify-self: start;
+  width: fit-content;
   min-width: var(--control-height);
   min-height: var(--control-height);
   border: 1px solid var(--line-soft);
@@ -644,6 +660,46 @@ button.primary,
 
 .page-home-link:hover {
   border-color: var(--line-strong);
+}
+
+/* Site footer. Links only to routes that exist. */
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  width: min(var(--content-standard), 100%);
+  margin: var(--space-8) auto 0;
+  border-top: 1px solid var(--line-soft);
+  padding-top: var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--text-small);
+}
+
+.site-footer-brand {
+  margin: 0;
+}
+
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+.site-footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height);
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.site-footer-links a:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--color-signal-mint);
+  text-underline-offset: 0.3em;
 }
 
 /* ------------------------------------------------------------- 8. Home */
@@ -698,13 +754,19 @@ button.primary,
   gap: var(--space-3);
 }
 
+/*
+ * Panel sections keep generous block padding but a restrained inline inset,
+ * so their text stays close to the rail bare sections sit on. A 6vw inline
+ * pad pushed headings ~87px inboard and made the page's left edge jog on
+ * every scroll past a panel.
+ */
 .spatial-proof {
   position: relative;
   overflow: hidden;
   width: 100%;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-stage);
-  padding: clamp(var(--space-7), 6vw, var(--space-9));
+  padding: clamp(var(--space-7), 6vw, var(--space-9)) var(--space-6);
   color: var(--color-reality-mist);
   background: var(--veil-ink);
   box-shadow: none;
@@ -870,11 +932,17 @@ button.primary,
   margin-top: var(--space-5);
 }
 
+/* Sized off the control token so these match nav links and action controls. */
 .aperture-stage-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: var(--control-height);
+  padding: 0 var(--space-3);
   border-color: var(--color-border-dark);
   color: var(--color-mist-slate);
   background: transparent;
+  font-size: var(--text-small);
 }
 
 .aperture-stage-controls button[aria-pressed="true"] {
@@ -1000,8 +1068,14 @@ button.primary,
   box-shadow: none;
 }
 
+/*
+ * Reserve two lines so body copy shares a baseline across the columns. A
+ * one-line heading otherwise lifted its paragraph 30px above its neighbours.
+ */
 .use-case-card h3 {
   font-size: var(--text-heading-3);
+  line-height: 1.1;
+  min-height: 2.2em;
 }
 
 .use-case-card p {
@@ -1026,7 +1100,7 @@ button.primary,
   width: 100%;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-stage);
-  padding: clamp(var(--space-7), 6vw, var(--space-9));
+  padding: clamp(var(--space-7), 6vw, var(--space-9)) var(--space-6);
   background: var(--surface-panel);
 }
 
@@ -1089,7 +1163,7 @@ button.primary,
   align-items: center;
   width: min(var(--content-standard), 100%);
   margin: 0 auto;
-  padding: var(--section-space) 0 var(--space-8);
+  padding: var(--section-space) 0;
 }
 
 .home-endorsement h2 {
@@ -1148,9 +1222,16 @@ button.primary,
   border-color: var(--color-signal-mint);
 }
 
+/*
+ * The stage is capped against the viewport so the scanner controls below it
+ * stay above the fold. A flat 640px floor plus the 16/10 ratio pushed the
+ * only action on the page ~140px off-screen at 1440x900.
+ */
 .ar-stage {
   position: relative;
-  min-height: 640px;
+  width: 100%;
+  min-height: min(360px, 40svh);
+  max-height: max(320px, calc(100svh - 420px));
   aspect-ratio: 16 / 10;
   overflow: hidden;
   border-radius: var(--radius-stage);
@@ -2566,10 +2647,40 @@ button.primary,
   min-height: var(--control-height);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-control);
-  padding: 9px 11px;
+  /* Inline-only padding: the control token owns the height (was 46px). */
+  padding: 0 var(--space-3);
   color: var(--text-primary);
   background: var(--surface-panel);
   box-shadow: none;
+}
+
+/* Password field with an in-field reveal toggle. */
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 72px;
+}
+
+.password-reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius-control);
+  padding: 0 var(--space-2);
+  color: var(--text-secondary);
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--text-small);
+}
+
+.password-reveal:hover {
+  color: var(--text-primary);
 }
 
 .target-page textarea {
@@ -3188,14 +3299,19 @@ input:-webkit-autofill:active {
   color: var(--text-secondary);
 }
 
+/*
+ * Cards flow down columns rather than sitting in grid rows. As a grid, every
+ * row inherited its tallest card, which left a ~600px hole under the shorter
+ * ones (card heights here range 678px to 1478px).
+ */
 .keyboard-settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-  gap: var(--space-5);
-  align-items: start;
+  columns: 2;
+  column-gap: var(--space-5);
 }
 
 .keyboard-shortcut-card {
+  break-inside: avoid;
+  margin-bottom: var(--space-5);
   padding: var(--space-5);
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-card);
@@ -3222,9 +3338,13 @@ input:-webkit-autofill:active {
   list-style: none;
 }
 
+/*
+ * A fixed key track. With `auto`, a long chord ("Ctrl/Command + Shift + Z")
+ * squeezed its description to 69px and shifted the copy edge row to row.
+ */
 .keyboard-shortcut-row {
   display: grid;
-  grid-template-columns: minmax(8.5rem, auto) 1fr;
+  grid-template-columns: 11rem minmax(0, 1fr);
   gap: var(--space-4);
   align-items: center;
   padding: var(--space-4) 0;
@@ -3484,8 +3604,19 @@ button:disabled,
     object-position: center;
   }
 
+  /*
+   * Product and Use cases stay reachable on phones. They used to be
+   * display:none with no hamburger, so two destinations had no mobile route
+   * at all -- and the top bar was empty enough to carry them.
+   */
   .shell-story-links {
-    display: none;
+    display: flex;
+    gap: 0;
+  }
+
+  .shell-story-links a {
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--text-label);
   }
 
   /* Route tabs become the bottom bar. Five columns once the account tab
@@ -3591,6 +3722,11 @@ button:disabled,
     grid-template-columns: 1fr;
   }
 
+  /* Single column: no need to reserve a second heading line. */
+  .use-case-card h3 {
+    min-height: 0;
+  }
+
   .spatial-proof-inner {
     gap: var(--space-7);
   }
@@ -3667,8 +3803,8 @@ button:disabled,
     gap: var(--space-3);
   }
 
-  .page-header h2,
-  .target-page .page-header h2 {
+  .page-header h1,
+  .target-page .page-header h1 {
     font-size: clamp(2rem, 10vw, 2.75rem);
   }
 
@@ -3893,7 +4029,10 @@ button:disabled,
     margin-left: 0;
   }
 
-  .keyboard-settings-grid,
+  .keyboard-settings-grid {
+    columns: 1;
+  }
+
   .keyboard-shortcut-row {
     grid-template-columns: 1fr;
   }

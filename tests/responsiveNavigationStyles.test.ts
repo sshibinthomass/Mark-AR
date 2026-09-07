@@ -86,10 +86,12 @@ describe('responsive navigation styles', () => {
   });
 
   it('lays out Settings cards responsively and gives keys a visible affordance', () => {
-    expect(cssRule(css, '.keyboard-settings-grid')).toContain('grid-template-columns');
+    /* Cards flow down columns so a tall card cannot leave a hole beside it. */
+    expect(cssRule(css, '.keyboard-settings-grid')).toContain('columns: 2');
+    expect(cssRule(css, '.keyboard-shortcut-card')).toContain('break-inside: avoid');
     expect(cssRule(css, '.keyboard-shortcut-row')).toContain('display: grid');
     expect(cssRule(css, '.keyboard-shortcut-keys kbd')).toContain('border');
-    expect(cssRule(mobile, '.keyboard-settings-grid')).toContain('grid-template-columns: 1fr');
+    expect(cssRule(mobile, '.keyboard-settings-grid')).toContain('columns: 1');
     expect(cssRule(mobile, '.keyboard-shortcut-row')).toContain('grid-template-columns: 1fr');
   });
 

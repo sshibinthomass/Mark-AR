@@ -16,7 +16,8 @@ describe('AnchorAR redesign styles', () => {
     expect(rule('body')).toContain('background: transparent');
     expect(rule('body')).toContain('font-family: var(--font-text)');
     expect(rule('.brand-link img')).toContain('object-fit: contain');
-    expect(baseRule('.shell-nav')).toContain('max-width: var(--content-max)');
+    /* The nav rides the same rail as page content so the pill edges align. */
+    expect(baseRule('.shell-nav')).toContain('max-width: var(--content-standard)');
   });
 
   it('paints the dark ground by default and treats light as an opt-in', () => {
